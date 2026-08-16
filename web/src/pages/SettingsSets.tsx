@@ -9,6 +9,7 @@ import {
   type CatalogGroup,
   type PermissionSet,
 } from '@/api'
+import { SortableHead } from '@/components/sortable-head'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import EmptyState from '@/components/EmptyState'
 import { ErrorAlert } from '@/components/error-alert'
@@ -43,6 +44,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { grantSummary } from '@/lib/grants'
+import { sortBy, useTableSort } from '@/lib/table-sort'
 
 type EditorState = {
   id?: string
@@ -85,6 +87,26 @@ export default function SettingsSets() {
   useEffect(() => {
     load()
   }, [])
+
+  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const sortedSets = useMemo(
+    () =>
+      sortBy(sets, sort, (ps, key) => {
+        switch (key) {
+          case 'name':
+            return ps.name
+          case 'description':
+            return ps.description
+          case 'grants':
+            return grantSummary(ps.grants).modules
+          case 'members':
+            return ps.memberCount ?? 0
+          default:
+            return ''
+        }
+      }),
+    [sets, sort],
+  )
 
   const templateById = useMemo(() => {
     const map = new Map<string, PermissionSet>()
@@ -203,15 +225,15 @@ export default function SettingsSets() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Grants</TableHead>
-                <TableHead>Members</TableHead>
+                <SortableHead column="name" label="Name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="description" label="Description" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="grants" label="Grants" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="members" label="Members" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sets.map((ps) => {
+              {sortedSets.map((ps) => {
                 const summary = grantSummary(ps.grants)
                 return (
                   <TableRow key={ps.id}>

@@ -7,7 +7,8 @@ import EmptyState from '@/components/EmptyState'
 import NodeDetailPanel from '@/components/node-detail-panel'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { ErrorAlert } from '@/components/error-alert'
-import { NodeCPUBar, NodeDiskBar, NodeMemoryBar, useNodeMetrics } from '@/components/MetricsPanel'
+import { NodeCPUBar, NodeDiskBar, NodeMemoryBar, metricSortValue, useMetricSortTick, useNodeMetrics } from '@/components/MetricsPanel'
+import { SortableHead } from '@/components/sortable-head'
 import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
 import { Button } from '@/components/ui/button'
@@ -41,6 +42,7 @@ import {
   objectName,
   type K8sObject,
 } from '@/lib/k8s-fields'
+import { sortBy, timestampSortValue, useTableSort } from '@/lib/table-sort'
 
 type PendingAction = 'cordon' | 'uncordon' | 'drain'
 
@@ -87,6 +89,39 @@ export default function Nodes() {
   }, [load])
 
   const visible = useMemo(() => nodes.filter((n) => matchesQuery(n, query)), [nodes, query])
+  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const metricsTick = useMetricSortTick()
+  const sorted = useMemo(
+    () =>
+      sortBy(visible, sort, (node, key) => {
+        const name = objectName(node)
+        switch (key) {
+          case 'name':
+            return name
+          case 'cpu':
+            return metricSortValue(`node:${name}:cpu`) ?? Number.NEGATIVE_INFINITY
+          case 'memory':
+            return metricSortValue(`node:${name}:memory`) ?? Number.NEGATIVE_INFINITY
+          case 'disk':
+            return metricSortValue(`node:${name}:disk`) ?? Number.NEGATIVE_INFINITY
+          case 'taints':
+            return nodeTaintCount(node)
+          case 'roles':
+            return nodeRoles(node)
+          case 'version':
+            return nodeVersion(node)
+          case 'age':
+            return timestampSortValue(node.metadata?.creationTimestamp)
+          case 'conditions':
+            return nodeConditionLabels(node)
+              .map((c) => c.text)
+              .join(' ')
+          default:
+            return ''
+        }
+      }),
+    [visible, sort, metricsTick],
+  )
   const metricsEnabled = can(user, 'metrics', 'view')
   const selected = useMemo(
     () => nodes.find((n) => objectName(n) === selectedName) ?? null,
@@ -149,20 +184,20 @@ export default function Nodes() {
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>CPU</TableHead>
-                <TableHead>Memory</TableHead>
-                <TableHead>Disk</TableHead>
-                <TableHead>Taints</TableHead>
-                <TableHead>Roles</TableHead>
-                <TableHead>Version</TableHead>
-                <TableHead>Age</TableHead>
-                <TableHead>Conditions</TableHead>
+                <SortableHead column="name" label="Name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="cpu" label="CPU" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="memory" label="Memory" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="disk" label="Disk" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="taints" label="Taints" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="roles" label="Roles" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="version" label="Version" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="age" label="Age" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="conditions" label="Conditions" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <TableHead className="w-8" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visible.map((node) => {
+              {sorted.map((node) => {
                 const name = objectName(node)
                 if (!name) return null
                 return (
@@ -183,7 +218,7 @@ export default function Nodes() {
               })}
             </TableBody>
           </Table>
-          {visible.length === 0 ? (
+          {sorted.length === 0 ? (
             <EmptyState>No nodes{query ? ' match this filter' : ''}.</EmptyState>
           ) : null}
         </div>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import EmptyState from '@/components/EmptyState'
+import { SortableHead } from '@/components/sortable-head'
 import { ErrorAlert } from '@/components/error-alert'
 import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
@@ -9,11 +10,11 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
 import { formatAge } from '@/lib/k8s-fields'
+import { sortBy, timestampSortValue, useTableSort } from '@/lib/table-sort'
 
 type EventItem = {
   metadata?: { name?: string; namespace?: string; creationTimestamp?: string }
@@ -74,6 +75,33 @@ export default function Events() {
       return hay.includes(q)
     })
   }, [events, query])
+  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const sorted = useMemo(
+    () =>
+      sortBy(visible, sort, (ev, key) => {
+        const obj = ev.involvedObject
+        const objLabel = obj
+          ? `${obj.kind ?? ''}/${obj.namespace ? obj.namespace + '/' : ''}${obj.name ?? ''}`
+          : ''
+        switch (key) {
+          case 'age':
+            return timestampSortValue(ev.lastTimestamp || ev.eventTime || ev.metadata?.creationTimestamp)
+          case 'namespace':
+            return ev.metadata?.namespace ?? ''
+          case 'object':
+            return objLabel
+          case 'reason':
+            return ev.reason ?? ''
+          case 'type':
+            return ev.type ?? ''
+          case 'message':
+            return ev.message ?? ''
+          default:
+            return ''
+        }
+      }),
+    [visible, sort],
+  )
 
   if (loading) return <PageLoading />
 
@@ -87,16 +115,16 @@ export default function Events() {
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>
-              <TableHead>Age</TableHead>
-              <TableHead>Namespace</TableHead>
-              <TableHead>Object</TableHead>
-              <TableHead>Reason</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Message</TableHead>
+              <SortableHead column="age" label="Age" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortableHead column="namespace" label="Namespace" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortableHead column="object" label="Object" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortableHead column="reason" label="Reason" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortableHead column="type" label="Type" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortableHead column="message" label="Message" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visible.map((ev) => {
+            {sorted.map((ev) => {
               const ns = ev.metadata?.namespace ?? ''
               const obj = ev.involvedObject
               const objLabel = obj
@@ -123,7 +151,7 @@ export default function Events() {
             })}
           </TableBody>
         </Table>
-        {visible.length === 0 ? <EmptyState>No events.</EmptyState> : null}
+        {sorted.length === 0 ? <EmptyState>No events.</EmptyState> : null}
       </div>
     </PageBody>
   )

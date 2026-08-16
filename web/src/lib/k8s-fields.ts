@@ -204,17 +204,14 @@ export function nodeResourceMap(obj: K8sObject, field: 'capacity' | 'allocatable
   return out
 }
 
-export function formatK8sQuantity(raw?: string): string {
-  if (!raw) return '—'
-  const match = /^([0-9.]+)([A-Za-z]*)$/.exec(raw)
-  if (!match) return raw
+export function k8sQuantityNumber(raw?: string): number {
+  if (!raw || raw === '—') return Number.NEGATIVE_INFINITY
+  const match = /^([0-9.]+)([A-Za-z]*)$/.exec(raw.trim())
+  if (!match) return Number.NEGATIVE_INFINITY
   const value = Number(match[1])
   const unit = match[2]
-  if (Number.isNaN(value)) return raw
-  if (unit === 'm') {
-    const cores = value / 1000
-    return Number.isInteger(cores) ? String(cores) : cores.toFixed(2)
-  }
+  if (Number.isNaN(value)) return Number.NEGATIVE_INFINITY
+  if (unit === 'm') return value / 1000
   const mul: Record<string, number> = {
     Ki: 1024,
     Mi: 1024 ** 2,
@@ -226,8 +223,22 @@ export function formatK8sQuantity(raw?: string): string {
     T: 1e12,
   }
   const factor = mul[unit]
-  if (!factor) return raw
-  const bytes = value * factor
+  return factor ? value * factor : value
+}
+
+export function formatK8sQuantity(raw?: string): string {
+  if (!raw) return '—'
+  const bytes = k8sQuantityNumber(raw)
+  if (bytes === Number.NEGATIVE_INFINITY) return raw
+  const match = /^([0-9.]+)([A-Za-z]*)$/.exec(raw)
+  const unit = match?.[2] ?? ''
+  if (unit === 'm') {
+    const cores = bytes
+    return Number.isInteger(cores) ? String(cores) : cores.toFixed(2)
+  }
+  if (!unit || !(unit in { Ki: 1, Mi: 1, Gi: 1, Ti: 1, K: 1, M: 1, G: 1, T: 1 })) {
+    return raw
+  }
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GiB`
   if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`
   if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KiB`

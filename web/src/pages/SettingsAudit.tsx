@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   deleteAuditFilter,
   deleteAuditIds,
@@ -6,6 +6,7 @@ import {
   type AuditFilters,
   type AuditLog,
 } from '@/api'
+import { SortableHead } from '@/components/sortable-head'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import EmptyState from '@/components/EmptyState'
 import { ErrorAlert } from '@/components/error-alert'
@@ -23,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { sortBy, timestampSortValue, useTableSort } from '@/lib/table-sort'
 
 function toRFC3339(datetimeLocal: string): string | undefined {
   if (!datetimeLocal) return undefined
@@ -76,6 +78,30 @@ export default function SettingsAudit() {
   useEffect(() => {
     load()
   }, [])
+
+  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const sortedLogs = useMemo(
+    () =>
+      sortBy(logs, sort, (log, key) => {
+        switch (key) {
+          case 'time':
+            return timestampSortValue(log.timestamp)
+          case 'user':
+            return log.username ?? ''
+          case 'module':
+            return log.module ?? ''
+          case 'action':
+            return log.action ?? ''
+          case 'result':
+            return log.result ?? ''
+          case 'path':
+            return log.path ?? ''
+          default:
+            return ''
+        }
+      }),
+    [logs, sort],
+  )
 
   function onFilterSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -201,16 +227,16 @@ export default function SettingsAudit() {
                     aria-label="Select all"
                   />
                 </TableHead>
-                <TableHead>Time</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead>Module</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Result</TableHead>
-                <TableHead>Path</TableHead>
+                <SortableHead column="time" label="Time" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="user" label="User" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="module" label="Module" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="action" label="Action" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="result" label="Result" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="path" label="Path" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {logs.map((log) => (
+              {sortedLogs.map((log) => (
                 <TableRow key={log.id}>
                   <TableCell>
                     <Checkbox

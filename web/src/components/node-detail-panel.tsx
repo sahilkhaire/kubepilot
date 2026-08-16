@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ChevronDownIcon,
   PauseIcon,
@@ -11,6 +11,7 @@ import {
 import type { User } from '@/api'
 import MetricsPanel from '@/components/MetricsPanel'
 import ResourceYAMLEditor from '@/components/resource-yaml-editor'
+import { SortableHead } from '@/components/sortable-head'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -41,6 +42,7 @@ import {
   podReady,
   type K8sObject,
 } from '@/lib/k8s-fields'
+import { ratioSortValue, sortBy, useTableSort } from '@/lib/table-sort'
 
 type EventItem = {
   metadata?: { name?: string; namespace?: string; creationTimestamp?: string }
@@ -177,6 +179,26 @@ export default function NodeDetailPanel({
     }
   }, [name, user])
 
+  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const sortedPods = useMemo(
+    () =>
+      sortBy(pods, sort, (pod, key) => {
+        switch (key) {
+          case 'name':
+            return objectName(pod)
+          case 'namespace':
+            return objectNamespace(pod)
+          case 'ready':
+            return ratioSortValue(podReady(pod))
+          case 'status':
+            return podPhase(pod)
+          default:
+            return ''
+        }
+      }),
+    [pods, sort],
+  )
+
   async function refresh() {
     setRefreshing(true)
     try {
@@ -309,14 +331,14 @@ export default function NodeDetailPanel({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Namespace</TableHead>
-                      <TableHead>Ready</TableHead>
-                      <TableHead>Status</TableHead>
+                      <SortableHead column="name" label="Name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                      <SortableHead column="namespace" label="Namespace" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                      <SortableHead column="ready" label="Ready" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                      <SortableHead column="status" label="Status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pods.map((pod) => {
+                    {sortedPods.map((pod) => {
                       const podName = objectName(pod)
                       const phase = podPhase(pod)
                       const running = phase === 'Running'

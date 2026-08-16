@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import EmptyState from '@/components/EmptyState'
+import { SortableHead } from '@/components/sortable-head'
 import { ErrorAlert } from '@/components/error-alert'
 import { ALL_NAMESPACES, isAllNamespaces, NamespaceSelect, resolveNamespaceValue } from '@/components/namespace-select'
 import { PageBody, PageHeader } from '@/components/page-header'
@@ -17,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { sortBy, useTableSort } from '@/lib/table-sort'
 
 type CRDItem = {
   metadata?: { name?: string }
@@ -138,9 +140,8 @@ export default function CustomResources() {
     }
   }, [selected, namespace])
 
-  if (loading && crds.length === 0) {
-    return <PageLoading />
-  }
+  const crdSort = useTableSort()
+  const instanceSort = useTableSort()
 
   const grouped = useMemo(() => {
     const q = query.toLowerCase()
@@ -155,8 +156,36 @@ export default function CustomResources() {
       list.push(crd)
       map.set(key, list)
     }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b))
-  }, [crds, query])
+    return [...map.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([group, items]) => [
+        group,
+        sortBy(items, crdSort.sort, (crd, key) => {
+          switch (key) {
+            case 'name':
+              return crd.metadata?.name ?? ''
+            case 'resource':
+              return crd.spec?.names?.plural ?? ''
+            case 'scope':
+              return crd.spec?.scope ?? ''
+            default:
+              return ''
+          }
+        }),
+      ] as const)
+  }, [crds, query, crdSort.sort])
+
+  const sortedInstances = useMemo(
+    () =>
+      sortBy(instances, instanceSort.sort, (item, key) =>
+        key === 'namespace' ? (item.metadata?.namespace ?? '') : (item.metadata?.name ?? ''),
+      ),
+    [instances, instanceSort.sort],
+  )
+
+  if (loading && crds.length === 0) {
+    return <PageLoading />
+  }
 
   const namespaced = selected?.spec?.scope === 'Namespaced'
 
@@ -171,9 +200,9 @@ export default function CustomResources() {
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Resource</TableHead>
-              <TableHead>Scope</TableHead>
+              <SortableHead column="name" label="Name" sortKey={crdSort.sortKey} sortDir={crdSort.sortDir} onSort={crdSort.onSort} />
+              <SortableHead column="resource" label="Resource" sortKey={crdSort.sortKey} sortDir={crdSort.sortDir} onSort={crdSort.onSort} />
+              <SortableHead column="scope" label="Scope" sortKey={crdSort.sortKey} sortDir={crdSort.sortDir} onSort={crdSort.onSort} />
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -235,12 +264,12 @@ export default function CustomResources() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Namespace</TableHead>
+                    <SortableHead column="name" label="Name" sortKey={instanceSort.sortKey} sortDir={instanceSort.sortDir} onSort={instanceSort.onSort} />
+                    <SortableHead column="namespace" label="Namespace" sortKey={instanceSort.sortKey} sortDir={instanceSort.sortDir} onSort={instanceSort.onSort} />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {instances.map((item) => {
+                  {sortedInstances.map((item) => {
                     const name = item.metadata?.name ?? ''
                     const ns = item.metadata?.namespace ?? ''
                     return (

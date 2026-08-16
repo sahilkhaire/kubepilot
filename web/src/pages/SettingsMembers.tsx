@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
   createMember,
@@ -10,6 +10,7 @@ import {
   type Member,
   type PermissionSet,
 } from '@/api'
+import { SortableHead } from '@/components/sortable-head'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import EmptyState from '@/components/EmptyState'
 import { ErrorAlert } from '@/components/error-alert'
@@ -34,6 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { sortBy, useTableSort } from '@/lib/table-sort'
 import { PageLoading } from '@/components/page-loading'
 
 function parseNamespaces(input: string): string[] {
@@ -75,6 +77,28 @@ export default function SettingsMembers() {
   useEffect(() => {
     load()
   }, [])
+
+  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const sortedMembers = useMemo(
+    () =>
+      sortBy(members, sort, (m, key) => {
+        switch (key) {
+          case 'username':
+            return m.username
+          case 'displayName':
+            return m.displayName
+          case 'permissionSet':
+            return sets.find((s) => s.id === m.permissionSetId)?.name ?? m.permissionSetId
+          case 'namespaces':
+            return m.namespaces.join(', ')
+          case 'enabled':
+            return m.enabled
+          default:
+            return ''
+        }
+      }),
+    [members, sort, sets],
+  )
 
   function dismissPassword() {
     setGeneratedPassword('')
@@ -229,16 +253,16 @@ export default function SettingsMembers() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Username</TableHead>
-                <TableHead>Display name</TableHead>
-                <TableHead>Permission set</TableHead>
-                <TableHead>Namespaces</TableHead>
-                <TableHead>Enabled</TableHead>
+                <SortableHead column="username" label="Username" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="displayName" label="Display name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="permissionSet" label="Permission set" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="namespaces" label="Namespaces" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="enabled" label="Enabled" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.map((m) => (
+              {sortedMembers.map((m) => (
                 <TableRow key={m.id}>
                   <TableCell className="font-medium">{m.username}</TableCell>
                   <TableCell>{m.displayName}</TableCell>

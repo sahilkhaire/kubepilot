@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import EmptyState from '@/components/EmptyState'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { SortableHead } from '@/components/sortable-head'
 import { ErrorAlert } from '@/components/error-alert'
 import { ALL_NAMESPACES, isAllNamespaces, NamespaceSelect, resolveNamespaceValue } from '@/components/namespace-select'
 import { PageBody, PageHeader } from '@/components/page-header'
@@ -17,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { sortBy, useTableSort } from '@/lib/table-sort'
 
 type HelmRelease = {
   name: string
@@ -108,6 +110,30 @@ export default function Helm() {
     }
   }, [namespace])
 
+  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const sorted = useMemo(
+    () =>
+      sortBy(releases, sort, (rel, key) => {
+        switch (key) {
+          case 'name':
+            return rel.name
+          case 'namespace':
+            return rel.namespace
+          case 'chart':
+            return rel.chart
+          case 'revision':
+            return rel.revision
+          case 'status':
+            return rel.status
+          case 'appVersion':
+            return rel.appVersion ?? ''
+          default:
+            return ''
+        }
+      }),
+    [releases, sort],
+  )
+
   async function onUninstall() {
     if (!toUninstall) return
     const rel = toUninstall
@@ -146,17 +172,17 @@ export default function Helm() {
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Namespace</TableHead>
-              <TableHead>Chart</TableHead>
-              <TableHead>Revision</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>App version</TableHead>
+              <SortableHead column="name" label="Name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortableHead column="namespace" label="Namespace" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortableHead column="chart" label="Chart" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortableHead column="revision" label="Revision" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortableHead column="status" label="Status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortableHead column="appVersion" label="App version" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               {canUninstall ? <TableHead className="text-right">Actions</TableHead> : null}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {releases.map((rel) => (
+            {sorted.map((rel) => (
               <TableRow key={`${rel.namespace}/${rel.name}`}>
                 <TableCell className="font-medium">{rel.name}</TableCell>
                 <TableCell className="text-muted-foreground">{rel.namespace}</TableCell>
@@ -185,7 +211,7 @@ export default function Helm() {
             ))}
           </TableBody>
         </Table>
-        {releases.length === 0 && namespace && !error ? (
+        {sorted.length === 0 && namespace && !error ? (
           <EmptyState>
             {isAllNamespaces(namespace) ? 'No releases.' : 'No releases in this namespace.'}
           </EmptyState>

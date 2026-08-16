@@ -45,6 +45,45 @@ function usagePercent(usage: number, capacity?: number): number | null {
   return Math.min(100, (usage / capacity) * 100)
 }
 
+const metricSortValues = new Map<string, number>()
+const metricSortListeners = new Set<() => void>()
+let metricSortNotifyTimer: number | undefined
+
+function rememberMetricSortValue(key: string, value: number | undefined) {
+  if (value == null || Number.isNaN(value)) {
+    if (!metricSortValues.delete(key)) return
+  } else if (metricSortValues.get(key) === value) {
+    return
+  } else {
+    metricSortValues.set(key, value)
+  }
+  if (metricSortNotifyTimer != null) return
+  metricSortNotifyTimer = window.setTimeout(() => {
+    metricSortNotifyTimer = undefined
+    metricSortListeners.forEach((fn) => fn())
+  }, 50)
+}
+
+function metricRank(metric?: ResourceMetric): number | undefined {
+  if (!metric) return undefined
+  return usagePercent(metric.usage, metric.capacity) ?? metric.usage
+}
+
+export function metricSortValue(key: string): number | undefined {
+  return metricSortValues.get(key)
+}
+
+export function useMetricSortTick() {
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const fn = () => setTick((n) => n + 1)
+    metricSortListeners.add(fn)
+    return () => {
+      metricSortListeners.delete(fn)
+    }
+  }, [])
+}
+
 function MetricCard({
   label,
   usage,
@@ -193,6 +232,7 @@ export function MetricsCell({ scope, namespace, name }: Pick<MetricsPanelProps, 
           if (!cancelled) setText('—')
           return
         }
+        rememberMetricSortValue(`pod:${namespace ?? ''}/${name ?? ''}`, metricRank(body.cpu))
         if (!cancelled) {
           setText(`${formatCores(body.cpu.usage)} / ${formatBytes(body.memory.usage)}`)
         }
@@ -272,7 +312,11 @@ export function useNodeMetrics(name: string, enabled: boolean) {
           return
         }
         const body: MetricsResponse = await res.json()
-        if (!cancelled) setData(body.available ? body : null)
+        const next = body.available ? body : null
+        rememberMetricSortValue(`node:${name}:cpu`, metricRank(next?.cpu))
+        rememberMetricSortValue(`node:${name}:memory`, metricRank(next?.memory))
+        rememberMetricSortValue(`node:${name}:disk`, metricRank(next?.disk))
+        if (!cancelled) setData(next)
       } catch {
         if (!cancelled) setData(null)
       }

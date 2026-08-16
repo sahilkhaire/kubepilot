@@ -10,7 +10,8 @@ import { ErrorAlert } from '@/components/error-alert'
 import { ALL_NAMESPACES, isAllNamespaces, NamespaceSelect, resolveNamespaceValue } from '@/components/namespace-select'
 import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
-import { MetricsCell } from '@/components/MetricsPanel'
+import { MetricsCell, metricSortValue, useMetricSortTick } from '@/components/MetricsPanel'
+import { SortableHead } from '@/components/sortable-head'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -52,8 +53,10 @@ import {
   secretType,
   serviceClusterIP,
   serviceType,
+  k8sQuantityNumber,
   type K8sObject,
 } from '@/lib/k8s-fields'
+import { ratioSortValue, sortBy, timestampSortValue, useTableSort } from '@/lib/table-sort'
 import type { YAMLTarget } from '@/lib/k8s-yaml'
 
 function statusBadge(value: string) {
@@ -65,6 +68,47 @@ function statusBadge(value: string) {
       {value || '—'}
     </Badge>
   )
+}
+
+function resourceSortValue(item: K8sObject, key: string, module: string, fallbackNs: string): unknown {
+  const name = objectName(item)
+  const ns = objectNamespace(item) || fallbackNs
+  switch (key) {
+    case 'name':
+      return name
+    case 'namespace':
+      return ns
+    case 'ready':
+      if (module === 'pods') return ratioSortValue(podReady(item))
+      if (module === 'daemonsets') return ratioSortValue(daemonReady(item))
+      return ratioSortValue(replicaReady(item))
+    case 'status':
+      return module === 'pvcs' ? pvcStatus(item) : podPhase(item)
+    case 'restarts':
+      return podRestarts(item)
+    case 'node':
+      return podNode(item)
+    case 'metrics':
+      return metricSortValue(`pod:${ns}/${name}`) ?? Number.NEGATIVE_INFINITY
+    case 'completions':
+      return ratioSortValue(jobCompletions(item))
+    case 'schedule':
+      return cronSchedule(item)
+    case 'type':
+      return module === 'secrets' ? secretType(item) : serviceType(item)
+    case 'clusterIP':
+      return serviceClusterIP(item)
+    case 'class':
+      return ingressClass(item)
+    case 'capacity':
+      return k8sQuantityNumber(pvcStorage(item))
+    case 'replicas':
+      return hpaReplicas(item)
+    case 'age':
+      return timestampSortValue(item.metadata?.creationTimestamp)
+    default:
+      return ''
+  }
 }
 
 function ResourceRowMenu({
@@ -210,6 +254,15 @@ export default function ResourceListPage({
     () => items.filter((item) => matchesQuery(item, query)),
     [items, query],
   )
+  const { sort, sortKey, sortDir, onSort } = useTableSort(module)
+  const metricsTick = useMetricSortTick()
+  const sorted = useMemo(
+    () =>
+      sortBy(visible, sort, (item, key) =>
+        resourceSortValue(item, key, module, isAllNamespaces(namespace) ? '' : namespace),
+      ),
+    [visible, sort, module, namespace, metricsTick],
+  )
 
   if (!kind || !section) {
     return (
@@ -268,43 +321,55 @@ export default function ResourceListPage({
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
-              <TableHead>Name</TableHead>
-              {!clusterScoped ? <TableHead>Namespace</TableHead> : null}
+              <SortableHead column="name" label="Name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              {!clusterScoped ? (
+                <SortableHead column="namespace" label="Namespace" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              ) : null}
               {module === 'pods' ? (
                 <>
-                  <TableHead>Ready</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Restarts</TableHead>
-                  <TableHead>Node</TableHead>
-                  <TableHead>CPU / Memory</TableHead>
+                  <SortableHead column="ready" label="Ready" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                  <SortableHead column="status" label="Status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                  <SortableHead column="restarts" label="Restarts" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                  <SortableHead column="node" label="Node" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                  <SortableHead column="metrics" label="CPU / Memory" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 </>
               ) : null}
               {['deployments', 'statefulsets', 'replicasets', 'daemonsets'].includes(module) ? (
-                <TableHead>Ready</TableHead>
+                <SortableHead column="ready" label="Ready" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               ) : null}
-              {module === 'jobs' ? <TableHead>Completions</TableHead> : null}
-              {module === 'cronjobs' ? <TableHead>Schedule</TableHead> : null}
+              {module === 'jobs' ? (
+                <SortableHead column="completions" label="Completions" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              ) : null}
+              {module === 'cronjobs' ? (
+                <SortableHead column="schedule" label="Schedule" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              ) : null}
               {module === 'services' ? (
                 <>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Cluster IP</TableHead>
+                  <SortableHead column="type" label="Type" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                  <SortableHead column="clusterIP" label="Cluster IP" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 </>
               ) : null}
-              {module === 'ingresses' ? <TableHead>Class</TableHead> : null}
+              {module === 'ingresses' ? (
+                <SortableHead column="class" label="Class" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              ) : null}
               {module === 'pvcs' ? (
                 <>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Capacity</TableHead>
+                  <SortableHead column="status" label="Status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                  <SortableHead column="capacity" label="Capacity" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 </>
               ) : null}
-              {module === 'secrets' ? <TableHead>Type</TableHead> : null}
-              {module === 'hpas' ? <TableHead>Replicas</TableHead> : null}
-              <TableHead>Age</TableHead>
+              {module === 'secrets' ? (
+                <SortableHead column="type" label="Type" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              ) : null}
+              {module === 'hpas' ? (
+                <SortableHead column="replicas" label="Replicas" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              ) : null}
+              <SortableHead column="age" label="Age" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <TableHead className="w-8" />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visible.map((item) => {
+            {sorted.map((item) => {
               const name = objectName(item)
               if (!name) return null
               const ns = objectNamespace(item) || (isAllNamespaces(namespace) ? '' : namespace)
@@ -373,7 +438,7 @@ export default function ResourceListPage({
             })}
           </TableBody>
         </Table>
-        {visible.length === 0 && !error ? (
+        {sorted.length === 0 && !error ? (
           <EmptyState>No {kind.label.toLowerCase()}{query ? ' match this filter' : ''}.</EmptyState>
         ) : null}
       </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import EmptyState from '@/components/EmptyState'
 import ResourceYAMLSheet from '@/components/resource-yaml-sheet'
+import { SortableHead } from '@/components/sortable-head'
 import { ErrorAlert } from '@/components/error-alert'
 import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
@@ -16,6 +17,7 @@ import {
 } from '@/components/ui/table'
 import { useUser } from '@/lib/auth-context'
 import { can } from '@/lib/grants'
+import { sortBy, useTableSort } from '@/lib/table-sort'
 import type { YAMLTarget } from '@/lib/k8s-yaml'
 
 export default function Namespaces() {
@@ -52,6 +54,8 @@ export default function Namespaces() {
     const q = query.toLowerCase()
     return namespaces.filter((ns) => !q || ns.toLowerCase().includes(q))
   }, [namespaces, query])
+  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const sorted = useMemo(() => sortBy(visible, sort, (ns) => ns), [visible, sort])
 
   if (loading) return <PageLoading />
 
@@ -70,12 +74,12 @@ export default function Namespaces() {
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>
-              <TableHead>Name</TableHead>
+              <SortableHead column="name" label="Name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visible.map((ns) => (
+            {sorted.map((ns) => (
               <TableRow key={ns}>
                 <TableCell className="font-medium">{ns}</TableCell>
                 <TableCell className="text-right">
@@ -91,7 +95,7 @@ export default function Namespaces() {
             ))}
           </TableBody>
         </Table>
-        {visible.length === 0 ? <EmptyState>No namespaces.</EmptyState> : null}
+        {sorted.length === 0 ? <EmptyState>No namespaces.</EmptyState> : null}
       </div>
       <ResourceYAMLSheet
         target={yamlTarget}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { SortableHead } from '@/components/sortable-head'
 import { ErrorAlert } from '@/components/error-alert'
 import { ALL_NAMESPACES, isAllNamespaces, NamespaceSelect, resolveNamespaceValue } from '@/components/namespace-select'
 import { PageBody, PageHeader } from '@/components/page-header'
@@ -8,12 +9,12 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
 import { useUser } from '@/lib/auth-context'
 import { can } from '@/lib/grants'
+import { sortBy, useTableSort } from '@/lib/table-sort'
 
 const rows = [
   { module: 'pods', label: 'Pods', href: '/workloads/pods' },
@@ -83,6 +84,11 @@ export default function Workloads() {
     }
   }, [namespace])
 
+  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const sortedRows = sortBy(visibleRows, sort, (row, key) =>
+    key === 'count' ? (counts[row.module] ?? Number.NEGATIVE_INFINITY) : row.label,
+  )
+
   if (loading && namespaces.length === 0) {
     return <PageLoading />
   }
@@ -100,12 +106,12 @@ export default function Workloads() {
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>
-              <TableHead>Kind</TableHead>
-              <TableHead className="text-right">Count</TableHead>
+              <SortableHead column="kind" label="Kind" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortableHead column="count" label="Count" sortKey={sortKey} sortDir={sortDir} onSort={onSort} align="right" />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visibleRows.map((row) => (
+            {sortedRows.map((row) => (
               <TableRow key={row.module}>
                 <TableCell>
                   <Link to={row.href} className="font-medium hover:underline">
