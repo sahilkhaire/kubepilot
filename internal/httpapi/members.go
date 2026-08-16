@@ -318,6 +318,9 @@ func validateNamespaces(namespaces []string, installNS string) error {
 		return errEmptyNamespaces
 	}
 	for _, ns := range namespaces {
+		if strings.TrimSpace(ns) == "" {
+			return errBlankNamespace
+		}
 		if installNS != "" && ns == installNS {
 			return errInstallNSForbidden
 		}
@@ -326,8 +329,9 @@ func validateNamespaces(namespaces []string, installNS string) error {
 }
 
 var (
-	errEmptyNamespaces     = &namespaceError{"namespaces required"}
-	errInstallNSForbidden  = &namespaceError{"install namespace not allowed"}
+	errEmptyNamespaces    = &namespaceError{"namespaces required"}
+	errBlankNamespace     = &namespaceError{"namespace required"}
+	errInstallNSForbidden = &namespaceError{"install namespace not allowed"}
 )
 
 type namespaceError struct{ msg string }

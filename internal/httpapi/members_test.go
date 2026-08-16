@@ -287,6 +287,28 @@ func TestCreateMemberEmptyNamespaces(t *testing.T) {
 	}
 }
 
+func TestCreateMemberBlankNamespaces(t *testing.T) {
+	t.Parallel()
+	st := store.NewMemory()
+	createPermissionSet(t, st, "ps1")
+	h := newMembersHandler(t, st)
+	session := login(t, h, "owner", "secret")
+
+	for _, namespaces := range []string{`[""]`, `["  "]`} {
+		t.Run(namespaces, func(t *testing.T) {
+			body := bytes.NewBufferString(`{"username":"blank","displayName":"Blank","permissionSetId":"ps1","namespaces":` + namespaces + `}`)
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/api/settings/members", body)
+			req.AddCookie(session)
+			h.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestCreateMemberInvalidUsername(t *testing.T) {
 	t.Parallel()
 	st := store.NewMemory()
