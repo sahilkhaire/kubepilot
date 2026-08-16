@@ -260,13 +260,7 @@ func isMetricsBadRequest(err error) bool {
 }
 
 func metricsProviderFor(deps Deps) streams.MetricsProvider {
-	if deps.MetricsProvider != nil {
-		return deps.MetricsProvider
-	}
-	if deps.Kube != nil {
-		return streams.NewAutoMetricsProvider(deps.Kube, deps.PrometheusURL, nil)
-	}
-	return nil
+	return deps.MetricsProvider
 }
 
 func execUpgraderFor(deps Deps) streams.ExecUpgrader {

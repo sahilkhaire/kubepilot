@@ -69,18 +69,28 @@ type SourceDiscoverer interface {
 	Discover(ctx context.Context) (MetricSource, error)
 }
 
+const discoveryRetryAfter = 30 * time.Second
+
 type autoMetricsProvider struct {
 	kube          *kube.Client
 	prometheusURL string
 	discoverer    SourceDiscoverer
+	now           func() time.Time
+	retryAfter    time.Duration
 
-	mu      sync.Mutex
-	source  MetricSource
+	mu           sync.Mutex
+	source       MetricSource
 	discoveryDone bool
+	nextDiscover time.Time
 }
 
 func NewAutoMetricsProvider(k *kube.Client, prometheusURL string, discoverer SourceDiscoverer) MetricsProvider {
-	p := &autoMetricsProvider{kube: k, prometheusURL: prometheusURL}
+	p := &autoMetricsProvider{
+		kube:          k,
+		prometheusURL: prometheusURL,
+		now:           time.Now,
+		retryAfter:    discoveryRetryAfter,
+	}
 	if discoverer != nil {
 		p.discoverer = discoverer
 	} else {
@@ -114,15 +124,25 @@ func (p *autoMetricsProvider) sourceFor(ctx context.Context) (MetricSource, erro
 	if p.discoveryDone {
 		return p.source, nil
 	}
+	now := p.now
+	if now == nil {
+		now = time.Now
+	}
+	if !p.nextDiscover.IsZero() && now().Before(p.nextDiscover) {
+		return p.source, nil
+	}
 	src, err := p.discoverer.Discover(ctx)
 	if err != nil {
+		p.nextDiscover = now().Add(p.retryAfter)
 		return nil, err
 	}
 	if src != nil {
 		p.source = src
 		p.discoveryDone = true
+		return src, nil
 	}
-	return src, nil
+	p.nextDiscover = now().Add(p.retryAfter)
+	return nil, nil
 }
 
 func validateQuery(q MetricsQuery) error {

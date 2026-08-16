@@ -14,6 +14,13 @@ import (
 	"k8s.io/client-go/restmapper"
 )
 
+// Dashboard clients issue many concurrent GETs (metrics discovery, pod lists).
+// client-go defaults (QPS 5 / burst 10) queue those behind "client-side throttling".
+const (
+	clientQPS   float32 = 50
+	clientBurst         = 100
+)
+
 type Client struct {
 	Inner   kubernetes.Interface
 	Config  *rest.Config // for SPDY exec; nil in test clients without exec
@@ -23,11 +30,17 @@ type Client struct {
 	Drainer NodeDrainer // optional override for tests
 }
 
+func applyClientRateLimits(cfg *rest.Config) {
+	cfg.QPS = clientQPS
+	cfg.Burst = clientBurst
+}
+
 func InCluster() (*kubernetes.Clientset, error) {
 	cfg, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, err
 	}
+	applyClientRateLimits(cfg)
 	return kubernetes.NewForConfig(cfg)
 }
 
@@ -37,6 +50,7 @@ func NewInCluster() (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	applyClientRateLimits(cfg)
 	cs, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		return nil, err

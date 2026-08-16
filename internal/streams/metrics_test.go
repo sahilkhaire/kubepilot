@@ -103,7 +103,7 @@ func (c *countingDiscoverer) Discover(context.Context) (streams.MetricSource, er
 	return c.src, nil
 }
 
-func TestAutoMetricsProviderRetriesDiscoveryAfterNoSource(t *testing.T) {
+func TestAutoMetricsProviderCachesFailedDiscovery(t *testing.T) {
 	t.Parallel()
 
 	d := &countingDiscoverer{src: nil}
@@ -118,8 +118,8 @@ func TestAutoMetricsProviderRetriesDiscoveryAfterNoSource(t *testing.T) {
 			t.Fatalf("result=%+v want available=false", res)
 		}
 	}
-	if d.calls != 2 {
-		t.Fatalf("discover calls=%d want 2 (retry after no source)", d.calls)
+	if d.calls != 1 {
+		t.Fatalf("discover calls=%d want 1 (negative cache)", d.calls)
 	}
 }
 

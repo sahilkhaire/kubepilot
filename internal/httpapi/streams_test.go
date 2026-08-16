@@ -526,3 +526,39 @@ func TestMetricsAllowedWithViewGrant(t *testing.T) {
 		t.Fatalf("body=%+v unexpected metrics payload", body)
 	}
 }
+
+func TestMetricsReusesProviderAcrossRequests(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"metrics": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+
+	cs := fake.NewSimpleClientset()
+	h := newAuthHandlerWithOptions(t, st, httpapi.Deps{
+		InstallNS: testInstallNS,
+		Kube:      kube.ForTest(cs),
+	})
+	session := login(t, h, "member", "pass")
+
+	for i := 0; i < 2; i++ {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/streams/metrics?scope=cluster", nil)
+		req.AddCookie(session)
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("request %d: code=%d body=%s want %d", i, rec.Code, rec.Body.String(), http.StatusOK)
+		}
+	}
+
+	got := 0
+	for _, a := range cs.Actions() {
+		if a.GetVerb() == "get" && a.GetResource().Resource == "services" {
+			got++
+		}
+	}
+	const want = 9 // 3 namespaces × 3 candidate service names, once
+	if got != want {
+		t.Fatalf("service gets=%d want %d (discovery should run once per handler)", got, want)
+	}
+}

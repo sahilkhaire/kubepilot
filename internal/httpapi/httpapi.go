@@ -30,6 +30,9 @@ type Deps struct {
 }
 
 func New(deps Deps) http.Handler {
+	if deps.MetricsProvider == nil && deps.Kube != nil {
+		deps.MetricsProvider = streams.NewAutoMetricsProvider(deps.Kube, deps.PrometheusURL, nil)
+	}
 	mux := http.NewServeMux()
 	if deps.Auth != nil {
 		registerAuthRoutes(mux, deps.Auth, deps.Audit, deps.TrustProxy)
