@@ -263,3 +263,97 @@ func TestMemberEventsExcludeInstallNS(t *testing.T) {
 		t.Fatalf("expected dev event with empty involvedObject.namespace in %v", events)
 	}
 }
+
+func seedNodeWithPods() *kube.Client {
+	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1"}}
+	nsDev := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "dev"}}
+	nsProd := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "prod"}}
+	podDev := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "dev"},
+		Spec:       corev1.PodSpec{NodeName: "node-1"},
+	}
+	podProd := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "prod"},
+		Spec:       corev1.PodSpec{NodeName: "node-1"},
+	}
+	podOtherNode := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: "dev"},
+		Spec:       corev1.PodSpec{NodeName: "node-2"},
+	}
+	return kube.ForTest(fake.NewSimpleClientset(node, nsDev, nsProd, podDev, podProd, podOtherNode))
+}
+
+func TestNodePodsDeniedWithoutNodesGrant(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	h := newK8sHandler(t, st, seedNodeWithPods())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/nodes/node-1/pods", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("code=%d want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestNodePodsEmptyWithoutPodsGrant(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"nodes": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	h := newK8sHandler(t, st, seedNodeWithPods())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/nodes/node-1/pods", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), http.StatusOK)
+	}
+	var pods []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &pods); err != nil {
+		t.Fatal(err)
+	}
+	if len(pods) != 0 {
+		t.Fatalf("pods=%v want empty without pods view", pods)
+	}
+}
+
+func TestNodePodsFiltersByNamespace(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"nodes": {"view"}, "pods": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	h := newK8sHandler(t, st, seedNodeWithPods())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/nodes/node-1/pods", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), http.StatusOK)
+	}
+	var pods []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &pods); err != nil {
+		t.Fatal(err)
+	}
+	if len(pods) != 1 {
+		t.Fatalf("pods=%d want 1", len(pods))
+	}
+	meta, _ := pods[0]["metadata"].(map[string]any)
+	if meta["name"] != "web" || meta["namespace"] != "dev" {
+		t.Fatalf("pod=%v want web/dev", pods[0])
+	}
+}

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { User } from '@/api'
 import { Badge } from '@/components/ui/badge'
 import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
 import { ErrorAlert } from '@/components/error-alert'
 import MetricsPanel from '@/components/MetricsPanel'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useUser } from '@/lib/auth-context'
+import { can } from '@/lib/grants'
 
 const labels: Record<string, { label: string; href: string }> = {
   pods: { label: 'Pods', href: '/workloads/pods' },
@@ -18,12 +19,21 @@ const labels: Record<string, { label: string; href: string }> = {
   cronjobs: { label: 'Cron Jobs', href: '/workloads/cronjobs' },
 }
 
-export default function Home({ user }: { user: User }) {
+export default function Home() {
+  const user = useUser()
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const canOverview = can(user, 'cluster.overview', 'view')
+  const canMetrics = can(user, 'metrics', 'view')
+  const visibleCards = Object.entries(labels).filter(([key]) => can(user, key, 'view'))
 
   useEffect(() => {
+    if (!canOverview) {
+      setLoading(false)
+      setCounts({})
+      return
+    }
     let cancelled = false
     async function load() {
       setLoading(true)
@@ -44,7 +54,7 @@ export default function Home({ user }: { user: User }) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [canOverview])
 
   return (
     <PageBody>
@@ -58,19 +68,19 @@ export default function Home({ user }: { user: User }) {
         <PageLoading compact />
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
-          {Object.entries(labels).map(([key, meta]) => (
+          {visibleCards.map(([key, meta]) => (
             <Link key={key} to={meta.href} className="min-w-0">
               <Card className="shadow-none ring-foreground/8 transition-colors hover:bg-muted/40">
                 <CardHeader className="gap-1 py-3">
                   <CardDescription className="text-[11px]">{meta.label}</CardDescription>
-                  <CardTitle className="text-xl tabular-nums">{counts[key] ?? '—'}</CardTitle>
+                  <CardTitle className="text-xl tabular-nums">{canOverview ? (counts[key] ?? '—') : '—'}</CardTitle>
                 </CardHeader>
               </Card>
             </Link>
           ))}
         </div>
       )}
-      <MetricsPanel scope="cluster" title="Cluster metrics" />
+      {canMetrics ? <MetricsPanel scope="cluster" title="Cluster metrics" /> : null}
     </PageBody>
   )
 }

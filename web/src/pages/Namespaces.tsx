@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import EmptyState from '@/components/EmptyState'
+import ResourceYAMLSheet from '@/components/resource-yaml-sheet'
 import { ErrorAlert } from '@/components/error-alert'
 import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
@@ -14,12 +14,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useUser } from '@/lib/auth-context'
+import { can } from '@/lib/grants'
+import type { YAMLTarget } from '@/lib/k8s-yaml'
 
 export default function Namespaces() {
+  const user = useUser()
   const [namespaces, setNamespaces] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
+  const [yamlTarget, setYamlTarget] = useState<YAMLTarget | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -74,8 +79,12 @@ export default function Namespaces() {
               <TableRow key={ns}>
                 <TableCell className="font-medium">{ns}</TableCell>
                 <TableCell className="text-right">
-                  <Button variant="ghost" size="xs" asChild>
-                    <Link to={`/namespaces/cluster/namespaces/${encodeURIComponent(ns)}/yaml`}>YAML</Link>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setYamlTarget({ module: 'namespaces', name: ns, clusterScoped: true })}
+                  >
+                    YAML
                   </Button>
                 </TableCell>
               </TableRow>
@@ -84,6 +93,19 @@ export default function Namespaces() {
         </Table>
         {visible.length === 0 ? <EmptyState>No namespaces.</EmptyState> : null}
       </div>
+      <ResourceYAMLSheet
+        target={yamlTarget}
+        canEdit={can(user, 'namespaces', 'yaml_edit')}
+        canDelete={can(user, 'namespaces', 'delete')}
+        onOpenChange={(open) => {
+          if (!open) setYamlTarget(null)
+        }}
+        onDeleted={() => {
+          if (yamlTarget) {
+            setNamespaces((prev) => prev.filter((ns) => ns !== yamlTarget.name))
+          }
+        }}
+      />
     </PageBody>
   )
 }

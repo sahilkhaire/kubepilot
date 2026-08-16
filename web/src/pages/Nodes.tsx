@@ -1,12 +1,23 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { EllipsisVerticalIcon } from 'lucide-react'
+import { toast } from 'sonner'
+import { cordonNode, deleteK8sResource, drainNode, uncordonNode, type User } from '@/api'
+import DeleteConfirm from '@/components/DeleteConfirm'
 import EmptyState from '@/components/EmptyState'
+import NodeDetailPanel from '@/components/node-detail-panel'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { ErrorAlert } from '@/components/error-alert'
+import { NodeCPUBar, NodeDiskBar, NodeMemoryBar, useNodeMetrics } from '@/components/MetricsPanel'
 import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
-import { MetricsCell } from '@/components/MetricsPanel'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import {
   Table,
@@ -16,92 +27,313 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatAge, matchesQuery, nodeReady, nodeVersion, objectName, type K8sObject } from '@/lib/k8s-fields'
+import { useUser } from '@/lib/auth-context'
+import { can } from '@/lib/grants'
+import {
+  formatAge,
+  matchesQuery,
+  nodeConditionLabels,
+  nodeInternalIP,
+  nodeRoles,
+  nodeTaintCount,
+  nodeUnschedulable,
+  nodeVersion,
+  objectName,
+  type K8sObject,
+} from '@/lib/k8s-fields'
+
+type PendingAction = 'cordon' | 'uncordon' | 'drain'
 
 export default function Nodes() {
+  const user = useUser()
   const [nodes, setNodes] = useState<K8sObject[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
+  const [pending, setPending] = useState<{ name: string; action: PendingAction } | null>(null)
+  const [confirm, setConfirm] = useState<{ name: string; action: PendingAction } | null>(null)
+  const [deleteName, setDeleteName] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [selectedName, setSelectedName] = useState<string | null>(null)
+  const [panelView, setPanelView] = useState<'details' | 'yaml'>('details')
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true)
-      setError('')
-      try {
-        const res = await fetch('/api/k8s/nodes', { credentials: 'same-origin' })
-        if (res.status === 403) {
-          if (!cancelled) setNodes([])
-          return
-        }
-        if (!res.ok) throw new Error('failed to load nodes')
-        const data: K8sObject[] = await res.json()
-        if (!cancelled) setNodes(Array.isArray(data) ? data : [])
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'load failed')
-      } finally {
-        if (!cancelled) setLoading(false)
+  const load = useCallback(async () => {
+    setError('')
+    try {
+      const res = await fetch('/api/k8s/nodes', { credentials: 'same-origin' })
+      if (res.status === 403) {
+        setNodes([])
+        return
       }
-    }
-    load()
-    return () => {
-      cancelled = true
+      if (!res.ok) throw new Error('failed to load nodes')
+      const data: K8sObject[] = await res.json()
+      setNodes(Array.isArray(data) ? data : [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'load failed')
     }
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    async function firstLoad() {
+      setLoading(true)
+      await load()
+      if (!cancelled) setLoading(false)
+    }
+    firstLoad()
+    return () => {
+      cancelled = true
+    }
+  }, [load])
+
   const visible = useMemo(() => nodes.filter((n) => matchesQuery(n, query)), [nodes, query])
+  const metricsEnabled = can(user, 'metrics', 'view')
+  const selected = useMemo(
+    () => nodes.find((n) => objectName(n) === selectedName) ?? null,
+    [nodes, selectedName],
+  )
+
+  function openNode(name: string, view: 'details' | 'yaml' = 'details') {
+    setSelectedName(name)
+    setPanelView(view)
+  }
+
+  async function runAction(name: string, action: PendingAction) {
+    setPending({ name, action })
+    try {
+      if (action === 'cordon') await cordonNode(name)
+      else if (action === 'uncordon') await uncordonNode(name)
+      else await drainNode(name)
+      toast.success(
+        action === 'cordon' ? `Cordoned ${name}` : action === 'uncordon' ? `Uncordoned ${name}` : `Draining ${name}`,
+      )
+      await load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'action failed')
+    } finally {
+      setPending(null)
+      setConfirm(null)
+    }
+  }
+
+  async function runDelete(name: string) {
+    setDeleting(true)
+    try {
+      await deleteK8sResource('nodes', name, { clusterScoped: true })
+      toast.success(`Deleted ${name}`)
+      setDeleteName(null)
+      if (selectedName === name) setSelectedName(null)
+      await load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'delete failed')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   if (loading) return <PageLoading />
 
   return (
-    <PageBody>
-      <PageHeader title="Nodes" description={`${visible.length} item${visible.length === 1 ? '' : 's'}`}>
-        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter…" className="h-7 w-48 text-xs" />
-      </PageHeader>
-      <ErrorAlert message={error} />
-      <div className="min-h-0 flex-1 overflow-auto rounded-md border">
-        <Table>
-          <TableHeader className="sticky top-0 bg-background">
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Version</TableHead>
-              <TableHead>CPU / Memory</TableHead>
-              <TableHead>Age</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visible.map((node) => {
-              const name = objectName(node)
-              if (!name) return null
-              const ready = nodeReady(node)
-              return (
-                <TableRow key={name}>
-                  <TableCell className="font-medium">{name}</TableCell>
-                  <TableCell>
-                    <Badge variant={ready === 'Ready' ? 'outline' : 'destructive'} className="h-5 px-1.5 text-[10px]">
-                      {ready}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">{nodeVersion(node)}</TableCell>
-                  <TableCell>
-                    <MetricsCell scope="node" name={name} />
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{formatAge(node.metadata?.creationTimestamp)}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="xs" asChild>
-                      <Link to={`/nodes/cluster/nodes/${encodeURIComponent(name)}/yaml`}>YAML</Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
-        {visible.length === 0 ? <EmptyState>No nodes.</EmptyState> : null}
+    <PageBody className="flex-row gap-0 p-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3">
+        <PageHeader title="Nodes" description={`${visible.length} item${visible.length === 1 ? '' : 's'}`}>
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Filter…"
+            className="h-7 w-48 text-xs"
+          />
+        </PageHeader>
+        <ErrorAlert message={error} />
+        <div className="min-h-0 flex-1 overflow-auto rounded-md border">
+          <Table>
+            <TableHeader className="sticky top-0 z-10 bg-background">
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>CPU</TableHead>
+                <TableHead>Memory</TableHead>
+                <TableHead>Disk</TableHead>
+                <TableHead>Taints</TableHead>
+                <TableHead>Roles</TableHead>
+                <TableHead>Version</TableHead>
+                <TableHead>Age</TableHead>
+                <TableHead>Conditions</TableHead>
+                <TableHead className="w-8" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visible.map((node) => {
+                const name = objectName(node)
+                if (!name) return null
+                return (
+                  <NodeRow
+                    key={name}
+                    node={node}
+                    user={user}
+                    selected={selectedName === name}
+                    metricsEnabled={metricsEnabled}
+                    busy={pending?.name === name}
+                    onOpen={() => openNode(name)}
+                    onYaml={() => openNode(name, 'yaml')}
+                    onCordon={() => setConfirm({ name, action: nodeUnschedulable(node) ? 'uncordon' : 'cordon' })}
+                    onDrain={() => setConfirm({ name, action: 'drain' })}
+                    onDelete={() => setDeleteName(name)}
+                  />
+                )
+              })}
+            </TableBody>
+          </Table>
+          {visible.length === 0 ? (
+            <EmptyState>No nodes{query ? ' match this filter' : ''}.</EmptyState>
+          ) : null}
+        </div>
       </div>
+      {selected ? (
+        <NodeDetailPanel
+          node={selected}
+          user={user}
+          view={panelView}
+          onViewChange={setPanelView}
+          onClose={() => setSelectedName(null)}
+          onCordon={() =>
+            setConfirm({
+              name: objectName(selected),
+              action: nodeUnschedulable(selected) ? 'uncordon' : 'cordon',
+            })
+          }
+          onDrain={() => setConfirm({ name: objectName(selected), action: 'drain' })}
+          onDelete={() => setDeleteName(objectName(selected))}
+          onRefreshed={(next) => {
+            const nextName = objectName(next)
+            setNodes((prev) => prev.map((n) => (objectName(n) === nextName ? next : n)))
+          }}
+        />
+      ) : null}
+      <ConfirmDialog
+        open={confirm != null}
+        title={
+          confirm?.action === 'drain'
+            ? `Drain ${confirm.name}?`
+            : confirm?.action === 'uncordon'
+              ? `Uncordon ${confirm.name}?`
+              : `Cordon ${confirm?.name ?? ''}?`
+        }
+        description={
+          confirm?.action === 'drain'
+            ? 'This cordons the node and evicts its pods. Workloads without disruption budgets may be interrupted.'
+            : confirm?.action === 'uncordon'
+              ? 'The node will accept new pods again.'
+              : 'The node will stop accepting new pods until it is uncordoned.'
+        }
+        confirmLabel={
+          confirm?.action === 'drain' ? 'Drain' : confirm?.action === 'uncordon' ? 'Uncordon' : 'Cordon'
+        }
+        destructive={confirm?.action === 'drain'}
+        pending={pending != null}
+        onConfirm={() => {
+          if (!confirm) return
+          return runAction(confirm.name, confirm.action)
+        }}
+        onCancel={() => !pending && setConfirm(null)}
+      />
+      {deleteName ? (
+        <DeleteConfirm
+          resourceName={deleteName}
+          resourceLabel="node"
+          pending={deleting}
+          onConfirm={() => runDelete(deleteName)}
+          onCancel={() => !deleting && setDeleteName(null)}
+        />
+      ) : null}
     </PageBody>
+  )
+}
+
+function NodeRow({
+  node,
+  user,
+  selected,
+  metricsEnabled,
+  busy,
+  onOpen,
+  onYaml,
+  onCordon,
+  onDrain,
+  onDelete,
+}: {
+  node: K8sObject
+  user: User
+  selected: boolean
+  metricsEnabled: boolean
+  busy: boolean
+  onOpen: () => void
+  onYaml: () => void
+  onCordon: () => void
+  onDrain: () => void
+  onDelete: () => void
+}) {
+  const name = objectName(node)
+  const ip = nodeInternalIP(node)
+  const metrics = useNodeMetrics(name, metricsEnabled)
+  const conditions = nodeConditionLabels(node)
+  const unschedulable = nodeUnschedulable(node)
+
+  return (
+    <TableRow data-state={selected ? 'selected' : undefined} className="cursor-pointer" onClick={onOpen}>
+      <TableCell>
+        <span className="font-medium">{name}</span>
+        {ip && ip !== name ? <p className="text-[11px] text-muted-foreground">{ip}</p> : null}
+      </TableCell>
+      <TableCell>
+        <NodeCPUBar metric={metrics?.cpu} />
+      </TableCell>
+      <TableCell>
+        <NodeMemoryBar metric={metrics?.memory} />
+      </TableCell>
+      <TableCell>
+        <NodeDiskBar metric={metrics?.disk} />
+      </TableCell>
+      <TableCell className="tabular-nums text-muted-foreground">{nodeTaintCount(node)}</TableCell>
+      <TableCell>{nodeRoles(node)}</TableCell>
+      <TableCell className="font-mono text-muted-foreground">{nodeVersion(node)}</TableCell>
+      <TableCell className="text-muted-foreground">{formatAge(node.metadata?.creationTimestamp)}</TableCell>
+      <TableCell>
+        <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+          {conditions.map((c) => (
+            <span key={c.text} className={c.ok ? 'text-emerald-500' : 'text-destructive'}>
+              {c.text}
+            </span>
+          ))}
+        </div>
+      </TableCell>
+      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-xs" aria-label={`Actions for ${name}`} disabled={busy}>
+              <EllipsisVerticalIcon />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-40">
+            <DropdownMenuItem onClick={onYaml}>YAML</DropdownMenuItem>
+            {can(user, 'nodes', 'cordon') ? (
+              <DropdownMenuItem onClick={onCordon}>{unschedulable ? 'Uncordon' : 'Cordon'}</DropdownMenuItem>
+            ) : null}
+            {can(user, 'nodes', 'drain') ? (
+              <DropdownMenuItem variant="destructive" onClick={onDrain}>
+                Drain
+              </DropdownMenuItem>
+            ) : null}
+            {can(user, 'nodes', 'delete') ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onClick={onDelete}>
+                  Delete
+                </DropdownMenuItem>
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TableCell>
+    </TableRow>
   )
 }

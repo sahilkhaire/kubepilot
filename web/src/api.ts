@@ -315,6 +315,27 @@ export async function deleteAuditFilter(filters: AuditFilters): Promise<void> {
   }
 }
 
+export async function cordonNode(name: string): Promise<void> {
+  const res = await apiFetch(`/api/k8s/nodes/${encodeURIComponent(name)}/cordon`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(await readAPIError(res, 'failed to cordon node'))
+  }
+}
+
+export async function uncordonNode(name: string): Promise<void> {
+  const res = await apiFetch(`/api/k8s/nodes/${encodeURIComponent(name)}/uncordon`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(await readAPIError(res, 'failed to uncordon node'))
+  }
+}
+
+export async function drainNode(name: string): Promise<void> {
+  const res = await apiFetch(`/api/k8s/nodes/${encodeURIComponent(name)}/drain`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(await readAPIError(res, 'failed to drain node'))
+  }
+}
+
 export async function deleteK8sResource(
   module: string,
   name: string,

@@ -7,6 +7,8 @@ import { PageLoading } from '@/components/page-loading'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useUser } from '@/lib/auth-context'
+import { can } from '@/lib/grants'
 import {
   Table,
   TableBody,
@@ -39,6 +41,8 @@ function crdVersion(crd: CRDItem): string {
 }
 
 export default function CustomResources() {
+  const user = useUser()
+  const canViewInstances = can(user, 'custom_resources', 'view')
   const [crds, setCrds] = useState<CRDItem[]>([])
   const [namespaces, setNamespaces] = useState<string[]>([])
   const [namespace, setNamespace] = useState('')
@@ -162,7 +166,8 @@ export default function CustomResources() {
         <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter…" className="h-7 w-48 text-xs" />
       </PageHeader>
       <ErrorAlert message={error} />
-      <div className="min-h-0 flex-1 overflow-auto rounded-md border">
+      <div className="min-h-0 flex-1 space-y-3 overflow-auto">
+        <div className="rounded-md border">
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>
@@ -195,14 +200,16 @@ export default function CustomResources() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          type="button"
-                          variant={isSelected ? 'secondary' : 'ghost'}
-                          size="xs"
-                          onClick={() => setSelected(isSelected ? null : crd)}
-                        >
-                          {isSelected ? 'Hide instances' : 'View instances'}
-                        </Button>
+                        {canViewInstances ? (
+                          <Button
+                            type="button"
+                            variant={isSelected ? 'secondary' : 'ghost'}
+                            size="xs"
+                            onClick={() => setSelected(isSelected ? null : crd)}
+                          >
+                            {isSelected ? 'Hide instances' : 'View instances'}
+                          </Button>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   )
@@ -212,42 +219,43 @@ export default function CustomResources() {
           </TableBody>
         </Table>
         {grouped.length === 0 ? <EmptyState>No custom resource definitions.</EmptyState> : null}
-      </div>
-
-      {selected ? (
-        <div className="rounded-md border">
-          <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
-            <p className="text-sm font-medium">Instances — {selected.metadata?.name}</p>
-            {namespaced ? (
-              <NamespaceSelect namespaces={namespaces} value={namespace} onChange={setNamespace} />
-            ) : null}
-          </div>
-          {instances.length === 0 ? (
-            <EmptyState>No instances.</EmptyState>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Namespace</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {instances.map((item) => {
-                  const name = item.metadata?.name ?? ''
-                  const ns = item.metadata?.namespace ?? ''
-                  return (
-                    <TableRow key={ns ? `${ns}/${name}` : name}>
-                      <TableCell className="font-medium">{name}</TableCell>
-                      <TableCell>{ns || '—'}</TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          )}
         </div>
-      ) : null}
+
+        {selected ? (
+          <div className="rounded-md border">
+            <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+              <p className="text-sm font-medium">Instances — {selected.metadata?.name}</p>
+              {namespaced ? (
+                <NamespaceSelect namespaces={namespaces} value={namespace} onChange={setNamespace} />
+              ) : null}
+            </div>
+            {instances.length === 0 ? (
+              <EmptyState>No instances.</EmptyState>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Namespace</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {instances.map((item) => {
+                    const name = item.metadata?.name ?? ''
+                    const ns = item.metadata?.namespace ?? ''
+                    return (
+                      <TableRow key={ns ? `${ns}/${name}` : name}>
+                        <TableCell className="font-medium">{name}</TableCell>
+                        <TableCell>{ns || '—'}</TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        ) : null}
+      </div>
     </PageBody>
   )
 }

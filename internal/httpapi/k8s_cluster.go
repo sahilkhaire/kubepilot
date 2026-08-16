@@ -37,6 +37,9 @@ func registerK8sClusterRoutes(mux *http.ServeMux, deps Deps) {
 	mux.HandleFunc("POST /api/k8s/namespaces/{name}/delete", func(w http.ResponseWriter, r *http.Request) {
 		handleDeleteNamespace(w, r, deps)
 	})
+	mux.HandleFunc("GET /api/k8s/nodes/{name}/pods", func(w http.ResponseWriter, r *http.Request) {
+		handleNodePods(w, r, deps)
+	})
 	mux.HandleFunc("POST /api/k8s/nodes/{name}/cordon", func(w http.ResponseWriter, r *http.Request) {
 		handleNodeCordon(w, r, deps, true, "cordon")
 	})
@@ -205,6 +208,88 @@ func handleDeleteNamespace(w http.ResponseWriter, r *http.Request, deps Deps) {
 		return
 	}
 	handleResourceDelete(w, r, deps, "namespaces", "", name, true)
+}
+
+func handleNodePods(w http.ResponseWriter, r *http.Request, deps Deps) {
+	name := r.PathValue("name")
+	u, ps, ok := authenticateForKube(w, r, deps.Auth, deps.Store)
+	if !ok {
+		return
+	}
+	if !rbac.Allow(rbac.Request{
+		User:          *u,
+		InstallNS:     deps.InstallNS,
+		PermissionSet: ps,
+		Module:        "nodes",
+		Action:        "view",
+		ClusterScoped: true,
+	}) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	if deps.Kube == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	exists, err := deps.Kube.ObjectExists(r.Context(), "nodes", "", name)
+	if err != nil {
+		log.Printf("kube exists nodes: name=%s err=%v", name, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if !exists {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	pods, err := deps.Kube.ListPodsOnNode(r.Context(), name)
+	if err != nil {
+		log.Printf("kube list pods on node: name=%s err=%v", name, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	visibleSet := map[string]bool{}
+	if u.Role != store.RoleOwner {
+		clusterNS, err := deps.Kube.ClusterNamespaces(r.Context())
+		if err != nil {
+			log.Printf("kube list namespaces: err=%v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		for _, ns := range rbac.VisibleNamespaces(*u, deps.InstallNS, clusterNS) {
+			visibleSet[ns] = true
+		}
+	}
+
+	out := make([]corev1.Pod, 0)
+	for _, pod := range pods {
+		ns := pod.Namespace
+		if ns == "" {
+			continue
+		}
+		if u.Role != store.RoleOwner {
+			if deps.InstallNS != "" && ns == deps.InstallNS {
+				continue
+			}
+			if !visibleSet[ns] {
+				continue
+			}
+		}
+		if !rbac.Allow(rbac.Request{
+			User:          *u,
+			InstallNS:     deps.InstallNS,
+			PermissionSet: ps,
+			Module:        "pods",
+			Action:        "view",
+			Namespace:     ns,
+		}) {
+			continue
+		}
+		out = append(out, pod)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func handleNodeCordon(w http.ResponseWriter, r *http.Request, deps Deps, unschedulable bool, auditDetail string) {

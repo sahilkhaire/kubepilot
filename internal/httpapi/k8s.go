@@ -327,6 +327,17 @@ func handleWorkloadsOverview(w http.ResponseWriter, r *http.Request, deps Deps) 
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
+	if !rbac.Allow(rbac.Request{
+		User:          *u,
+		InstallNS:     deps.InstallNS,
+		PermissionSet: ps,
+		Module:        "workloads.overview",
+		Action:        "view",
+		Namespace:     ns,
+	}) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
 	if deps.Kube == nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
@@ -362,6 +373,17 @@ func handleClusterOverview(w http.ResponseWriter, r *http.Request, deps Deps) {
 	}
 	if deps.Kube == nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	if !rbac.Allow(rbac.Request{
+		User:          *u,
+		InstallNS:     deps.InstallNS,
+		PermissionSet: ps,
+		Module:        "cluster.overview",
+		Action:        "view",
+		ClusterScoped: true,
+	}) {
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 

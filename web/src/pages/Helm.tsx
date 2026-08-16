@@ -7,6 +7,8 @@ import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { useUser } from '@/lib/auth-context'
+import { can } from '@/lib/grants'
 import {
   Table,
   TableBody,
@@ -27,6 +29,8 @@ type HelmRelease = {
 }
 
 export default function Helm() {
+  const user = useUser()
+  const canUninstall = can(user, 'helm', 'uninstall')
   const [namespaces, setNamespaces] = useState<string[]>([])
   const [namespace, setNamespace] = useState('')
   const [releases, setReleases] = useState<HelmRelease[]>([])
@@ -148,7 +152,7 @@ export default function Helm() {
               <TableHead>Revision</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>App version</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              {canUninstall ? <TableHead className="text-right">Actions</TableHead> : null}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -164,17 +168,19 @@ export default function Helm() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{rel.appVersion ?? '—'}</TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="xs"
-                    disabled={pending === rel.name}
-                    onClick={() => setToUninstall(rel)}
-                  >
-                    {pending === rel.name ? 'Uninstalling…' : 'Uninstall'}
-                  </Button>
-                </TableCell>
+                {canUninstall ? (
+                  <TableCell className="text-right">
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="xs"
+                      disabled={pending === rel.name}
+                      onClick={() => setToUninstall(rel)}
+                    >
+                      {pending === rel.name ? 'Uninstalling…' : 'Uninstall'}
+                    </Button>
+                  </TableCell>
+                ) : null}
               </TableRow>
             ))}
           </TableBody>

@@ -1,6 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, Navigate, useParams } from 'react-router-dom'
+import { EllipsisVerticalIcon } from 'lucide-react'
+import { toast } from 'sonner'
+import { deleteK8sResource, type User } from '@/api'
+import DeleteConfirm from '@/components/DeleteConfirm'
 import EmptyState from '@/components/EmptyState'
+import ResourceYAMLSheet from '@/components/resource-yaml-sheet'
 import { ErrorAlert } from '@/components/error-alert'
 import { NamespaceSelect } from '@/components/namespace-select'
 import { PageBody, PageHeader } from '@/components/page-header'
@@ -8,6 +13,13 @@ import { PageLoading } from '@/components/page-loading'
 import { MetricsCell } from '@/components/MetricsPanel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import {
   Table,
@@ -17,7 +29,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { catalog, findKind } from '@/lib/catalog'
+import { catalog, findKind, grantModuleId } from '@/lib/catalog'
+import { useUser } from '@/lib/auth-context'
+import { can } from '@/lib/grants'
 import {
   cronSchedule,
   formatAge,
@@ -40,6 +54,7 @@ import {
   serviceType,
   type K8sObject,
 } from '@/lib/k8s-fields'
+import type { YAMLTarget } from '@/lib/k8s-yaml'
 
 function statusBadge(value: string) {
   const v = value.toLowerCase()
@@ -49,6 +64,59 @@ function statusBadge(value: string) {
     <Badge variant={bad ? 'destructive' : ok ? 'outline' : 'secondary'} className="h-5 px-1.5 text-[10px] font-medium">
       {value || '—'}
     </Badge>
+  )
+}
+
+function ResourceRowMenu({
+  name,
+  namespace,
+  module,
+  user,
+  busy,
+  onYaml,
+  onDelete,
+}: {
+  name: string
+  namespace: string
+  module: string
+  user: User
+  busy: boolean
+  onYaml: () => void
+  onDelete: () => void
+}) {
+  const showLogs = module === 'pods' && can(user, 'pods', 'logs')
+  const showShell = module === 'pods' && can(user, 'pods', 'exec')
+  const showDelete = module !== 'endpoints' && can(user, module, 'delete')
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon-xs" aria-label={`Actions for ${name}`} disabled={busy}>
+          <EllipsisVerticalIcon />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-40">
+        <DropdownMenuItem onClick={onYaml}>YAML</DropdownMenuItem>
+        {showLogs ? (
+          <DropdownMenuItem asChild>
+            <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/logs`}>Logs</Link>
+          </DropdownMenuItem>
+        ) : null}
+        {showShell ? (
+          <DropdownMenuItem asChild>
+            <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/exec`}>Shell</Link>
+          </DropdownMenuItem>
+        ) : null}
+        {showDelete ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onClick={onDelete}>
+              Delete
+            </DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -66,9 +134,14 @@ export default function ResourceListPage({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
+  const [yamlTarget, setYamlTarget] = useState<YAMLTarget | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ name: string; namespace?: string } | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const clusterScoped = Boolean(kind?.clusterScoped)
   const module = kind?.module ?? ''
+  const user = useUser()
+  const grantModule = kind && section ? (grantModuleId(section, kind) ?? kind.module) : ''
 
   useEffect(() => {
     let cancelled = false
@@ -102,40 +175,35 @@ export default function ResourceListPage({
     }
   }, [module])
 
-  useEffect(() => {
+  const loadItems = useCallback(async () => {
     if (!module || module === 'overview') return
     if (!clusterScoped && !namespace) {
       setItems([])
       return
     }
-    let cancelled = false
-    async function load() {
-      setError('')
-      try {
-        const path = clusterScoped
-          ? `/api/k8s/${encodeURIComponent(module)}`
-          : `/api/k8s/namespaces/${encodeURIComponent(namespace)}/${encodeURIComponent(module)}`
-        const res = await fetch(path, { credentials: 'same-origin' })
-        if (res.status === 403 || res.status === 404) {
-          if (!cancelled) setItems([])
-          return
-        }
-        if (!res.ok) {
-          throw new Error(`failed to load ${module}`)
-        }
-        const data: K8sObject[] = await res.json()
-        if (!cancelled) setItems(Array.isArray(data) ? data : [])
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'load failed')
-        }
+    setError('')
+    try {
+      const path = clusterScoped
+        ? `/api/k8s/${encodeURIComponent(module)}`
+        : `/api/k8s/namespaces/${encodeURIComponent(namespace)}/${encodeURIComponent(module)}`
+      const res = await fetch(path, { credentials: 'same-origin' })
+      if (res.status === 403 || res.status === 404) {
+        setItems([])
+        return
       }
-    }
-    load()
-    return () => {
-      cancelled = true
+      if (!res.ok) {
+        throw new Error(`failed to load ${module}`)
+      }
+      const data: K8sObject[] = await res.json()
+      setItems(Array.isArray(data) ? data : [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'load failed')
     }
   }, [module, namespace, clusterScoped])
+
+  useEffect(() => {
+    void loadItems()
+  }, [loadItems])
 
   const visible = useMemo(
     () => items.filter((item) => matchesQuery(item, query)),
@@ -150,16 +218,31 @@ export default function ResourceListPage({
     )
   }
 
+  if (grantModule && !can(user, grantModule, 'view')) {
+    return <Navigate to="/" replace />
+  }
+
   if (loading && namespaces.length === 0) {
     return <PageLoading />
   }
 
-  const yamlPath = (item: K8sObject) => {
-    const name = objectName(item)
-    if (clusterScoped) {
-      return `${section.basePath}/cluster/${encodeURIComponent(module)}/${encodeURIComponent(name)}/yaml`
+  async function runDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await deleteK8sResource(module, deleteTarget.name, {
+        namespace: clusterScoped ? undefined : deleteTarget.namespace,
+        clusterScoped,
+      })
+      toast.success(`Deleted ${deleteTarget.name}`)
+      setDeleteTarget(null)
+      if (yamlTarget?.name === deleteTarget.name) setYamlTarget(null)
+      await loadItems()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'delete failed')
+    } finally {
+      setDeleting(false)
     }
-    return `${section.basePath}/${encodeURIComponent(namespace)}/${encodeURIComponent(module)}/${encodeURIComponent(name)}/yaml`
   }
 
   return (
@@ -216,7 +299,7 @@ export default function ResourceListPage({
               {module === 'secrets' ? <TableHead>Type</TableHead> : null}
               {module === 'hpas' ? <TableHead>Replicas</TableHead> : null}
               <TableHead>Age</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="w-8" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -237,7 +320,11 @@ export default function ResourceListPage({
                       <TableCell>{podRestarts(item)}</TableCell>
                       <TableCell className="text-muted-foreground">{podNode(item) || '—'}</TableCell>
                       <TableCell>
-                        <MetricsCell scope="pod" namespace={ns} name={name} />
+                        {can(user, 'metrics', 'view') ? (
+                          <MetricsCell scope="pod" namespace={ns} name={name} />
+                        ) : (
+                          '—'
+                        )}
                       </TableCell>
                     </>
                   ) : null}
@@ -264,25 +351,21 @@ export default function ResourceListPage({
                   {module === 'hpas' ? <TableCell>{hpaReplicas(item)}</TableCell> : null}
                   <TableCell className="text-muted-foreground">{formatAge(item.metadata?.creationTimestamp)}</TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-0.5">
-                      {module === 'pods' ? (
-                        <>
-                          <Button variant="ghost" size="xs" asChild>
-                            <Link to={`/workloads/${encodeURIComponent(ns)}/pods/${encodeURIComponent(name)}/logs`}>
-                              Logs
-                            </Link>
-                          </Button>
-                          <Button variant="ghost" size="xs" asChild>
-                            <Link to={`/workloads/${encodeURIComponent(ns)}/pods/${encodeURIComponent(name)}/exec`}>
-                              Exec
-                            </Link>
-                          </Button>
-                        </>
-                      ) : null}
-                      <Button variant="ghost" size="xs" asChild>
-                        <Link to={yamlPath(item)}>YAML</Link>
-                      </Button>
-                    </div>
+                    <ResourceRowMenu
+                      name={name}
+                      namespace={ns}
+                      module={module}
+                      user={user}
+                      busy={deleting && deleteTarget?.name === name}
+                      onYaml={() =>
+                        setYamlTarget(
+                          clusterScoped
+                            ? { module, name, clusterScoped: true }
+                            : { module, name, namespace: ns, clusterScoped: false },
+                        )
+                      }
+                      onDelete={() => setDeleteTarget({ name, namespace: clusterScoped ? undefined : ns })}
+                    />
                   </TableCell>
                 </TableRow>
               )
@@ -293,6 +376,26 @@ export default function ResourceListPage({
           <EmptyState>No {kind.label.toLowerCase()}{query ? ' match this filter' : ''}.</EmptyState>
         ) : null}
       </div>
+      <ResourceYAMLSheet
+        target={yamlTarget}
+        canEdit={can(user, grantModule, 'yaml_edit')}
+        canDelete={can(user, grantModule, 'delete')}
+        onOpenChange={(open) => {
+          if (!open) setYamlTarget(null)
+        }}
+        onDeleted={() => {
+          setItems((prev) => prev.filter((item) => objectName(item) !== yamlTarget?.name))
+        }}
+      />
+      {deleteTarget ? (
+        <DeleteConfirm
+          resourceName={deleteTarget.name}
+          resourceLabel={kind.label}
+          pending={deleting}
+          onConfirm={() => runDelete()}
+          onCancel={() => !deleting && setDeleteTarget(null)}
+        />
+      ) : null}
     </PageBody>
   )
 }

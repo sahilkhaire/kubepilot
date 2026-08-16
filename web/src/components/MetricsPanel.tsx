@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useUser } from '@/lib/auth-context'
+import { can } from '@/lib/grants'
 
 type ResourceMetric = {
   usage: number
@@ -13,6 +16,7 @@ type MetricsResponse = {
   source?: string
   cpu?: ResourceMetric
   memory?: ResourceMetric
+  disk?: ResourceMetric
 }
 
 type MetricsPanelProps = {
@@ -73,10 +77,17 @@ function MetricCard({
 }
 
 export default function MetricsPanel({ scope, namespace, name, title, compact }: MetricsPanelProps) {
+  const user = useUser()
+  const allowed = can(user, 'metrics', 'view')
   const [data, setData] = useState<MetricsResponse | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!allowed) {
+      setLoading(false)
+      setData(null)
+      return
+    }
     let cancelled = false
     async function load() {
       setLoading(true)
@@ -101,7 +112,11 @@ export default function MetricsPanel({ scope, namespace, name, title, compact }:
     return () => {
       cancelled = true
     }
-  }, [scope, namespace, name])
+  }, [scope, namespace, name, allowed])
+
+  if (!allowed) {
+    return null
+  }
 
   if (loading) {
     if (compact) return <Skeleton className="h-4 w-24" />
@@ -153,9 +168,15 @@ export default function MetricsPanel({ scope, namespace, name, title, compact }:
 }
 
 export function MetricsCell({ scope, namespace, name }: Pick<MetricsPanelProps, 'scope' | 'namespace' | 'name'>) {
+  const user = useUser()
+  const allowed = can(user, 'metrics', 'view')
   const [text, setText] = useState('—')
 
   useEffect(() => {
+    if (!allowed) {
+      setText('—')
+      return
+    }
     let cancelled = false
     async function load() {
       const params = new URLSearchParams({ scope })
@@ -183,7 +204,96 @@ export function MetricsCell({ scope, namespace, name }: Pick<MetricsPanelProps, 
     return () => {
       cancelled = true
     }
-  }, [scope, namespace, name])
+  }, [scope, namespace, name, allowed])
 
   return <span className="font-mono text-sm text-muted-foreground tabular-nums">{text}</span>
+}
+
+const barColors = {
+  cpu: '*:data-[slot=progress-indicator]:bg-sky-500',
+  memory: '*:data-[slot=progress-indicator]:bg-violet-500',
+  disk: '*:data-[slot=progress-indicator]:bg-zinc-400',
+}
+
+function UsageBar({
+  metric,
+  kind,
+  format,
+}: {
+  metric?: ResourceMetric
+  kind: keyof typeof barColors
+  format: (n: number) => string
+}) {
+  if (!metric) {
+    return <span className="text-muted-foreground">—</span>
+  }
+  const pct = usagePercent(metric.usage, metric.capacity)
+  const label = metric.capacity
+    ? `${format(metric.usage)} / ${format(metric.capacity)}`
+    : format(metric.usage)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="flex w-24 cursor-default flex-col justify-center gap-1">
+          {pct != null ? (
+            <Progress
+              value={pct}
+              className={`h-1.5 ${pct > 85 ? '*:data-[slot=progress-indicator]:bg-destructive' : barColors[kind]}`}
+            />
+          ) : (
+            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{format(metric.usage)}</span>
+          )}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent>
+        {label}
+        {pct != null ? ` · ${pct.toFixed(0)}%` : ''}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+export function useNodeMetrics(name: string, enabled: boolean) {
+  const [data, setData] = useState<MetricsResponse | null>(null)
+
+  useEffect(() => {
+    if (!enabled || !name) {
+      setData(null)
+      return
+    }
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch(`/api/streams/metrics?scope=node&name=${encodeURIComponent(name)}`, {
+          credentials: 'same-origin',
+        })
+        if (!res.ok) {
+          if (!cancelled) setData(null)
+          return
+        }
+        const body: MetricsResponse = await res.json()
+        if (!cancelled) setData(body.available ? body : null)
+      } catch {
+        if (!cancelled) setData(null)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [name, enabled])
+
+  return data
+}
+
+export function NodeCPUBar({ metric }: { metric?: ResourceMetric }) {
+  return <UsageBar metric={metric} kind="cpu" format={formatCores} />
+}
+
+export function NodeMemoryBar({ metric }: { metric?: ResourceMetric }) {
+  return <UsageBar metric={metric} kind="memory" format={formatBytes} />
+}
+
+export function NodeDiskBar({ metric }: { metric?: ResourceMetric }) {
+  return <UsageBar metric={metric} kind="disk" format={formatBytes} />
 }

@@ -27,7 +27,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
   SelectContent,
@@ -256,15 +255,15 @@ export default function SettingsSets() {
 
       <Dialog open={editor != null} onOpenChange={(open) => !open && setEditor(null)}>
         <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-4xl">
-          <DialogHeader>
+          <DialogHeader className="shrink-0">
             <DialogTitle>{editor?.id ? 'Edit permission set' : 'New permission set'}</DialogTitle>
             <DialogDescription>
               Grants apply on the next API call. Owner-only settings cannot be granted to members.
             </DialogDescription>
           </DialogHeader>
           {editor ? (
-            <form onSubmit={onSave} className="flex min-h-0 flex-1 flex-col gap-4">
-              <div className="grid gap-4 sm:grid-cols-2">
+            <form onSubmit={onSave} className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+              <div className="grid shrink-0 gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <Label htmlFor="ps-name">Name</Label>
                   <Input
@@ -304,14 +303,14 @@ export default function SettingsSets() {
                   </div>
                 ) : null}
               </div>
-              <ScrollArea className="min-h-0 flex-1 pr-3">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 max-h-[calc(90vh-14rem)]">
                 <PermissionGrantEditor
                   catalog={catalog}
                   grants={editor.grants}
                   onChange={(grants) => setEditor({ ...editor, grants })}
                 />
-              </ScrollArea>
-              <DialogFooter className="mx-0 mb-0 rounded-none border-0 bg-transparent p-0">
+              </div>
+              <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none border-0 bg-transparent p-0">
                 <Button type="button" variant="outline" onClick={() => setEditor(null)}>
                   Cancel
                 </Button>

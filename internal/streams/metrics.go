@@ -46,6 +46,7 @@ type MetricsResult struct {
 	Source    string          `json:"source,omitempty"`
 	CPU       *ResourceMetric `json:"cpu,omitempty"`
 	Memory    *ResourceMetric `json:"memory,omitempty"`
+	Disk      *ResourceMetric `json:"disk,omitempty"`
 }
 
 type MetricsQuery struct {
@@ -288,7 +289,41 @@ func (p *prometheusSource) Query(ctx context.Context, q MetricsQuery) (MetricsRe
 	if mem != nil {
 		res.Memory = mem
 	}
+	if q.Scope == ScopeNode {
+		fillNodePrometheusExtras(ctx, p, q.Name, &res)
+	}
 	return res, nil
+}
+
+func fillNodePrometheusExtras(ctx context.Context, p *prometheusSource, name string, res *MetricsResult) {
+	attachNodeCapacity(ctx, p.kube, name, res)
+	usageQ, sizeQ := promDiskQueries(name)
+	usage, err := p.instantScalar(ctx, usageQ)
+	if err != nil || usage == nil {
+		return
+	}
+	disk := &ResourceMetric{Usage: usage.Usage}
+	size, err := p.instantScalar(ctx, sizeQ)
+	if err == nil && size != nil {
+		disk.Capacity = size.Usage
+	}
+	res.Disk = disk
+}
+
+func attachNodeCapacity(ctx context.Context, k *kube.Client, name string, res *MetricsResult) {
+	if k == nil || k.Inner == nil {
+		return
+	}
+	node, err := k.Inner.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return
+	}
+	if res.CPU != nil {
+		res.CPU.Capacity = quantityCores(node.Status.Capacity[corev1.ResourceCPU])
+	}
+	if res.Memory != nil {
+		res.Memory.Capacity = quantityBytes(node.Status.Capacity[corev1.ResourceMemory])
+	}
 }
 
 func promQueries(q MetricsQuery) (cpu, mem string) {
@@ -305,6 +340,18 @@ func promQueries(q MetricsQuery) (cpu, mem string) {
 		mem = fmt.Sprintf(`sum(container_memory_working_set_bytes{namespace="%s",pod="%s",container!=""})`, q.Namespace, q.Name)
 	}
 	return cpu, mem
+}
+
+func promDiskQueries(name string) (usage, size string) {
+	usage = fmt.Sprintf(
+		`sum(node_filesystem_size_bytes{fstype!~"tmpfs|overlay",mountpoint="/",kubernetes_node="%s"} - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay",mountpoint="/",kubernetes_node="%s"}) or sum(node_filesystem_size_bytes{fstype!~"tmpfs|overlay",mountpoint="/",nodename="%s"} - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay",mountpoint="/",nodename="%s"})`,
+		name, name, name, name,
+	)
+	size = fmt.Sprintf(
+		`sum(node_filesystem_size_bytes{fstype!~"tmpfs|overlay",mountpoint="/",kubernetes_node="%s"}) or sum(node_filesystem_size_bytes{fstype!~"tmpfs|overlay",mountpoint="/",nodename="%s"})`,
+		name, name,
+	)
+	return usage, size
 }
 
 func (p *prometheusSource) instantScalar(ctx context.Context, query string) (*ResourceMetric, error) {

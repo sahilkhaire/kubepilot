@@ -31,6 +31,20 @@ export function hasView(grants: Record<string, string[]> | undefined, module: st
   return hasAction(grants, module, 'view')
 }
 
+export function isOwner(user: { role?: string } | null | undefined): boolean {
+  return user?.role === 'owner'
+}
+
+export function can(
+  user: { role?: string; grants?: Record<string, string[]> } | null | undefined,
+  module: string,
+  action: string,
+): boolean {
+  if (!user) return false
+  if (isOwner(user)) return true
+  return hasAction(user.grants, module, action)
+}
+
 export function actionLabel(action: string): string {
   return actionLabels[action] ?? action.replaceAll('_', ' ')
 }

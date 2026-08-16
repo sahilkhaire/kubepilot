@@ -4,6 +4,7 @@ export type K8sObject = {
     namespace?: string
     creationTimestamp?: string
     labels?: Record<string, string>
+    annotations?: Record<string, string>
   }
   spec?: Record<string, unknown>
   status?: Record<string, unknown>
@@ -112,6 +113,134 @@ export function nodeVersion(obj: K8sObject): string {
   return info?.kubeletVersion ?? '—'
 }
 
+export function nodeUnschedulable(obj: K8sObject): boolean {
+  return obj.spec?.unschedulable === true
+}
+
+export function nodeTaintCount(obj: K8sObject): number {
+  const taints = obj.spec?.taints
+  return Array.isArray(taints) ? taints.length : 0
+}
+
+export function nodeRoles(obj: K8sObject): string {
+  const labels = obj.metadata?.labels ?? {}
+  const roles: string[] = []
+  for (const [key, value] of Object.entries(labels)) {
+    if (key.startsWith('node-role.kubernetes.io/')) {
+      const role = key.slice('node-role.kubernetes.io/'.length)
+      if (role) roles.push(role)
+    } else if (key === 'kubernetes.io/role' && value) {
+      roles.push(value)
+    }
+  }
+  return roles.length > 0 ? [...new Set(roles)].join(', ') : 'node'
+}
+
+export function nodeInternalIP(obj: K8sObject): string {
+  const addresses = obj.status?.addresses
+  if (!Array.isArray(addresses)) return ''
+  const internal = addresses.find((a) => (a as { type?: string }).type === 'InternalIP') as
+    | { address?: string }
+    | undefined
+  return internal?.address ?? ''
+}
+
+export function nodeConditionLabels(obj: K8sObject): { text: string; ok: boolean }[] {
+  const ready = nodeReady(obj)
+  const out = [{ text: ready, ok: ready === 'Ready' }]
+  if (nodeUnschedulable(obj)) {
+    out.push({ text: 'SchedulingDisabled', ok: false })
+  }
+  return out
+}
+
+export function objectLabels(obj: K8sObject): Record<string, string> {
+  return obj.metadata?.labels ?? {}
+}
+
+export function objectAnnotations(obj: K8sObject): Record<string, string> {
+  return obj.metadata?.annotations ?? {}
+}
+
+export function nodeAddresses(obj: K8sObject): { type: string; address: string }[] {
+  const addresses = obj.status?.addresses
+  if (!Array.isArray(addresses)) return []
+  return addresses
+    .map((a) => {
+      const row = a as { type?: string; address?: string }
+      return { type: row.type ?? '', address: row.address ?? '' }
+    })
+    .filter((a) => a.type && a.address)
+}
+
+export type NodeInfo = {
+  osImage: string
+  kernelVersion: string
+  containerRuntimeVersion: string
+  kubeletVersion: string
+  operatingSystem: string
+  architecture: string
+}
+
+export function nodeInfo(obj: K8sObject): NodeInfo {
+  const info = (obj.status?.nodeInfo ?? {}) as Partial<NodeInfo>
+  return {
+    osImage: info.osImage ?? '—',
+    kernelVersion: info.kernelVersion ?? '—',
+    containerRuntimeVersion: info.containerRuntimeVersion ?? '—',
+    kubeletVersion: info.kubeletVersion ?? '—',
+    operatingSystem: info.operatingSystem ?? '—',
+    architecture: info.architecture ?? '—',
+  }
+}
+
+export function nodeResourceMap(obj: K8sObject, field: 'capacity' | 'allocatable'): Record<string, string> {
+  const raw = obj.status?.[field]
+  if (!raw || typeof raw !== 'object') return {}
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === 'string') out[key] = value
+  }
+  return out
+}
+
+export function formatK8sQuantity(raw?: string): string {
+  if (!raw) return '—'
+  const match = /^([0-9.]+)([A-Za-z]*)$/.exec(raw)
+  if (!match) return raw
+  const value = Number(match[1])
+  const unit = match[2]
+  if (Number.isNaN(value)) return raw
+  if (unit === 'm') {
+    const cores = value / 1000
+    return Number.isInteger(cores) ? String(cores) : cores.toFixed(2)
+  }
+  const mul: Record<string, number> = {
+    Ki: 1024,
+    Mi: 1024 ** 2,
+    Gi: 1024 ** 3,
+    Ti: 1024 ** 4,
+    K: 1000,
+    M: 1e6,
+    G: 1e9,
+    T: 1e12,
+  }
+  const factor = mul[unit]
+  if (!factor) return raw
+  const bytes = value * factor
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GiB`
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KiB`
+  return `${bytes.toFixed(0)} B`
+}
+
+export const nodeResourceColumns = [
+  { key: 'cpu', label: 'CPU' },
+  { key: 'memory', label: 'Memory' },
+  { key: 'ephemeral-storage', label: 'Ephemeral Storage' },
+  { key: 'pods', label: 'Pods' },
+] as const
+
 export function ingressClass(obj: K8sObject): string {
   return str(obj.spec?.ingressClassName) || '—'
 }
@@ -136,5 +265,6 @@ export function matchesQuery(obj: K8sObject, q: string): boolean {
   const needle = q.toLowerCase()
   const name = objectName(obj).toLowerCase()
   const ns = objectNamespace(obj).toLowerCase()
-  return name.includes(needle) || ns.includes(needle)
+  const ip = nodeInternalIP(obj).toLowerCase()
+  return name.includes(needle) || ns.includes(needle) || ip.includes(needle)
 }

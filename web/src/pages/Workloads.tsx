@@ -12,6 +12,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useUser } from '@/lib/auth-context'
+import { can } from '@/lib/grants'
 
 const rows = [
   { module: 'pods', label: 'Pods', href: '/workloads/pods' },
@@ -24,6 +26,8 @@ const rows = [
 ]
 
 export default function Workloads() {
+  const user = useUser()
+  const visibleRows = rows.filter((row) => can(user, row.module, 'view'))
   const [namespaces, setNamespaces] = useState<string[]>([])
   const [namespace, setNamespace] = useState('')
   const [counts, setCounts] = useState<Record<string, number>>({})
@@ -97,7 +101,7 @@ export default function Workloads() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((row) => (
+            {visibleRows.map((row) => (
               <TableRow key={row.module}>
                 <TableCell>
                   <Link to={row.href} className="font-medium hover:underline">

@@ -32,7 +32,9 @@ export default function SettingsLayout() {
           ))}
         </TabsList>
       </Tabs>
-      <Outlet />
+      <div className="min-h-0 flex-1 overflow-auto">
+        <Outlet />
+      </div>
     </PageBody>
   )
 }

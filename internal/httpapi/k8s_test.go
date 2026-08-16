@@ -212,7 +212,7 @@ func TestWorkloadsOverviewOmitsDeniedModules(t *testing.T) {
 	t.Parallel()
 
 	st := store.NewMemory()
-	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view"}})
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"workloads.overview": {"view"}, "pods": {"view"}})
 	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
 	h := newK8sHandler(t, st, seedWorkloadFakeClient())
 	session := login(t, h, "member", "pass")
@@ -314,7 +314,7 @@ func TestMemberStarCannotSeeInstallNS(t *testing.T) {
 	t.Parallel()
 
 	st := store.NewMemory()
-	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view"}})
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"cluster.overview": {"view"}, "workloads.overview": {"view"}, "pods": {"view"}})
 	createK8sMember(t, st, "member", "pass", "ps1", []string{"*"})
 	h := newK8sHandler(t, st, seedWorkloadFakeClientWithInstallNS())
 	session := login(t, h, "member", "pass")
@@ -360,6 +360,32 @@ func TestWorkloadsOverviewDeniedNamespace(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("code=%d want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestOverviewRequiresModule(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	h := newK8sHandler(t, st, seedWorkloadFakeClient())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/workloads/overview?namespace=dev", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("workloads overview code=%d want %d", rec.Code, http.StatusForbidden)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/k8s/cluster/overview", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("cluster overview code=%d want %d", rec.Code, http.StatusForbidden)
 	}
 }
 
