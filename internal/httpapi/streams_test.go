@@ -8,7 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
+
 	"github.com/zixflow/k8s/internal/httpapi"
+	"github.com/zixflow/k8s/internal/kube"
 	"github.com/zixflow/k8s/internal/streams"
 	"github.com/zixflow/k8s/internal/store"
 )
@@ -309,5 +313,45 @@ func TestPodExecAllowedWithExecGrant(t *testing.T) {
 	}
 	if !phases["start"] || !phases["stop"] {
 		t.Fatalf("audit phases=%v want start and stop", phases)
+	}
+}
+
+func TestPodExecRejectsCrossOrigin(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view", "exec"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	kc := &kube.Client{
+		Inner:  fake.NewSimpleClientset(),
+		Config: &rest.Config{Host: "http://localhost"},
+	}
+	h := newAuthHandlerWithOptions(t, st, httpapi.Deps{
+		InstallNS:    testInstallNS,
+		ExecUpgrader: streams.NewKubeExecUpgrader(kc, false),
+	})
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/streams/exec?namespace=dev&pod=pod-dev", nil)
+	req.Host = "app.example.com"
+	req.Header.Set("Origin", "https://evil.example.com")
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Sec-WebSocket-Version", "13")
+	req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("code=%d want %d", rec.Code, http.StatusForbidden)
+	}
+
+	entries, err := st.QueryAudit(context.Background(), store.AuditFilter{Module: "pods", Action: "exec"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("audit logs=%d want none for rejected origin", len(entries))
 	}
 }

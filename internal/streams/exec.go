@@ -30,15 +30,17 @@ type ExecUpgrader interface {
 }
 
 type kubeExecUpgrader struct {
-	kube     *kube.Client
-	upgrader websocket.Upgrader
+	kube        *kube.Client
+	trustProxy  bool
+	upgrader    websocket.Upgrader
 }
 
-func NewKubeExecUpgrader(c *kube.Client) ExecUpgrader {
+func NewKubeExecUpgrader(c *kube.Client, trustProxy bool) ExecUpgrader {
 	return &kubeExecUpgrader{
-		kube: c,
+		kube:       c,
+		trustProxy: trustProxy,
 		upgrader: websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool { return true },
+			CheckOrigin: func(r *http.Request) bool { return sameOrigin(r, trustProxy) },
 		},
 	}
 }
@@ -111,6 +113,8 @@ func (k *kubeExecUpgrader) Handle(w http.ResponseWriter, r *http.Request, ns, po
 
 	executor, err := remotecommand.NewSPDYExecutor(k.kube.Config, http.MethodPost, req.URL())
 	if err != nil {
+		waitExecReader(conn, stdinReader, &wg)
+		close(sizeQueue)
 		return err
 	}
 
@@ -122,8 +126,7 @@ func (k *kubeExecUpgrader) Handle(w http.ResponseWriter, r *http.Request, ns, po
 		TerminalSizeQueue: &chanTerminalSizeQueue{ch: sizeQueue},
 	})
 
-	stdinReader.Close()
-	wg.Wait()
+	waitExecReader(conn, stdinReader, &wg)
 	close(sizeQueue)
 
 	if streamErr != nil && !errors.Is(streamErr, context.Canceled) && !errors.Is(streamErr, io.EOF) {
@@ -131,6 +134,12 @@ func (k *kubeExecUpgrader) Handle(w http.ResponseWriter, r *http.Request, ns, po
 		return streamErr
 	}
 	return nil
+}
+
+func waitExecReader(conn *websocket.Conn, stdinReader *io.PipeReader, wg *sync.WaitGroup) {
+	_ = stdinReader.Close()
+	_ = conn.Close()
+	wg.Wait()
 }
 
 type wsStreamWriter struct {

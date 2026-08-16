@@ -194,7 +194,7 @@ func execUpgraderFor(deps Deps) streams.ExecUpgrader {
 		return deps.ExecUpgrader
 	}
 	if deps.Kube != nil {
-		return streams.NewKubeExecUpgrader(deps.Kube)
+		return streams.NewKubeExecUpgrader(deps.Kube, deps.TrustProxy)
 	}
 	return nil
 }
