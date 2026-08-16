@@ -56,6 +56,10 @@ type Store interface {
 	Owner(ctx context.Context) (*User, error) // nil, nil if none
 	CreateOwner(ctx context.Context, u User) error
 	CreateMember(ctx context.Context, u User) error
+	ListMembers(ctx context.Context) ([]User, error)
+	UpdateMember(ctx context.Context, u User) error
+	DeleteMember(ctx context.Context, id string) error
+	ResetMemberPassword(ctx context.Context, userID, hash string) error
 	UpdateOwnerPassword(ctx context.Context, userID, hash string) error
 	UpdatePassword(ctx context.Context, userID, hash string) error
 	UserByUsername(ctx context.Context, username string) (*User, error)

@@ -32,6 +32,7 @@ func main() {
 		Ready:      st.Ping,
 		Auth:       authSvc,
 		Store:      st,
+		InstallNS:  cfg.PodNamespace,
 		TrustProxy: cfg.TrustProxy,
 	})
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, handler))

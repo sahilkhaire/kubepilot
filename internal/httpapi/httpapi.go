@@ -13,6 +13,7 @@ type Deps struct {
 	Ready      func(context.Context) error
 	Auth       *auth.Service
 	Store      store.Store
+	InstallNS  string
 	TrustProxy bool
 	WebDist    string // optional; falls back to WEB_DIST env
 }
@@ -24,6 +25,7 @@ func New(deps Deps) http.Handler {
 	}
 	if deps.Auth != nil && deps.Store != nil {
 		registerPermissionSetRoutes(mux, deps.Auth, deps.Store)
+		registerMemberRoutes(mux, deps.Auth, deps.Store, deps.InstallNS)
 	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

@@ -58,6 +58,69 @@ func (m *memoryStore) CreateMember(ctx context.Context, u User) error {
 	return nil
 }
 
+func (m *memoryStore) ListMembers(ctx context.Context) ([]User, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var out []User
+	for _, u := range m.users {
+		if u.Role == RoleMember {
+			out = append(out, *cloneUser(u))
+		}
+	}
+	return out, nil
+}
+
+func (m *memoryStore) UpdateMember(ctx context.Context, u User) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	existing, ok := m.users[u.ID]
+	if !ok || existing.Role != RoleMember {
+		return nil
+	}
+	clone := cloneUser(&u)
+	clone.Username = existing.Username
+	clone.Role = RoleMember
+	clone.PasswordHash = existing.PasswordHash
+	clone.MustChangePassword = existing.MustChangePassword
+	clone.CreatedAt = existing.CreatedAt
+	clone.CreatedBy = existing.CreatedBy
+	m.users[u.ID] = clone
+	return nil
+}
+
+func (m *memoryStore) DeleteMember(ctx context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	u, ok := m.users[id]
+	if !ok || u.Role != RoleMember {
+		return nil
+	}
+	delete(m.usersByUsername, u.Username)
+	delete(m.users, id)
+	for sid, s := range m.sessions {
+		if s.UserID == id {
+			delete(m.sessions, sid)
+		}
+	}
+	return nil
+}
+
+func (m *memoryStore) ResetMemberPassword(ctx context.Context, userID, hash string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	u, ok := m.users[userID]
+	if !ok || u.Role != RoleMember {
+		return nil
+	}
+	u.PasswordHash = hash
+	u.MustChangePassword = true
+	u.UpdatedAt = time.Now().UTC()
+	return nil
+}
+
 func (m *memoryStore) UpdateOwnerPassword(ctx context.Context, userID, hash string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

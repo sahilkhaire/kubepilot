@@ -145,6 +145,74 @@ func (m *mongoStore) CreateMember(ctx context.Context, u User) error {
 	return err
 }
 
+func (m *mongoStore) ListMembers(ctx context.Context) ([]User, error) {
+	cur, err := m.users.Find(ctx, bson.M{"role": RoleMember})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var out []User
+	for cur.Next(ctx) {
+		var doc mongoUser
+		if err := cur.Decode(&doc); err != nil {
+			return nil, err
+		}
+		out = append(out, *mongoUserToUser(&doc))
+	}
+	return out, cur.Err()
+}
+
+func (m *mongoStore) UpdateMember(ctx context.Context, u User) error {
+	oid, err := bson.ObjectIDFromHex(u.ID)
+	if err != nil {
+		return nil
+	}
+	_, err = m.users.UpdateOne(ctx,
+		bson.M{"_id": oid, "role": RoleMember},
+		bson.M{"$set": bson.M{
+			"displayName":     u.DisplayName,
+			"permissionSetId": u.PermissionSetID,
+			"namespaces":      u.Namespaces,
+			"enabled":         u.Enabled,
+			"updatedAt":       u.UpdatedAt,
+		}},
+	)
+	return err
+}
+
+func (m *mongoStore) DeleteMember(ctx context.Context, id string) error {
+	oid, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return nil
+	}
+	res, err := m.users.DeleteOne(ctx, bson.M{"_id": oid, "role": RoleMember})
+	if err != nil {
+		return err
+	}
+	if res.DeletedCount == 0 {
+		return nil
+	}
+	_, err = m.sess.DeleteMany(ctx, bson.M{"userId": id})
+	return err
+}
+
+func (m *mongoStore) ResetMemberPassword(ctx context.Context, userID, hash string) error {
+	oid, err := bson.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil
+	}
+	_, err = m.users.UpdateOne(ctx,
+		bson.M{"_id": oid, "role": RoleMember},
+		bson.M{"$set": bson.M{
+			"passwordHash":       hash,
+			"mustChangePassword": true,
+			"updatedAt":          time.Now().UTC(),
+		}},
+	)
+	return err
+}
+
 func (m *mongoStore) UpdateOwnerPassword(ctx context.Context, userID, hash string) error {
 	oid, err := bson.ObjectIDFromHex(userID)
 	if err != nil {
