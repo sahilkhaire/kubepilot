@@ -10,10 +10,10 @@ export function PageHeader({
   children?: React.ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+    <div className="flex min-h-9 flex-wrap items-center justify-between gap-2">
+      <div className="flex min-w-0 items-baseline gap-3">
+        <h1 className="text-base font-semibold tracking-tight">{title}</h1>
+        {description ? <p className="truncate text-xs text-muted-foreground">{description}</p> : null}
       </div>
       {children ? <div className="flex flex-wrap items-center gap-2">{children}</div> : null}
     </div>
@@ -27,5 +27,7 @@ export function PageBody({
   children: React.ReactNode
   className?: string
 }) {
-  return <div className={cn('flex flex-1 flex-col gap-6 p-4 md:gap-8 md:p-6', className)}>{children}</div>
+  return (
+    <div className={cn('flex min-h-0 flex-1 flex-col gap-3 p-3', className)}>{children}</div>
+  )
 }

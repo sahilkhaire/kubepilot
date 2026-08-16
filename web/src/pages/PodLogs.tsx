@@ -132,7 +132,7 @@ export default function PodLogs() {
       <PageHeader title={`Logs: ${pod}`} description={`Namespace ${ns}`}>
         {loading ? <Badge variant="outline">Streaming</Badge> : null}
         <Button variant="outline" asChild>
-          <Link to="/workloads">Back to Workloads</Link>
+          <Link to="/workloads/pods">Back to Pods</Link>
         </Button>
       </PageHeader>
       <ErrorAlert message={error} />

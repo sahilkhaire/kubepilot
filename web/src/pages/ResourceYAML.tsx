@@ -36,6 +36,7 @@ const gvkForModule: Record<string, string> = {
   pvs: 'v1/PersistentVolume',
   storageclasses: 'storage.k8s.io/v1/StorageClass',
   nodes: 'v1/Node',
+  namespaces: 'v1/Namespace',
   serviceaccounts: 'v1/ServiceAccount',
   roles: 'rbac.authorization.k8s.io/v1/Role',
   rolebindings: 'rbac.authorization.k8s.io/v1/RoleBinding',
@@ -50,6 +51,7 @@ const clusterScopedModules = new Set([
   'pvs',
   'storageclasses',
   'nodes',
+  'namespaces',
   'clusterroles',
   'clusterrolebindings',
 ])
@@ -73,6 +75,8 @@ export default function ResourceYAML({ backLink, backLabel }: ResourceYAMLProps)
 
   const module = resource ?? ''
   const clusterScoped = clusterScopedModules.has(module)
+  const groupedBack = ['/config', '/network', '/storage', '/access']
+  const listHref = groupedBack.includes(backLink) && module ? `${backLink}/${module}` : backLink
 
   useEffect(() => {
     if (!module || !name) return
@@ -152,7 +156,7 @@ export default function ResourceYAML({ backLink, backLabel }: ResourceYAMLProps)
         clusterScoped,
       })
       setDeleteOpen(false)
-      navigate(backLink)
+      navigate(listHref)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'delete failed')
     } finally {
@@ -171,7 +175,7 @@ export default function ResourceYAML({ backLink, backLabel }: ResourceYAMLProps)
         description={!clusterScoped && ns ? `Namespace ${ns}` : 'Cluster-scoped resource'}
       >
         <Button variant="outline" asChild>
-          <Link to={backLink}>Back to {backLabel}</Link>
+          <Link to={listHref}>Back to {backLabel}</Link>
         </Button>
         <Button type="button" onClick={() => setConfirmOpen(true)} disabled={applying || deleting}>
           Apply

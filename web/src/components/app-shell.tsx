@@ -16,15 +16,15 @@ export function AppShell({
     <SidebarProvider
       style={
         {
-          '--sidebar-width': 'calc(var(--spacing) * 64)',
-          '--header-height': 'calc(var(--spacing) * 12)',
+          '--sidebar-width': '16.5rem',
+          '--header-height': '2.5rem',
         } as React.CSSProperties
       }
     >
       <AppSidebar variant="inset" user={user} onLogout={onLogout} />
-      <SidebarInset>
+      <SidebarInset className="min-h-0 overflow-hidden">
         <SiteHeader />
-        <div className="flex flex-1 flex-col">{children}</div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   )

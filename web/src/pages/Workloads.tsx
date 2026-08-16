@@ -1,13 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import EmptyState from '@/components/EmptyState'
 import { ErrorAlert } from '@/components/error-alert'
 import { NamespaceSelect } from '@/components/namespace-select'
 import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
-import MetricsPanel, { MetricsCell } from '@/components/MetricsPanel'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -17,14 +13,20 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-type Pod = {
-  metadata?: { name?: string; namespace?: string }
-}
+const rows = [
+  { module: 'pods', label: 'Pods', href: '/workloads/pods' },
+  { module: 'deployments', label: 'Deployments', href: '/workloads/deployments' },
+  { module: 'daemonsets', label: 'Daemon Sets', href: '/workloads/daemonsets' },
+  { module: 'statefulsets', label: 'Stateful Sets', href: '/workloads/statefulsets' },
+  { module: 'replicasets', label: 'Replica Sets', href: '/workloads/replicasets' },
+  { module: 'jobs', label: 'Jobs', href: '/workloads/jobs' },
+  { module: 'cronjobs', label: 'Cron Jobs', href: '/workloads/cronjobs' },
+]
 
 export default function Workloads() {
   const [namespaces, setNamespaces] = useState<string[]>([])
   const [namespace, setNamespace] = useState('')
-  const [pods, setPods] = useState<Pod[]>([])
+  const [counts, setCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -35,9 +37,7 @@ export default function Workloads() {
       setError('')
       try {
         const res = await fetch('/api/k8s/namespaces', { credentials: 'same-origin' })
-        if (!res.ok) {
-          throw new Error('failed to load namespaces')
-        }
+        if (!res.ok) throw new Error('failed to load namespaces')
         const data: string[] = await res.json()
         if (cancelled) return
         setNamespaces(data)
@@ -45,13 +45,9 @@ export default function Workloads() {
           setNamespace((prev) => (prev && data.includes(prev) ? prev : data[0]))
         }
       } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'load failed')
-        }
+        if (!cancelled) setError(e instanceof Error ? e.message : 'load failed')
       } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
+        if (!cancelled) setLoading(false)
       }
     }
     loadNamespaces()
@@ -61,31 +57,22 @@ export default function Workloads() {
   }, [])
 
   useEffect(() => {
-    if (!namespace) {
-      setPods([])
-      return
-    }
+    if (!namespace) return
     let cancelled = false
-    async function loadPods() {
+    async function load() {
       setError('')
       try {
-        const res = await fetch(`/api/k8s/namespaces/${encodeURIComponent(namespace)}/pods`, {
+        const res = await fetch(`/api/k8s/workloads/overview?namespace=${encodeURIComponent(namespace)}`, {
           credentials: 'same-origin',
         })
-        if (!res.ok) {
-          throw new Error('failed to load pods')
-        }
-        const data: Pod[] = await res.json()
-        if (!cancelled) {
-          setPods(data)
-        }
+        if (!res.ok) throw new Error('failed to load workloads overview')
+        const data: Record<string, number> = await res.json()
+        if (!cancelled) setCounts(data)
       } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'load failed')
-        }
+        if (!cancelled) setError(e instanceof Error ? e.message : 'load failed')
       }
     }
-    loadPods()
+    load()
     return () => {
       cancelled = true
     }
@@ -97,58 +84,32 @@ export default function Workloads() {
 
   return (
     <PageBody>
-      <PageHeader title="Workloads" description="Pods in the selected namespace.">
+      <PageHeader title="Workloads" description={`Health in ${namespace || '—'}`}>
         <NamespaceSelect namespaces={namespaces} value={namespace} onChange={setNamespace} />
       </PageHeader>
-      <MetricsPanel scope="cluster" title="Cluster metrics" />
       <ErrorAlert message={error} />
-      <Card className="shadow-sm">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>CPU / Memory</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+      <div className="min-h-0 flex-1 overflow-auto rounded-md border">
+        <Table>
+          <TableHeader className="sticky top-0 bg-background">
+            <TableRow>
+              <TableHead>Kind</TableHead>
+              <TableHead className="text-right">Count</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={row.module}>
+                <TableCell>
+                  <Link to={row.href} className="font-medium hover:underline">
+                    {row.label}
+                  </Link>
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{counts[row.module] ?? '—'}</TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pods.map((pod) => {
-                const name = pod.metadata?.name ?? ''
-                if (!name) return null
-                return (
-                  <TableRow key={name}>
-                    <TableCell className="font-medium">{name}</TableCell>
-                    <TableCell>
-                      <MetricsCell scope="pod" namespace={namespace} name={name} />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/logs`}>
-                            Logs
-                          </Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/exec`}>
-                            Exec
-                          </Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/yaml`}>
-                            YAML
-                          </Link>
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-          {pods.length === 0 && namespace && !error ? <EmptyState>No pods in this namespace.</EmptyState> : null}
-        </CardContent>
-      </Card>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </PageBody>
   )
 }

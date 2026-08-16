@@ -122,7 +122,7 @@ export default function PodExec() {
           {status}
         </Badge>
         <Button variant="outline" asChild>
-          <Link to="/workloads">Back to Workloads</Link>
+          <Link to="/workloads/pods">Back to Pods</Link>
         </Button>
       </PageHeader>
       <ErrorAlert message={error} />

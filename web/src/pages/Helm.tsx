@@ -7,7 +7,6 @@ import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -135,53 +134,55 @@ export default function Helm() {
 
   return (
     <PageBody>
-      <PageHeader title="Helm" description="Releases in the selected namespace.">
+      <PageHeader title="Releases" description={`${releases.length} item${releases.length === 1 ? '' : 's'}`}>
         <NamespaceSelect namespaces={namespaces} value={namespace} onChange={setNamespace} />
       </PageHeader>
       <ErrorAlert message={error} />
-      <Card className="shadow-sm">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Chart</TableHead>
-                <TableHead>Revision</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+      <div className="min-h-0 flex-1 overflow-auto rounded-md border">
+        <Table>
+          <TableHeader className="sticky top-0 bg-background">
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Namespace</TableHead>
+              <TableHead>Chart</TableHead>
+              <TableHead>Revision</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>App version</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {releases.map((rel) => (
+              <TableRow key={`${rel.namespace}/${rel.name}`}>
+                <TableCell className="font-medium">{rel.name}</TableCell>
+                <TableCell className="text-muted-foreground">{rel.namespace}</TableCell>
+                <TableCell>{rel.chart}</TableCell>
+                <TableCell>{rel.revision}</TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="h-5 px-1.5 text-[10px] capitalize">
+                    {rel.status}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-muted-foreground">{rel.appVersion ?? '—'}</TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="xs"
+                    disabled={pending === rel.name}
+                    onClick={() => setToUninstall(rel)}
+                  >
+                    {pending === rel.name ? 'Uninstalling…' : 'Uninstall'}
+                  </Button>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {releases.map((rel) => (
-                <TableRow key={`${rel.namespace}/${rel.name}`}>
-                  <TableCell className="font-medium">{rel.name}</TableCell>
-                  <TableCell>{rel.chart}</TableCell>
-                  <TableCell>{rel.revision}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="capitalize">
-                      {rel.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      disabled={pending === rel.name}
-                      onClick={() => setToUninstall(rel)}
-                    >
-                      {pending === rel.name ? 'Uninstalling…' : 'Uninstall'}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {releases.length === 0 && namespace && !error ? (
-            <EmptyState>No releases in this namespace.</EmptyState>
-          ) : null}
-        </CardContent>
-      </Card>
+            ))}
+          </TableBody>
+        </Table>
+        {releases.length === 0 && namespace && !error ? (
+          <EmptyState>No releases in this namespace.</EmptyState>
+        ) : null}
+      </div>
       <ConfirmDialog
         open={toUninstall != null}
         title="Uninstall release"

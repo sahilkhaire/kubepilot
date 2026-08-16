@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import EmptyState from '@/components/EmptyState'
 import { ErrorAlert } from '@/components/error-alert'
 import { NamespaceSelect } from '@/components/namespace-select'
@@ -6,7 +6,7 @@ import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import {
   Table,
   TableBody,
@@ -46,6 +46,7 @@ export default function CustomResources() {
   const [instances, setInstances] = useState<ResourceItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [query, setQuery] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -137,95 +138,115 @@ export default function CustomResources() {
     return <PageLoading />
   }
 
+  const grouped = useMemo(() => {
+    const q = query.toLowerCase()
+    const map = new Map<string, CRDItem[]>()
+    for (const crd of crds) {
+      const name = crd.metadata?.name ?? ''
+      const group = crd.spec?.group ?? ''
+      const resource = crd.spec?.names?.plural ?? ''
+      if (q && !`${name} ${group} ${resource}`.toLowerCase().includes(q)) continue
+      const key = group || 'core'
+      const list = map.get(key) ?? []
+      list.push(crd)
+      map.set(key, list)
+    }
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b))
+  }, [crds, query])
+
   const namespaced = selected?.spec?.scope === 'Namespaced'
 
   return (
     <PageBody>
-      <PageHeader title="Custom Resources" description="CRD definitions and instances." />
+      <PageHeader title="Definitions" description={`${crds.length} CRDs in ${grouped.length} groups`}>
+        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter…" className="h-7 w-48 text-xs" />
+      </PageHeader>
       <ErrorAlert message={error} />
-
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">CRD definitions</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {crds.length === 0 ? (
-            <EmptyState>No custom resource definitions.</EmptyState>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Group</TableHead>
-                  <TableHead>Resource</TableHead>
-                  <TableHead>Scope</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+      <div className="min-h-0 flex-1 overflow-auto rounded-md border">
+        <Table>
+          <TableHeader className="sticky top-0 bg-background">
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Resource</TableHead>
+              <TableHead>Scope</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {grouped.map(([group, items]) => (
+              <Fragment key={group}>
+                <TableRow key={`g-${group}`} className="hover:bg-transparent">
+                  <TableCell colSpan={4} className="bg-muted/50 py-1 font-medium text-muted-foreground">
+                    {group}
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {crds.map((crd) => {
+                {items.map((crd) => {
                   const name = crd.metadata?.name ?? ''
-                  const group = crd.spec?.group ?? ''
                   const resource = crd.spec?.names?.plural ?? ''
                   const scope = crd.spec?.scope ?? ''
                   const isSelected = selected?.metadata?.name === name
                   return (
                     <TableRow key={name}>
                       <TableCell className="font-medium">{name}</TableCell>
-                      <TableCell>{group}</TableCell>
                       <TableCell>{resource}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{scope}</Badge>
+                        <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                          {scope}
+                        </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button type="button" variant={isSelected ? 'secondary' : 'ghost'} size="sm" onClick={() => setSelected(isSelected ? null : crd)}>
+                        <Button
+                          type="button"
+                          variant={isSelected ? 'secondary' : 'ghost'}
+                          size="xs"
+                          onClick={() => setSelected(isSelected ? null : crd)}
+                        >
                           {isSelected ? 'Hide instances' : 'View instances'}
                         </Button>
                       </TableCell>
                     </TableRow>
                   )
                 })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+              </Fragment>
+            ))}
+          </TableBody>
+        </Table>
+        {grouped.length === 0 ? <EmptyState>No custom resource definitions.</EmptyState> : null}
+      </div>
 
       {selected ? (
-        <Card className="shadow-sm">
-          <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">Instances — {selected.metadata?.name}</CardTitle>
+        <div className="rounded-md border">
+          <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+            <p className="text-sm font-medium">Instances — {selected.metadata?.name}</p>
             {namespaced ? (
               <NamespaceSelect namespaces={namespaces} value={namespace} onChange={setNamespace} />
             ) : null}
-          </CardHeader>
-          <CardContent className="p-0">
-            {instances.length === 0 ? (
-              <EmptyState>No instances.</EmptyState>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Namespace</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {instances.map((item) => {
-                    const name = item.metadata?.name ?? ''
-                    const ns = item.metadata?.namespace ?? ''
-                    return (
-                      <TableRow key={ns ? `${ns}/${name}` : name}>
-                        <TableCell className="font-medium">{name}</TableCell>
-                        <TableCell>{ns || '—'}</TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+          </div>
+          {instances.length === 0 ? (
+            <EmptyState>No instances.</EmptyState>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Namespace</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {instances.map((item) => {
+                  const name = item.metadata?.name ?? ''
+                  const ns = item.metadata?.namespace ?? ''
+                  return (
+                    <TableRow key={ns ? `${ns}/${name}` : name}>
+                      <TableCell className="font-medium">{name}</TableCell>
+                      <TableCell>{ns || '—'}</TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </div>
       ) : null}
     </PageBody>
   )

@@ -21,11 +21,11 @@ export function NamespaceSelect({
   }
   return (
     <div className="flex items-center gap-2">
-      <Label htmlFor="namespace" className="text-muted-foreground">
+      <Label htmlFor="namespace" className="text-xs text-muted-foreground">
         Namespace
       </Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger id="namespace" className="min-w-40">
+        <SelectTrigger id="namespace" size="sm" className="min-w-36">
           <SelectValue placeholder="Select namespace" />
         </SelectTrigger>
         <SelectContent>

@@ -1,5 +1,5 @@
 import ResourceYAML from './ResourceYAML'
 
 export default function WorkloadYAML() {
-  return <ResourceYAML backLink="/workloads" backLabel="Workloads" />
+  return <ResourceYAML backLink="/workloads/pods" backLabel="Pods" />
 }
