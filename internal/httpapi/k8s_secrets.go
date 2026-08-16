@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/zixflow/k8s/internal/audit"
-	"github.com/zixflow/k8s/internal/kube"
-	"github.com/zixflow/k8s/internal/rbac"
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/audit"
+	"github.com/sahilkhaire/k8s-apis/internal/kube"
+	"github.com/sahilkhaire/k8s-apis/internal/rbac"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 func secretRevealRequested(r *http.Request) bool {

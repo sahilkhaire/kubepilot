@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/zixflow/k8s/internal/rbac"
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/rbac"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 func TestVisibleNamespaces(t *testing.T) {

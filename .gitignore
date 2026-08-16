@@ -5,6 +5,7 @@
 *.out
 bin/
 dist/
+/cluster-console
 web/node_modules/
 web/dist/
 web/*.tsbuildinfo

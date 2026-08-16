@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zixflow/k8s/internal/auth"
-	"github.com/zixflow/k8s/internal/bootstrap"
-	"github.com/zixflow/k8s/internal/password"
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/auth"
+	"github.com/sahilkhaire/k8s-apis/internal/bootstrap"
+	"github.com/sahilkhaire/k8s-apis/internal/password"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 const sessionSecret = "test-session-secret"

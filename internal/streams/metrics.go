@@ -18,7 +18,7 @@ import (
 	"k8s.io/client-go/discovery"
 	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 
-	"github.com/zixflow/k8s/internal/kube"
+	"github.com/sahilkhaire/k8s-apis/internal/kube"
 )
 
 const (

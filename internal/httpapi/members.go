@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zixflow/k8s/internal/audit"
-	"github.com/zixflow/k8s/internal/auth"
-	"github.com/zixflow/k8s/internal/password"
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/audit"
+	"github.com/sahilkhaire/k8s-apis/internal/auth"
+	"github.com/sahilkhaire/k8s-apis/internal/password"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 var usernameRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{1,31}$`)

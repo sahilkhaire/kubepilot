@@ -3,7 +3,7 @@ package audit_test
 import (
 	"testing"
 
-	"github.com/zixflow/k8s/internal/audit"
+	"github.com/sahilkhaire/k8s-apis/internal/audit"
 )
 
 func TestModuleForPathK8s(t *testing.T) {

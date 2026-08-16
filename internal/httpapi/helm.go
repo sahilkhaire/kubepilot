@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/zixflow/k8s/internal/audit"
-	"github.com/zixflow/k8s/internal/helmctrl"
-	"github.com/zixflow/k8s/internal/rbac"
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/audit"
+	"github.com/sahilkhaire/k8s-apis/internal/helmctrl"
+	"github.com/sahilkhaire/k8s-apis/internal/rbac"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 func registerHelmRoutes(mux *http.ServeMux, deps Deps) {

@@ -3,7 +3,7 @@ package config_test
 import (
 	"testing"
 
-	"github.com/zixflow/k8s/internal/config"
+	"github.com/sahilkhaire/k8s-apis/internal/config"
 )
 
 func TestLoadRequiresSecrets(t *testing.T) {

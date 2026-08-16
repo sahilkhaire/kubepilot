@@ -1,6 +1,6 @@
 image:
-  repository: ""
-  tag: ""
+  repository: ghcr.io/sahilkhaire/k8s-apis
+  tag: latest
   pullPolicy: IfNotPresent
   pullSecrets: []
 

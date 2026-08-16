@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 func TestDeletePermissionSetInUse(t *testing.T) {

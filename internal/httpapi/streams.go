@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/zixflow/k8s/internal/audit"
-	"github.com/zixflow/k8s/internal/rbac"
-	"github.com/zixflow/k8s/internal/streams"
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/audit"
+	"github.com/sahilkhaire/k8s-apis/internal/rbac"
+	"github.com/sahilkhaire/k8s-apis/internal/streams"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 func registerStreamRoutes(mux *http.ServeMux, deps Deps) {

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/zixflow/k8s/internal/audit"
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/audit"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 func registerAppSettingsRoutes(mux *http.ServeMux, deps Deps) {

@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/zixflow/k8s/internal/auth"
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/auth"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 func requireOwner(w http.ResponseWriter, r *http.Request, authSvc *auth.Service) (*store.User, bool) {

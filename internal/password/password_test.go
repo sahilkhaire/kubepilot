@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zixflow/k8s/internal/password"
+	"github.com/sahilkhaire/k8s-apis/internal/password"
 )
 
 func TestVerifyRejectsMalformedEncodings(t *testing.T) {

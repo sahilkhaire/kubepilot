@@ -3,7 +3,7 @@ package rbac
 import (
 	"strings"
 
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 type Request struct {

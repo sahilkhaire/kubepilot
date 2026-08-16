@@ -19,7 +19,7 @@
 
 ## Global Constraints
 
-- Go module path: `github.com/zixflow/k8s` (change only if the git remote differs).
+- Go module path: `github.com/sahilkhaire/k8s-apis` (change only if the git remote differs).
 - Go 1.24, `go test ./...` and `go test -race ./...` must pass.
 - Image is generic: zero install-specific values compiled in. Config is env only: `MONGODB_URI`, `SESSION_SECRET`, `OWNER_USERNAME`, `OWNER_PASSWORD`, `POD_NAMESPACE`, `LISTEN_ADDR`, `TRUST_PROXY`.
 - Cookie name: `cluster_console_session`. HttpOnly, Secure, SameSite=Lax. Idle 8h, absolute 24h.
@@ -93,7 +93,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/zixflow/k8s/internal/httpapi"
+	"github.com/sahilkhaire/k8s-apis/internal/httpapi"
 )
 
 func TestHealthzOK(t *testing.T) {
@@ -148,7 +148,7 @@ Expected: FAIL (package or `New` undefined)
 `go.mod`:
 
 ```
-module github.com/zixflow/k8s
+module github.com/sahilkhaire/k8s-apis
 
 go 1.24
 ```

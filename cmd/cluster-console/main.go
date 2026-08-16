@@ -5,14 +5,14 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/zixflow/k8s/internal/audit"
-	"github.com/zixflow/k8s/internal/auth"
-	"github.com/zixflow/k8s/internal/bootstrap"
-	"github.com/zixflow/k8s/internal/config"
-	"github.com/zixflow/k8s/internal/helmctrl"
-	"github.com/zixflow/k8s/internal/httpapi"
-	"github.com/zixflow/k8s/internal/kube"
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/audit"
+	"github.com/sahilkhaire/k8s-apis/internal/auth"
+	"github.com/sahilkhaire/k8s-apis/internal/bootstrap"
+	"github.com/sahilkhaire/k8s-apis/internal/config"
+	"github.com/sahilkhaire/k8s-apis/internal/helmctrl"
+	"github.com/sahilkhaire/k8s-apis/internal/httpapi"
+	"github.com/sahilkhaire/k8s-apis/internal/kube"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 func main() {

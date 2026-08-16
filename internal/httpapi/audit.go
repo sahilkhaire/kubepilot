@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zixflow/k8s/internal/audit"
-	"github.com/zixflow/k8s/internal/auth"
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/audit"
+	"github.com/sahilkhaire/k8s-apis/internal/auth"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 const auditConfirmHeader = "delete"

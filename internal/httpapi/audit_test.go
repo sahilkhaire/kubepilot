@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zixflow/k8s/internal/audit"
-	"github.com/zixflow/k8s/internal/httpapi"
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/audit"
+	"github.com/sahilkhaire/k8s-apis/internal/httpapi"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 type auditInsertFailStore struct {

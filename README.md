@@ -9,12 +9,12 @@ Product documentation lives in [docs/](docs/README.md).
 ```bash
 helm install cluster-console deploy/charts/cluster-console \
   --namespace YOUR_NAMESPACE --create-namespace \
-  --set image.repository=<your-registry>/cluster-console \
-  --set image.tag=<version> \
   --set mongodbUri=mongodb://<host>:27017/cluster_console \
   --set sessionSecret=<random-string> \
   --set ownerPassword=<owner-password> \
   --set ingress.host=console.example.com
+
+The chart defaults to the public image `ghcr.io/sahilkhaire/k8s-apis:latest`. Override `image.repository` / `image.tag` to use a mirror.
 ```
 
 Alternatively, create a Secret yourself and set `existingSecret` instead of `mongodbUri`, `sessionSecret`, and `ownerPassword`.

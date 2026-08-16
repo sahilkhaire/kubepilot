@@ -53,8 +53,8 @@ Optional: PodDisruptionBudget, HPA — not required for v1. Default replicas: **
 
 ```yaml
 image:
-  repository: ""   # required: public image or your mirror, e.g. ghcr.io/example/cluster-console
-  tag: ""          # required at install
+  repository: ghcr.io/sahilkhaire/k8s-apis
+  tag: latest
   pullPolicy: IfNotPresent
   pullSecrets: []  # optional, for private mirrors
 

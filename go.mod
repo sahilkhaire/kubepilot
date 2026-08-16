@@ -1,4 +1,4 @@
-module github.com/zixflow/k8s
+module github.com/sahilkhaire/k8s-apis
 
 go 1.24.0
 

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zixflow/k8s/internal/audit"
-	"github.com/zixflow/k8s/internal/password"
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/audit"
+	"github.com/sahilkhaire/k8s-apis/internal/password"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 func SyncOwner(ctx context.Context, st store.Store, ownerUsername, ownerPassword string, auditor *audit.Auditor) error {

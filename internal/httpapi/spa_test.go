@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zixflow/k8s/internal/httpapi"
+	"github.com/sahilkhaire/k8s-apis/internal/httpapi"
 )
 
 func TestWebDistServesAssetsAndSPAFallback(t *testing.T) {

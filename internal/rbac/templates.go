@@ -1,6 +1,6 @@
 package rbac
 
-import "github.com/zixflow/k8s/internal/store"
+import "github.com/sahilkhaire/k8s-apis/internal/store"
 
 const (
 	BuiltinViewer   = "viewer"

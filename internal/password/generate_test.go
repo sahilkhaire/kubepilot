@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zixflow/k8s/internal/password"
+	"github.com/sahilkhaire/k8s-apis/internal/password"
 )
 
 func TestGenerateLength(t *testing.T) {

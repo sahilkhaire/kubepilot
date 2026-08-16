@@ -9,8 +9,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"github.com/zixflow/k8s/internal/kube"
-	"github.com/zixflow/k8s/internal/streams"
+	"github.com/sahilkhaire/k8s-apis/internal/kube"
+	"github.com/sahilkhaire/k8s-apis/internal/streams"
 )
 
 func TestDiscoverPrometheusFromService(t *testing.T) {

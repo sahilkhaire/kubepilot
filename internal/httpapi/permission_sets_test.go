@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zixflow/k8s/internal/httpapi"
-	"github.com/zixflow/k8s/internal/rbac"
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/httpapi"
+	"github.com/sahilkhaire/k8s-apis/internal/rbac"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 func newHandlerWithStore(t *testing.T, st store.Store) http.Handler {

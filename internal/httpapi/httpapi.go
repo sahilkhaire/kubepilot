@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/zixflow/k8s/internal/audit"
-	"github.com/zixflow/k8s/internal/auth"
-	"github.com/zixflow/k8s/internal/helmctrl"
-	"github.com/zixflow/k8s/internal/kube"
-	"github.com/zixflow/k8s/internal/streams"
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/audit"
+	"github.com/sahilkhaire/k8s-apis/internal/auth"
+	"github.com/sahilkhaire/k8s-apis/internal/helmctrl"
+	"github.com/sahilkhaire/k8s-apis/internal/kube"
+	"github.com/sahilkhaire/k8s-apis/internal/streams"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 type Deps struct {

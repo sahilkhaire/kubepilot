@@ -7,8 +7,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/zixflow/k8s/internal/bootstrap"
-	"github.com/zixflow/k8s/internal/store"
+	"github.com/sahilkhaire/k8s-apis/internal/bootstrap"
+	"github.com/sahilkhaire/k8s-apis/internal/store"
 )
 
 func TestOpenMongoIntegration(t *testing.T) {

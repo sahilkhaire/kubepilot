@@ -1,6 +1,6 @@
 package rbac
 
-import "github.com/zixflow/k8s/internal/store"
+import "github.com/sahilkhaire/k8s-apis/internal/store"
 
 func VisibleNamespaces(user store.User, installNS string, clusterNamespaces []string) []string {
 	if len(clusterNamespaces) == 0 {
