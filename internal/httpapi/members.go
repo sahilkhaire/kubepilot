@@ -165,15 +165,13 @@ func handleCreateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Se
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if !writeSettingsAudit(w, r, auditor, authSvc, trustProxy, owner, audit.Event{
+	writeSettingsAudit(r, auditor, authSvc, trustProxy, owner, audit.Event{
 		Module:     "settings.members",
 		Action:     "member_create",
 		HTTPStatus: http.StatusCreated,
 		Name:       u.Username,
 		Details:    map[string]any{"memberId": u.ID, "username": u.Username},
-	}) {
-		return
-	}
+	})
 	writeJSON(w, http.StatusCreated, createMemberResponse{
 		User:     memberPublic(&u),
 		Password: plain,
@@ -265,15 +263,13 @@ func handleUpdateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Se
 			action = "member_disable"
 		}
 	}
-	if !writeSettingsAudit(w, r, auditor, authSvc, trustProxy, owner, audit.Event{
+	writeSettingsAudit(r, auditor, authSvc, trustProxy, owner, audit.Event{
 		Module:     "settings.members",
 		Action:     action,
 		HTTPStatus: http.StatusOK,
 		Name:       updated.Username,
 		Details:    map[string]any{"memberId": updated.ID},
-	}) {
-		return
-	}
+	})
 	writeJSON(w, http.StatusOK, memberPublic(&updated))
 }
 
@@ -302,15 +298,13 @@ func handleDeleteMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Se
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if !writeSettingsAudit(w, r, auditor, authSvc, trustProxy, owner, audit.Event{
+	writeSettingsAudit(r, auditor, authSvc, trustProxy, owner, audit.Event{
 		Module:     "settings.members",
 		Action:     "member_delete",
 		HTTPStatus: http.StatusNoContent,
 		Name:       existing.Username,
 		Details:    map[string]any{"memberId": id},
-	}) {
-		return
-	}
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -349,15 +343,13 @@ func handleResetMemberPassword(w http.ResponseWriter, r *http.Request, authSvc *
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if !writeSettingsAudit(w, r, auditor, authSvc, trustProxy, owner, audit.Event{
+	writeSettingsAudit(r, auditor, authSvc, trustProxy, owner, audit.Event{
 		Module:     "settings.members",
 		Action:     "member_password_reset",
 		HTTPStatus: http.StatusOK,
 		Name:       existing.Username,
 		Details:    map[string]any{"memberId": id},
-	}) {
-		return
-	}
+	})
 	writeJSON(w, http.StatusOK, resetPasswordResponse{Password: plain})
 }
 

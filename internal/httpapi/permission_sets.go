@@ -108,15 +108,13 @@ func handleCreatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if !writeSettingsAudit(w, r, auditor, authSvc, trustProxy, owner, audit.Event{
+	writeSettingsAudit(r, auditor, authSvc, trustProxy, owner, audit.Event{
 		Module:     "settings.permission_sets",
 		Action:     "permission_set_create",
 		HTTPStatus: http.StatusCreated,
 		Name:       ps.Name,
 		Details:    map[string]any{"permissionSetId": ps.ID},
-	}) {
-		return
-	}
+	})
 	writeJSON(w, http.StatusCreated, permissionSetPublic(&ps))
 }
 
@@ -168,15 +166,13 @@ func handleUpdatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if !writeSettingsAudit(w, r, auditor, authSvc, trustProxy, owner, audit.Event{
+	writeSettingsAudit(r, auditor, authSvc, trustProxy, owner, audit.Event{
 		Module:     "settings.permission_sets",
 		Action:     "permission_set_edit",
 		HTTPStatus: http.StatusOK,
 		Name:       updated.Name,
 		Details:    map[string]any{"permissionSetId": updated.ID},
-	}) {
-		return
-	}
+	})
 	writeJSON(w, http.StatusOK, permissionSetPublic(&updated))
 }
 
@@ -205,15 +201,13 @@ func handleDeletePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if !writeSettingsAudit(w, r, auditor, authSvc, trustProxy, owner, audit.Event{
+	writeSettingsAudit(r, auditor, authSvc, trustProxy, owner, audit.Event{
 		Module:     "settings.permission_sets",
 		Action:     "permission_set_delete",
 		HTTPStatus: http.StatusNoContent,
 		Name:       existing.Name,
 		Details:    map[string]any{"permissionSetId": id},
-	}) {
-		return
-	}
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
 

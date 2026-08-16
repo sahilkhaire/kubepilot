@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -60,7 +62,7 @@ func handleQueryAudit(w http.ResponseWriter, r *http.Request, authSvc *auth.Serv
 	}
 	logs, err := st.QueryAudit(r.Context(), filter)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 	out := make([]auditLogResponse, 0, len(logs))
@@ -91,23 +93,21 @@ func handleDeleteAudit(w http.ResponseWriter, r *http.Request, authSvc *auth.Ser
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		if auditor != nil {
-			_ = auditor.Write(r.Context(), audit.Event{
-				UserID:     owner.ID,
-				Username:   owner.Username,
-				Role:       string(owner.Role),
-				IP:         clientIP(r, trustProxy),
-				UserAgent:  audit.TruncateUserAgent(r.UserAgent()),
-				SessionID:  actorSessionID(r, authSvc),
-				Module:     "settings.audit",
-				Action:     "audit_delete_filter",
-				Result:     "success",
-				HTTPStatus: http.StatusNoContent,
-				Path:       r.URL.Path,
-				Method:     r.Method,
-				Details:    map[string]any{"deleted": n},
-			})
-		}
+		writeAuditOrLog(r.Context(), auditor, audit.Event{
+			UserID:     owner.ID,
+			Username:   owner.Username,
+			Role:       string(owner.Role),
+			IP:         clientIP(r, trustProxy),
+			UserAgent:  audit.TruncateUserAgent(r.UserAgent()),
+			SessionID:  actorSessionID(r, authSvc),
+			Module:     "settings.audit",
+			Action:     "audit_delete_filter",
+			Result:     "success",
+			HTTPStatus: http.StatusNoContent,
+			Path:       r.URL.Path,
+			Method:     r.Method,
+			Details:    map[string]any{"deleted": n},
+		})
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -122,23 +122,21 @@ func handleDeleteAudit(w http.ResponseWriter, r *http.Request, authSvc *auth.Ser
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if auditor != nil {
-		_ = auditor.Write(r.Context(), audit.Event{
-			UserID:     owner.ID,
-			Username:   owner.Username,
-			Role:       string(owner.Role),
-			IP:         clientIP(r, trustProxy),
-			UserAgent:  audit.TruncateUserAgent(r.UserAgent()),
-			SessionID:  actorSessionID(r, authSvc),
-			Module:     "settings.audit",
-			Action:     "audit_delete_ids",
-			Result:     "success",
-			HTTPStatus: http.StatusNoContent,
-			Path:       r.URL.Path,
-			Method:     r.Method,
-			Details:    map[string]any{"deleted": n, "ids": req.IDs},
-		})
-	}
+	writeAuditOrLog(r.Context(), auditor, audit.Event{
+		UserID:     owner.ID,
+		Username:   owner.Username,
+		Role:       string(owner.Role),
+		IP:         clientIP(r, trustProxy),
+		UserAgent:  audit.TruncateUserAgent(r.UserAgent()),
+		SessionID:  actorSessionID(r, authSvc),
+		Module:     "settings.audit",
+		Action:     "audit_delete_ids",
+		Result:     "success",
+		HTTPStatus: http.StatusNoContent,
+		Path:       r.URL.Path,
+		Method:     r.Method,
+		Details:    map[string]any{"deleted": n, "ids": req.IDs},
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -197,9 +195,18 @@ func auditLogPublic(log *store.AuditLog) auditLogResponse {
 	return resp
 }
 
-func writeSettingsAudit(w http.ResponseWriter, r *http.Request, auditor *audit.Auditor, authSvc *auth.Service, trustProxy bool, owner *store.User, e audit.Event) bool {
+func writeAuditOrLog(ctx context.Context, auditor *audit.Auditor, e audit.Event) {
 	if auditor == nil {
-		return true
+		return
+	}
+	if err := auditor.Write(ctx, e); err != nil {
+		log.Printf("audit write failed: module=%s action=%s err=%v", e.Module, e.Action, err)
+	}
+}
+
+func writeSettingsAudit(r *http.Request, auditor *audit.Auditor, authSvc *auth.Service, trustProxy bool, owner *store.User, e audit.Event) {
+	if auditor == nil {
+		return
 	}
 	e.UserID = owner.ID
 	e.Username = owner.Username
@@ -216,11 +223,7 @@ func writeSettingsAudit(w http.ResponseWriter, r *http.Request, auditor *audit.A
 	if e.Result == "" {
 		e.Result = "success"
 	}
-	if err := auditor.Write(r.Context(), e); err != nil {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		return false
-	}
-	return true
+	writeAuditOrLog(r.Context(), auditor, e)
 }
 
 func actorSessionID(r *http.Request, authSvc *auth.Service) string {

@@ -1,15 +1,48 @@
 package httpapi_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/zixflow/k8s/internal/audit"
+	"github.com/zixflow/k8s/internal/httpapi"
 	"github.com/zixflow/k8s/internal/store"
 )
+
+type auditInsertFailStore struct {
+	store.Store
+}
+
+func (s *auditInsertFailStore) InsertAudit(ctx context.Context, log store.AuditLog) (string, error) {
+	return "", errors.New("audit insert failed")
+}
+
+type auditInsertFailNextStore struct {
+	store.Store
+	failNext bool
+}
+
+func (s *auditInsertFailNextStore) InsertAudit(ctx context.Context, log store.AuditLog) (string, error) {
+	if s.failNext {
+		s.failNext = false
+		return "", errors.New("audit insert failed")
+	}
+	return s.Store.InsertAudit(ctx, log)
+}
+
+type auditQueryFailStore struct {
+	store.Store
+}
+
+func (s *auditQueryFailStore) QueryAudit(ctx context.Context, filter store.AuditFilter) ([]store.AuditLog, error) {
+	return nil, errors.New("audit query failed")
+}
 
 func TestFailedLoginWritesLoginFailedWithoutPassword(t *testing.T) {
 	t.Parallel()
@@ -103,5 +136,70 @@ func TestQueryAuditOwnerOnly(t *testing.T) {
 	}
 	if len(rows) == 0 {
 		t.Fatal("expected audit rows")
+	}
+}
+
+func TestQueryAuditStoreFailureReturns503(t *testing.T) {
+	t.Parallel()
+	st := &auditQueryFailStore{Store: store.NewMemory()}
+	h := newAuthHandlerWithStore(t, st)
+	session := login(t, h, "owner", "secret")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/settings/audit", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("code=%d want 503", rec.Code)
+	}
+}
+
+func TestCreateMemberSucceedsWhenAuditWriteFails(t *testing.T) {
+	t.Parallel()
+	st := &auditInsertFailStore{Store: store.NewMemory()}
+	createPermissionSet(t, st, "ps1")
+	h := newAuthHandlerWithOptions(t, st, httpapi.Deps{InstallNS: testInstallNS, Audit: audit.New(st)})
+	session := login(t, h, "owner", "secret")
+
+	body := bytes.NewBufferString(`{"username":"alice","displayName":"Alice","permissionSetId":"ps1","namespaces":["dev"]}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/settings/members", body)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp["password"].(string); !ok {
+		t.Fatalf("password missing: %v", resp)
+	}
+}
+
+func TestDeleteAuditSucceedsWhenAuditWriteFails(t *testing.T) {
+	t.Parallel()
+	st := &auditInsertFailNextStore{Store: store.NewMemory()}
+	h := newAuthHandlerWithStore(t, st)
+	session := login(t, h, "owner", "secret")
+
+	id, err := st.InsertAudit(context.Background(), store.AuditLog{
+		Module: "test",
+		Action: "test",
+		Result: "success",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.failNext = true
+
+	body := strings.NewReader(`{"ids":["` + id + `"]}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodDelete, "/api/settings/audit", body)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
