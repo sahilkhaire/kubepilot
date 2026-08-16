@@ -1,12 +1,33 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+/** Maximum number of log lines kept in memory and rendered. */
+const MAX_DISPLAY_LOG_LINES = 5000
+
+function capLogLines(text: string, maxLines: number): string {
+  if (maxLines <= 0) {
+    return ''
+  }
+  let lineCount = 0
+  for (let i = text.length - 1; i >= 0; i--) {
+    if (text[i] === '\n') {
+      lineCount++
+      if (lineCount >= maxLines) {
+        return text.slice(i + 1)
+      }
+    }
+  }
+  return text
+}
+
 export default function PodLogs() {
   const { ns, pod } = useParams<{ ns: string; pod: string }>()
   const [text, setText] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const preRef = useRef<HTMLPreElement>(null)
+  const bufferRef = useRef('')
+  const rafRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!ns || !pod) return
@@ -15,10 +36,23 @@ export default function PodLogs() {
     const ac = new AbortController()
     let cancelled = false
 
+    function scheduleUpdate() {
+      if (rafRef.current !== null) {
+        return
+      }
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null
+        if (!cancelled) {
+          setText(bufferRef.current)
+        }
+      })
+    }
+
     async function loadLogs() {
       setLoading(true)
       setError('')
       setText('')
+      bufferRef.current = ''
       const params = new URLSearchParams({
         namespace,
         pod: podName,
@@ -38,13 +72,20 @@ export default function PodLogs() {
           throw new Error('streaming not supported')
         }
         const decoder = new TextDecoder()
-        let accumulated = ''
         while (!cancelled) {
           const { done, value } = await reader.read()
           if (done) break
-          accumulated += decoder.decode(value, { stream: true })
-          setText(accumulated)
+          bufferRef.current = capLogLines(
+            bufferRef.current + decoder.decode(value, { stream: true }),
+            MAX_DISPLAY_LOG_LINES,
+          )
+          scheduleUpdate()
         }
+        bufferRef.current = capLogLines(
+          bufferRef.current + decoder.decode(),
+          MAX_DISPLAY_LOG_LINES,
+        )
+        scheduleUpdate()
       } catch (e) {
         if (!cancelled && !ac.signal.aborted) {
           setError(e instanceof Error ? e.message : 'load failed')
@@ -60,6 +101,10 @@ export default function PodLogs() {
     return () => {
       cancelled = true
       ac.abort()
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
     }
   }, [ns, pod])
 
