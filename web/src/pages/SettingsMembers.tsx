@@ -48,6 +48,8 @@ export default function SettingsMembers() {
   const [generatedPassword, setGeneratedPassword] = useState('')
   const [loading, setLoading] = useState(true)
   const [memberToDelete, setMemberToDelete] = useState<Member | null>(null)
+  const [accessTarget, setAccessTarget] = useState<Member | null>(null)
+  const [accessPending, setAccessPending] = useState(false)
 
   const [inviteUsername, setInviteUsername] = useState('')
   const [inviteDisplayName, setInviteDisplayName] = useState('')
@@ -86,8 +88,8 @@ export default function SettingsMembers() {
             return sets.find((s) => s.id === m.permissionSetId)?.name ?? m.permissionSetId
           case 'namespaces':
             return namespaceGrantLabel(sets.find((s) => s.id === m.permissionSetId) ?? {})
-          case 'enabled':
-            return m.enabled
+          case 'status':
+            return m.enabled ? 'active' : 'suspended'
           default:
             return ''
         }
@@ -137,13 +139,20 @@ export default function SettingsMembers() {
     }
   }
 
-  async function onToggleEnabled(member: Member) {
+  async function onConfirmAccess() {
+    if (!accessTarget) return
+    const resume = !accessTarget.enabled
+    setAccessPending(true)
     setError('')
     try {
-      await updateMember(member.id, { enabled: !member.enabled })
+      await updateMember(accessTarget.id, { enabled: resume })
+      toast.success(resume ? `Resumed access for ${accessTarget.username}` : `Suspended ${accessTarget.username}`)
+      setAccessTarget(null)
       await load()
     } catch {
-      setError('Failed to update member')
+      setError(resume ? 'Failed to resume member' : 'Failed to suspend member')
+    } finally {
+      setAccessPending(false)
     }
   }
 
@@ -241,13 +250,13 @@ export default function SettingsMembers() {
                 <SortableHead column="displayName" label="Display name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <SortableHead column="permissionSet" label="Permission set" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <SortableHead column="namespaces" label="Namespaces" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-                <SortableHead column="enabled" label="Enabled" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="status" label="Status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {sortedMembers.map((m, index) => (
-                <TableRow key={m.id}>
+                <TableRow key={m.id} className={m.enabled ? undefined : 'opacity-70'}>
                   <SerialCell index={index} />
                   <TableCell className="font-medium">{m.username}</TableCell>
                   <TableCell>{m.displayName}</TableCell>
@@ -256,15 +265,21 @@ export default function SettingsMembers() {
                     {namespaceGrantLabel(sets.find((s) => s.id === m.permissionSetId) ?? {})}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={m.enabled ? 'outline' : 'secondary'}>{m.enabled ? 'yes' : 'no'}</Badge>
+                    <Badge variant={m.enabled ? 'outline' : 'destructive'}>{m.enabled ? 'Active' : 'Suspended'}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button type="button" variant="ghost" size="sm" onClick={() => onResetPassword(m.id)}>
                         Reset password
                       </Button>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => onToggleEnabled(m)}>
-                        {m.enabled ? 'Disable' : 'Enable'}
+                      <Button
+                        type="button"
+                        variant={m.enabled ? 'ghost' : 'outline'}
+                        size="sm"
+                        disabled={accessPending && accessTarget?.id === m.id}
+                        onClick={() => setAccessTarget(m)}
+                      >
+                        {m.enabled ? 'Suspend' : 'Resume'}
                       </Button>
                       <Button type="button" variant="destructive" size="sm" onClick={() => setMemberToDelete(m)}>
                         Delete
@@ -279,6 +294,20 @@ export default function SettingsMembers() {
         </CardContent>
       </Card>
 
+      <ConfirmDialog
+        open={accessTarget != null}
+        title={accessTarget?.enabled ? `Suspend ${accessTarget.username}?` : `Resume ${accessTarget?.username ?? ''}?`}
+        description={
+          accessTarget?.enabled
+            ? 'They will be signed out immediately and cannot log in until access is resumed.'
+            : 'They will be able to sign in again with their existing password.'
+        }
+        confirmLabel={accessTarget?.enabled ? 'Suspend' : 'Resume'}
+        destructive={Boolean(accessTarget?.enabled)}
+        pending={accessPending}
+        onConfirm={onConfirmAccess}
+        onCancel={() => !accessPending && setAccessTarget(null)}
+      />
       <ConfirmDialog
         open={memberToDelete != null}
         title="Delete member"
