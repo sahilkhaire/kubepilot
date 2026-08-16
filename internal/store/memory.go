@@ -14,6 +14,7 @@ type memoryStore struct {
 	users           map[string]*User
 	usersByUsername map[string]string
 	sessions        map[string]*Session
+	permissionSets  map[string]*PermissionSet
 }
 
 func NewMemory() Store {
@@ -21,6 +22,7 @@ func NewMemory() Store {
 		users:           make(map[string]*User),
 		usersByUsername: make(map[string]string),
 		sessions:        make(map[string]*Session),
+		permissionSets:  make(map[string]*PermissionSet),
 	}
 }
 
@@ -155,6 +157,85 @@ func (m *memoryStore) DeleteSessionsForUser(ctx context.Context, userID string) 
 
 func (m *memoryStore) Ping(ctx context.Context) error {
 	return nil
+}
+
+func (m *memoryStore) CreatePermissionSet(ctx context.Context, ps PermissionSet) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	clone := clonePermissionSet(&ps)
+	m.permissionSets[ps.ID] = clone
+	return nil
+}
+
+func (m *memoryStore) UpdatePermissionSet(ctx context.Context, ps PermissionSet) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.permissionSets[ps.ID]; !ok {
+		return nil
+	}
+	m.permissionSets[ps.ID] = clonePermissionSet(&ps)
+	return nil
+}
+
+func (m *memoryStore) DeletePermissionSet(ctx context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.permissionSets[id]; !ok {
+		return nil
+	}
+	for _, u := range m.users {
+		if u.Role == RoleMember && u.PermissionSetID == id {
+			return ErrInUse
+		}
+	}
+	delete(m.permissionSets, id)
+	return nil
+}
+
+func (m *memoryStore) PermissionSet(ctx context.Context, id string) (*PermissionSet, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	ps, ok := m.permissionSets[id]
+	if !ok {
+		return nil, nil
+	}
+	return clonePermissionSet(ps), nil
+}
+
+func (m *memoryStore) ListPermissionSets(ctx context.Context) ([]PermissionSet, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]PermissionSet, 0, len(m.permissionSets))
+	for _, ps := range m.permissionSets {
+		out = append(out, *clonePermissionSet(ps))
+	}
+	return out, nil
+}
+
+func (m *memoryStore) MembersByPermissionSetID(ctx context.Context, permissionSetID string) ([]User, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var out []User
+	for _, u := range m.users {
+		if u.Role == RoleMember && u.PermissionSetID == permissionSetID {
+			out = append(out, *cloneUser(u))
+		}
+	}
+	return out, nil
+}
+
+func clonePermissionSet(ps *PermissionSet) *PermissionSet {
+	if ps == nil {
+		return nil
+	}
+	clone := *ps
+	if ps.Grants != nil {
+		clone.Grants = make(map[string][]string, len(ps.Grants))
+		for k, v := range ps.Grants {
+			clone.Grants[k] = append([]string(nil), v...)
+		}
+	}
+	return &clone
 }
 
 func cloneUser(u *User) *User {

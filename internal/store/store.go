@@ -2,8 +2,11 @@ package store
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+var ErrInUse = errors.New("permission set in use")
 
 type Role string
 
@@ -25,6 +28,16 @@ type User struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	CreatedBy          string
+}
+
+type PermissionSet struct {
+	ID              string
+	Name            string
+	Description     string
+	BuiltinTemplate string // viewer|operator|admin|empty for custom
+	Grants          map[string][]string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 type Session struct {
@@ -53,4 +66,10 @@ type Store interface {
 	DeleteSession(ctx context.Context, id string) error
 	DeleteSessionsForUser(ctx context.Context, userID string) error
 	Ping(ctx context.Context) error
+	CreatePermissionSet(ctx context.Context, ps PermissionSet) error
+	UpdatePermissionSet(ctx context.Context, ps PermissionSet) error
+	DeletePermissionSet(ctx context.Context, id string) error
+	PermissionSet(ctx context.Context, id string) (*PermissionSet, error)
+	ListPermissionSets(ctx context.Context) ([]PermissionSet, error)
+	MembersByPermissionSetID(ctx context.Context, permissionSetID string) ([]User, error)
 }

@@ -31,6 +31,7 @@ func main() {
 	handler := httpapi.New(httpapi.Deps{
 		Ready:      st.Ping,
 		Auth:       authSvc,
+		Store:      st,
 		TrustProxy: cfg.TrustProxy,
 	})
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, handler))

@@ -6,11 +6,13 @@ import (
 	"os"
 
 	"github.com/zixflow/k8s/internal/auth"
+	"github.com/zixflow/k8s/internal/store"
 )
 
 type Deps struct {
 	Ready      func(context.Context) error
 	Auth       *auth.Service
+	Store      store.Store
 	TrustProxy bool
 	WebDist    string // optional; falls back to WEB_DIST env
 }
@@ -19,6 +21,9 @@ func New(deps Deps) http.Handler {
 	mux := http.NewServeMux()
 	if deps.Auth != nil {
 		registerAuthRoutes(mux, deps.Auth, deps.TrustProxy)
+	}
+	if deps.Auth != nil && deps.Store != nil {
+		registerPermissionSetRoutes(mux, deps.Auth, deps.Store)
 	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

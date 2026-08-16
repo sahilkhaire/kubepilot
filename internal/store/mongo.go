@@ -18,6 +18,7 @@ type mongoStore struct {
 	client *mongo.Client
 	users  *mongo.Collection
 	sess   *mongo.Collection
+	psets  *mongo.Collection
 }
 
 type mongoUser struct {
@@ -47,6 +48,16 @@ type mongoSession struct {
 	UserAgent     string    `bson:"userAgent"`
 }
 
+type mongoPermissionSet struct {
+	ID              bson.ObjectID `bson:"_id,omitempty"`
+	Name            string        `bson:"name"`
+	Description     string        `bson:"description"`
+	BuiltinTemplate string        `bson:"builtinTemplate,omitempty"`
+	Grants          map[string][]string `bson:"grants"`
+	CreatedAt       time.Time     `bson:"createdAt"`
+	UpdatedAt       time.Time     `bson:"updatedAt"`
+}
+
 func OpenMongo(ctx context.Context, uri string) (Store, error) {
 	client, err := mongo.Connect(options.Client().ApplyURI(uri))
 	if err != nil {
@@ -67,6 +78,7 @@ func OpenMongo(ctx context.Context, uri string) (Store, error) {
 	db := client.Database(dbName)
 	users := db.Collection("users")
 	sess := db.Collection("sessions")
+	psets := db.Collection("permission_sets")
 
 	indexModel := options.Index().SetUnique(true)
 	if _, err := users.Indexes().CreateOne(ctx, mongo.IndexModel{
@@ -81,6 +93,7 @@ func OpenMongo(ctx context.Context, uri string) (Store, error) {
 		client: client,
 		users:  users,
 		sess:   sess,
+		psets:  psets,
 	}, nil
 }
 
@@ -224,6 +237,148 @@ func (m *mongoStore) DeleteSession(ctx context.Context, id string) error {
 func (m *mongoStore) DeleteSessionsForUser(ctx context.Context, userID string) error {
 	_, err := m.sess.DeleteMany(ctx, bson.M{"userId": userID})
 	return err
+}
+
+func (m *mongoStore) CreatePermissionSet(ctx context.Context, ps PermissionSet) error {
+	doc, err := permissionSetToMongo(ps)
+	if err != nil {
+		return err
+	}
+	_, err = m.psets.InsertOne(ctx, doc)
+	return err
+}
+
+func (m *mongoStore) UpdatePermissionSet(ctx context.Context, ps PermissionSet) error {
+	oid, err := bson.ObjectIDFromHex(ps.ID)
+	if err != nil {
+		return nil
+	}
+	doc, err := permissionSetToMongo(ps)
+	if err != nil {
+		return err
+	}
+	_, err = m.psets.ReplaceOne(ctx, bson.M{"_id": oid}, doc)
+	return err
+}
+
+func (m *mongoStore) DeletePermissionSet(ctx context.Context, id string) error {
+	oid, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return nil
+	}
+	count, err := m.users.CountDocuments(ctx, bson.M{
+		"role":            RoleMember,
+		"permissionSetId": id,
+	})
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return ErrInUse
+	}
+	_, err = m.psets.DeleteOne(ctx, bson.M{"_id": oid})
+	return err
+}
+
+func (m *mongoStore) PermissionSet(ctx context.Context, id string) (*PermissionSet, error) {
+	oid, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, nil
+	}
+	var doc mongoPermissionSet
+	err = m.psets.FindOne(ctx, bson.M{"_id": oid}).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return mongoPermissionSetToPermissionSet(&doc), nil
+}
+
+func (m *mongoStore) ListPermissionSets(ctx context.Context) ([]PermissionSet, error) {
+	cur, err := m.psets.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var out []PermissionSet
+	for cur.Next(ctx) {
+		var doc mongoPermissionSet
+		if err := cur.Decode(&doc); err != nil {
+			return nil, err
+		}
+		out = append(out, *mongoPermissionSetToPermissionSet(&doc))
+	}
+	return out, cur.Err()
+}
+
+func (m *mongoStore) MembersByPermissionSetID(ctx context.Context, permissionSetID string) ([]User, error) {
+	cur, err := m.users.Find(ctx, bson.M{
+		"role":            RoleMember,
+		"permissionSetId": permissionSetID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var out []User
+	for cur.Next(ctx) {
+		var doc mongoUser
+		if err := cur.Decode(&doc); err != nil {
+			return nil, err
+		}
+		out = append(out, *mongoUserToUser(&doc))
+	}
+	return out, cur.Err()
+}
+
+func permissionSetToMongo(ps PermissionSet) (mongoPermissionSet, error) {
+	doc := mongoPermissionSet{
+		Name:            ps.Name,
+		Description:     ps.Description,
+		BuiltinTemplate: ps.BuiltinTemplate,
+		Grants:          cloneGrantsMap(ps.Grants),
+		CreatedAt:       ps.CreatedAt,
+		UpdatedAt:       ps.UpdatedAt,
+	}
+	if ps.ID != "" {
+		oid, err := bson.ObjectIDFromHex(ps.ID)
+		if err == nil {
+			doc.ID = oid
+			return doc, nil
+		}
+	}
+	doc.ID = bson.NewObjectID()
+	return doc, nil
+}
+
+func mongoPermissionSetToPermissionSet(doc *mongoPermissionSet) *PermissionSet {
+	if doc == nil {
+		return nil
+	}
+	return &PermissionSet{
+		ID:              doc.ID.Hex(),
+		Name:            doc.Name,
+		Description:     doc.Description,
+		BuiltinTemplate: doc.BuiltinTemplate,
+		Grants:          cloneGrantsMap(doc.Grants),
+		CreatedAt:       doc.CreatedAt,
+		UpdatedAt:       doc.UpdatedAt,
+	}
+}
+
+func cloneGrantsMap(grants map[string][]string) map[string][]string {
+	if grants == nil {
+		return nil
+	}
+	out := make(map[string][]string, len(grants))
+	for k, v := range grants {
+		out[k] = append([]string(nil), v...)
+	}
+	return out
 }
 
 func userToMongoUser(u User) (mongoUser, error) {

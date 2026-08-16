@@ -38,6 +38,7 @@ func newAuthHandlerWithOptions(t *testing.T, st store.Store, opts httpapi.Deps) 
 		t.Fatal(err)
 	}
 	opts.Auth = auth.New(st, testSessionSecret)
+	opts.Store = st
 	return httpapi.New(opts)
 }
 
