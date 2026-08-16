@@ -17,6 +17,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  SerialHead,
+  SerialCell,
 } from '@/components/ui/table'
 import { sortBy, useTableSort } from '@/lib/table-sort'
 import { useLiveRefresh } from '@/hooks/use-live-refresh'
@@ -194,6 +196,7 @@ export default function CustomResources() {
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>
+              <SerialHead />
               <SortableHead column="name" label="Name" sortKey={crdSort.sortKey} sortDir={crdSort.sortDir} onSort={crdSort.onSort} />
               <SortableHead column="resource" label="Resource" sortKey={crdSort.sortKey} sortDir={crdSort.sortDir} onSort={crdSort.onSort} />
               <SortableHead column="scope" label="Scope" sortKey={crdSort.sortKey} sortDir={crdSort.sortDir} onSort={crdSort.onSort} />
@@ -201,20 +204,23 @@ export default function CustomResources() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {grouped.map(([group, items]) => (
+            {grouped.map(([group, items], groupIndex) => {
+              const start = grouped.slice(0, groupIndex).reduce((n, [, its]) => n + its.length, 0)
+              return (
               <Fragment key={group}>
                 <TableRow key={`g-${group}`} className="hover:bg-transparent">
-                  <TableCell colSpan={4} className="bg-muted/50 py-1 font-medium text-muted-foreground">
+                  <TableCell colSpan={5} className="bg-muted/50 py-1 font-medium text-muted-foreground">
                     {group}
                   </TableCell>
                 </TableRow>
-                {items.map((crd) => {
+                {items.map((crd, index) => {
                   const name = crd.metadata?.name ?? ''
                   const resource = crd.spec?.names?.plural ?? ''
                   const scope = crd.spec?.scope ?? ''
                   const isSelected = selected?.metadata?.name === name
                   return (
                     <TableRow key={name}>
+                      <SerialCell index={start + index} />
                       <TableCell className="font-medium">{name}</TableCell>
                       <TableCell>{resource}</TableCell>
                       <TableCell>
@@ -238,7 +244,8 @@ export default function CustomResources() {
                   )
                 })}
               </Fragment>
-            ))}
+              )
+            })}
           </TableBody>
         </Table>
         {grouped.length === 0 ? <EmptyState>No custom resource definitions.</EmptyState> : null}
@@ -258,16 +265,18 @@ export default function CustomResources() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <SerialHead />
                     <SortableHead column="name" label="Name" sortKey={instanceSort.sortKey} sortDir={instanceSort.sortDir} onSort={instanceSort.onSort} />
                     <SortableHead column="namespace" label="Namespace" sortKey={instanceSort.sortKey} sortDir={instanceSort.sortDir} onSort={instanceSort.onSort} />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedInstances.map((item) => {
+                  {sortedInstances.map((item, index) => {
                     const name = item.metadata?.name ?? ''
                     const ns = item.metadata?.namespace ?? ''
                     return (
                       <TableRow key={ns ? `${ns}/${name}` : name}>
+                        <SerialCell index={index} />
                         <TableCell className="font-medium">{name}</TableCell>
                         <TableCell>{ns || '—'}</TableCell>
                       </TableRow>

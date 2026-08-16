@@ -40,6 +40,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  SerialHead,
+  SerialCell,
 } from '@/components/ui/table'
 import { catalog, findKind, grantModuleId } from '@/lib/catalog'
 import { useUser } from '@/lib/auth-context'
@@ -452,7 +454,8 @@ export default function ResourceListPage({
       <div className="min-h-0 flex-1 overflow-auto">
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-background">
-            <TableRow>
+              <TableRow>
+              <SerialHead />
               <SortableHead column="name" label="Name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               {!clusterScoped ? (
                 <SortableHead column="namespace" label="Namespace" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
@@ -501,7 +504,7 @@ export default function ResourceListPage({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sorted.map((item) => {
+            {sorted.map((item, index) => {
               const name = objectName(item)
               if (!name) return null
               const ns = objectNamespace(item) || (isAllNamespaces(namespace) ? '' : namespace)
@@ -514,6 +517,7 @@ export default function ResourceListPage({
                   className={clickable ? 'cursor-pointer' : undefined}
                   onClick={clickable ? () => openDeployment(item) : undefined}
                 >
+                  <SerialCell index={index} />
                   <TableCell className="font-medium">{name}</TableCell>
                   {!clusterScoped ? (
                     <TableCell className="text-muted-foreground">{ns}</TableCell>

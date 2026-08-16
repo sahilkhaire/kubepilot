@@ -23,6 +23,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  SerialHead,
+  SerialCell,
 } from '@/components/ui/table'
 import { sortBy, timestampSortValue, useTableSort } from '@/lib/table-sort'
 
@@ -220,6 +222,7 @@ export default function SettingsAudit() {
           <Table>
             <TableHeader>
               <TableRow>
+                <SerialHead />
                 <TableHead className="w-10">
                   <Checkbox
                     checked={logs.length > 0 && selected.size === logs.length}
@@ -236,8 +239,9 @@ export default function SettingsAudit() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedLogs.map((log) => (
+              {sortedLogs.map((log, index) => (
                 <TableRow key={log.id}>
+                  <SerialCell index={index} />
                   <TableCell>
                     <Checkbox
                       checked={selected.has(log.id)}

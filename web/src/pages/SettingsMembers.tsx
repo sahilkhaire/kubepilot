@@ -34,6 +34,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  SerialHead,
+  SerialCell,
 } from '@/components/ui/table'
 import { sortBy, useTableSort } from '@/lib/table-sort'
 import { namespaceGrantLabel } from '@/lib/grants'
@@ -234,6 +236,7 @@ export default function SettingsMembers() {
           <Table>
             <TableHeader>
               <TableRow>
+                <SerialHead />
                 <SortableHead column="username" label="Username" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <SortableHead column="displayName" label="Display name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <SortableHead column="permissionSet" label="Permission set" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
@@ -243,8 +246,9 @@ export default function SettingsMembers() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedMembers.map((m) => (
+              {sortedMembers.map((m, index) => (
                 <TableRow key={m.id}>
+                  <SerialCell index={index} />
                   <TableCell className="font-medium">{m.username}</TableCell>
                   <TableCell>{m.displayName}</TableCell>
                   <TableCell>{sets.find((s) => s.id === m.permissionSetId)?.name ?? m.permissionSetId}</TableCell>

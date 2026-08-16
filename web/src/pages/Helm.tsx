@@ -17,6 +17,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  SerialHead,
+  SerialCell,
 } from '@/components/ui/table'
 import { sortBy, useTableSort } from '@/lib/table-sort'
 import { useLiveRefresh } from '@/hooks/use-live-refresh'
@@ -169,6 +171,7 @@ export default function Helm() {
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>
+              <SerialHead />
               <SortableHead column="name" label="Name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortableHead column="namespace" label="Namespace" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortableHead column="chart" label="Chart" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
@@ -179,8 +182,9 @@ export default function Helm() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sorted.map((rel) => (
+            {sorted.map((rel, index) => (
               <TableRow key={`${rel.namespace}/${rel.name}`}>
+                <SerialCell index={index} />
                 <TableCell className="font-medium">{rel.name}</TableCell>
                 <TableCell className="text-muted-foreground">{rel.namespace}</TableCell>
                 <TableCell>{rel.chart}</TableCell>

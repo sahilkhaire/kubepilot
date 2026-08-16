@@ -22,6 +22,8 @@ import {
   TableCell,
   TableHeader,
   TableRow,
+  SerialHead,
+  SerialCell,
 } from '@/components/ui/table'
 import { SortableHead } from '@/components/sortable-head'
 import { can } from '@/lib/grants'
@@ -298,17 +300,19 @@ export default function DeploymentDetailPanel({
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <SerialHead />
                       <SortableHead column="name" label="Name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                       <SortableHead column="ready" label="Ready" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                       <SortableHead column="status" label="Status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sortedPods.map((pod) => {
+                    {sortedPods.map((pod, index) => {
                       const podName = objectName(pod)
                       const phase = podPhase(pod)
                       return (
                         <TableRow key={podName}>
+                          <SerialCell index={index} />
                           <TableCell className="font-medium">
                             {canLogs ? (
                               <Link

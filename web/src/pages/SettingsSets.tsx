@@ -43,6 +43,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  SerialHead,
+  SerialCell,
 } from '@/components/ui/table'
 import { grantSummary, namespaceGrantLabel } from '@/lib/grants'
 import { sortBy, useTableSort } from '@/lib/table-sort'
@@ -255,6 +257,7 @@ export default function SettingsSets() {
           <Table>
             <TableHeader>
               <TableRow>
+                <SerialHead />
                 <SortableHead column="name" label="Name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <SortableHead column="description" label="Description" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <SortableHead column="grants" label="Grants" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
@@ -264,10 +267,11 @@ export default function SettingsSets() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedSets.map((ps) => {
+              {sortedSets.map((ps, index) => {
                 const summary = grantSummary(ps.grants)
                 return (
                   <TableRow key={ps.id}>
+                    <SerialCell index={index} />
                     <TableCell className="font-medium">{ps.name}</TableCell>
                     <TableCell className="max-w-xs truncate text-muted-foreground">
                       {ps.description || '—'}

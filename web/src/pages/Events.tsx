@@ -12,6 +12,8 @@ import {
   TableCell,
   TableHeader,
   TableRow,
+  SerialHead,
+  SerialCell,
 } from '@/components/ui/table'
 import { formatAge } from '@/lib/k8s-fields'
 import { sortBy, timestampSortValue, useTableSort } from '@/lib/table-sort'
@@ -117,6 +119,7 @@ export default function Events() {
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>
+              <SerialHead />
               <SortableHead column="age" label="Age" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortableHead column="namespace" label="Namespace" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortableHead column="object" label="Object" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
@@ -126,7 +129,7 @@ export default function Events() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sorted.map((ev) => {
+            {sorted.map((ev, index) => {
               const ns = ev.metadata?.namespace ?? ''
               const obj = ev.involvedObject
               const objLabel = obj
@@ -136,6 +139,7 @@ export default function Events() {
               const warning = (ev.type ?? '').toLowerCase() === 'warning'
               return (
                 <TableRow key={key}>
+                  <SerialCell index={index} />
                   <TableCell className="text-muted-foreground">
                     {formatAge(ev.lastTimestamp || ev.eventTime || ev.metadata?.creationTimestamp)}
                   </TableCell>

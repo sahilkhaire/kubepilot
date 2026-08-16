@@ -24,6 +24,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  SerialHead,
+  SerialCell,
 } from '@/components/ui/table'
 import { can } from '@/lib/grants'
 import {
@@ -303,6 +305,7 @@ export default function NodeDetailPanel({
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <SerialHead />
                       <SortableHead column="name" label="Name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                       <SortableHead column="namespace" label="Namespace" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                       <SortableHead column="ready" label="Ready" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
@@ -310,12 +313,13 @@ export default function NodeDetailPanel({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sortedPods.map((pod) => {
+                    {sortedPods.map((pod, index) => {
                       const podName = objectName(pod)
                       const phase = podPhase(pod)
                       const running = phase === 'Running'
                       return (
                         <TableRow key={`${objectNamespace(pod)}/${podName}`}>
+                          <SerialCell index={index} />
                           <TableCell className="font-medium">{podName}</TableCell>
                           <TableCell className="text-muted-foreground">{objectNamespace(pod)}</TableCell>
                           <TableCell>{podReady(pod)}</TableCell>
@@ -375,6 +379,7 @@ function ResourceTable({ title, values }: { title: string; values: Record<string
         <Table>
           <TableHeader>
             <TableRow>
+              <SerialHead />
               {nodeResourceColumns.map((col) => (
                 <TableHead key={col.key}>{col.label}</TableHead>
               ))}
@@ -382,6 +387,7 @@ function ResourceTable({ title, values }: { title: string; values: Record<string
           </TableHeader>
           <TableBody>
             <TableRow>
+              <SerialCell index={0} />
               {nodeResourceColumns.map((col) => (
                 <TableCell key={col.key} className="tabular-nums">
                   {col.key === 'cpu' || col.key === 'pods'

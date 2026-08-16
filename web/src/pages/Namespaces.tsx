@@ -14,6 +14,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  SerialHead,
+  SerialCell,
 } from '@/components/ui/table'
 import { useUser } from '@/lib/auth-context'
 import { can } from '@/lib/grants'
@@ -76,13 +78,15 @@ export default function Namespaces() {
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>
+              <SerialHead />
               <SortableHead column="name" label="Name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sorted.map((ns) => (
+            {sorted.map((ns, index) => (
               <TableRow key={ns}>
+                <SerialCell index={index} />
                 <TableCell className="font-medium">{ns}</TableCell>
                 <TableCell className="text-right">
                   <Button

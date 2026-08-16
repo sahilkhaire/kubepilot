@@ -102,6 +102,26 @@ function TableCaption({
   )
 }
 
+function SerialHead({ className, ...props }: React.ComponentProps<"th">) {
+  return (
+    <TableHead className={cn("w-10 text-muted-foreground", className)} {...props}>
+      #
+    </TableHead>
+  )
+}
+
+function SerialCell({
+  index,
+  className,
+  ...props
+}: React.ComponentProps<"td"> & { index: number }) {
+  return (
+    <TableCell className={cn("tabular-nums text-muted-foreground", className)} {...props}>
+      {index + 1}
+    </TableCell>
+  )
+}
+
 export {
   Table,
   TableHeader,
@@ -111,4 +131,6 @@ export {
   TableRow,
   TableCell,
   TableCaption,
+  SerialHead,
+  SerialCell,
 }

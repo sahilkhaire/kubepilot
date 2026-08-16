@@ -11,6 +11,8 @@ import {
   TableCell,
   TableHeader,
   TableRow,
+  SerialHead,
+  SerialCell,
 } from '@/components/ui/table'
 import { useUser } from '@/lib/auth-context'
 import { can } from '@/lib/grants'
@@ -105,13 +107,15 @@ export default function Workloads() {
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>
+              <SerialHead />
               <SortableHead column="kind" label="Kind" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortableHead column="count" label="Count" sortKey={sortKey} sortDir={sortDir} onSort={onSort} align="right" />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedRows.map((row) => (
+            {sortedRows.map((row, index) => (
               <TableRow key={row.module}>
+                <SerialCell index={index} />
                 <TableCell>
                   <Link to={row.href} className="font-medium hover:underline">
                     {row.label}

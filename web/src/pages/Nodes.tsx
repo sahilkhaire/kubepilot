@@ -28,6 +28,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  SerialHead,
+  SerialCell,
 } from '@/components/ui/table'
 import { useUser } from '@/lib/auth-context'
 import { can } from '@/lib/grants'
@@ -189,6 +191,7 @@ export default function Nodes() {
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
+                <SerialHead />
                 <SortableHead column="name" label="Name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <SortableHead column="cpu" label="CPU" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <SortableHead column="memory" label="Memory" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
@@ -202,12 +205,13 @@ export default function Nodes() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sorted.map((node) => {
+              {sorted.map((node, index) => {
                 const name = objectName(node)
                 if (!name) return null
                 return (
                   <NodeRow
                     key={name}
+                    index={index}
                     node={node}
                     user={user}
                     selected={selectedName === name}
@@ -290,6 +294,7 @@ export default function Nodes() {
 }
 
 function NodeRow({
+  index,
   node,
   user,
   selected,
@@ -301,6 +306,7 @@ function NodeRow({
   onDrain,
   onDelete,
 }: {
+  index: number
   node: K8sObject
   user: User
   selected: boolean
@@ -320,6 +326,7 @@ function NodeRow({
 
   return (
     <TableRow data-state={selected ? 'selected' : undefined} className="cursor-pointer" onClick={onOpen}>
+      <SerialCell index={index} />
       <TableCell>
         <span className="font-medium">{name}</span>
         {ip && ip !== name ? <p className="text-[11px] text-muted-foreground">{ip}</p> : null}
