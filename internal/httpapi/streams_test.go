@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -395,5 +396,133 @@ func TestPodExecRejectsCrossOrigin(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Fatalf("audit logs=%d want none for rejected origin", len(entries))
+	}
+}
+
+type stubMetricsProvider struct {
+	called bool
+	result streams.MetricsResult
+	err    error
+}
+
+func (s *stubMetricsProvider) Query(_ context.Context, q streams.MetricsQuery) (streams.MetricsResult, error) {
+	s.called = true
+	if s.err != nil {
+		return streams.MetricsResult{}, s.err
+	}
+	return s.result, nil
+}
+
+func newMetricsHandler(t *testing.T, st store.Store, provider streams.MetricsProvider) http.Handler {
+	t.Helper()
+	return newAuthHandlerWithOptions(t, st, httpapi.Deps{
+		InstallNS:       testInstallNS,
+		MetricsProvider: provider,
+	})
+}
+
+func TestMetricsUnauthenticated(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	provider := &stubMetricsProvider{result: streams.MetricsResult{Available: true}}
+	h := newMetricsHandler(t, st, provider)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/streams/metrics?scope=cluster", nil)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("code=%d want %d", rec.Code, http.StatusUnauthorized)
+	}
+	if provider.called {
+		t.Fatal("provider should not be called")
+	}
+}
+
+func TestMetricsDeniedWithoutViewGrant(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	provider := &stubMetricsProvider{result: streams.MetricsResult{Available: true}}
+	h := newMetricsHandler(t, st, provider)
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/streams/metrics?scope=cluster", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), http.StatusForbidden)
+	}
+	if provider.called {
+		t.Fatal("provider should not be called without metrics.view grant")
+	}
+}
+
+func TestMetricsUnavailableNoSource(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"metrics": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	provider := &stubMetricsProvider{result: streams.MetricsResult{Available: false}}
+	h := newMetricsHandler(t, st, provider)
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/streams/metrics?scope=cluster", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), http.StatusOK)
+	}
+	if !provider.called {
+		t.Fatal("provider should be called")
+	}
+	var body streams.MetricsResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Available {
+		t.Fatalf("body=%+v want available=false", body)
+	}
+}
+
+func TestMetricsAllowedWithViewGrant(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"metrics": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	provider := &stubMetricsProvider{
+		result: streams.MetricsResult{
+			Available: true,
+			Source:    "metrics-server",
+			CPU:       &streams.ResourceMetric{Usage: 1.5, Capacity: 8},
+			Memory:    &streams.ResourceMetric{Usage: 1e9, Capacity: 8e9},
+		},
+	}
+	h := newMetricsHandler(t, st, provider)
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/streams/metrics?scope=node&name=worker-1", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), http.StatusOK)
+	}
+	var body streams.MetricsResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if !body.Available || body.CPU == nil || body.CPU.Usage != 1.5 {
+		t.Fatalf("body=%+v unexpected metrics payload", body)
 	}
 }

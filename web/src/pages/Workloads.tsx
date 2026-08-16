@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import MetricsPanel, { MetricsCell } from '../components/MetricsPanel'
 
 type Pod = {
   metadata?: { name?: string; namespace?: string }
@@ -82,6 +83,7 @@ export default function Workloads() {
   return (
     <div style={{ maxWidth: '56rem', margin: '2rem auto', padding: '0 1rem' }}>
       <h1>Workloads</h1>
+      <MetricsPanel scope="cluster" title="Cluster metrics" />
       {error && <p style={{ color: 'crimson' }}>{error}</p>}
       <label style={{ display: 'block', marginBottom: '1rem' }}>
         Namespace{' '}
@@ -101,6 +103,7 @@ export default function Workloads() {
         <thead>
           <tr>
             <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Name</th>
+            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>CPU / Memory</th>
             <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Actions</th>
           </tr>
         </thead>
@@ -111,6 +114,9 @@ export default function Workloads() {
             return (
               <tr key={name}>
                 <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{name}</td>
+                <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
+                  <MetricsCell scope="pod" namespace={namespace} name={name} />
+                </td>
                 <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
                   <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/logs`}>
                     Logs

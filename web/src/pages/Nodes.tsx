@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import MetricsPanel, { MetricsCell } from '../components/MetricsPanel'
 
 type NodeItem = {
   metadata?: { name?: string }
@@ -47,6 +48,7 @@ export default function Nodes() {
   return (
     <div style={{ maxWidth: '56rem', margin: '2rem auto', padding: '0 1rem' }}>
       <h1>Nodes</h1>
+      <MetricsPanel scope="cluster" title="Cluster metrics" />
       {error && <p style={{ color: 'crimson' }}>{error}</p>}
       {nodes.length === 0 ? (
         <p style={{ color: '#666' }}>No nodes.</p>
@@ -55,6 +57,7 @@ export default function Nodes() {
           <thead>
             <tr>
               <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Name</th>
+              <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>CPU / Memory</th>
               <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Actions</th>
             </tr>
           </thead>
@@ -65,6 +68,9 @@ export default function Nodes() {
               return (
                 <tr key={name}>
                   <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{name}</td>
+                  <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
+                    <MetricsCell scope="node" name={name} />
+                  </td>
                   <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
                     <Link to={`/nodes/cluster/nodes/${encodeURIComponent(name)}/yaml`}>YAML</Link>
                   </td>

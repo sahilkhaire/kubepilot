@@ -21,8 +21,10 @@ type Deps struct {
 	TrustProxy bool
 	WebDist    string // optional; falls back to WEB_DIST env
 	Kube         *kube.Client
-	LogStreamer  streams.LogStreamer
-	ExecUpgrader streams.ExecUpgrader
+	LogStreamer     streams.LogStreamer
+	ExecUpgrader    streams.ExecUpgrader
+	MetricsProvider streams.MetricsProvider
+	PrometheusURL   string
 }
 
 func New(deps Deps) http.Handler {

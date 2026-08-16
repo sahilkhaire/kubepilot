@@ -20,6 +20,9 @@ func registerStreamRoutes(mux *http.ServeMux, deps Deps) {
 	mux.HandleFunc("GET /api/streams/exec", func(w http.ResponseWriter, r *http.Request) {
 		handlePodExec(w, r, deps)
 	})
+	mux.HandleFunc("GET /api/streams/metrics", func(w http.ResponseWriter, r *http.Request) {
+		handleMetrics(w, r, deps)
+	})
 }
 
 func handlePodLogs(w http.ResponseWriter, r *http.Request, deps Deps) {
@@ -192,6 +195,78 @@ func handlePodExec(w http.ResponseWriter, r *http.Request, deps Deps) {
 		log.Printf("pod exec: ns=%s pod=%s err=%v", ns, pod, err)
 		return
 	}
+}
+
+func handleMetrics(w http.ResponseWriter, r *http.Request, deps Deps) {
+	u, err := authenticateRequest(r, deps.Auth)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	var ps *rbac.PermissionSet
+	if u.Role != store.RoleOwner {
+		ps, err = permissionSetForRBAC(r.Context(), deps.Store, u.PermissionSetID)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+	if !rbac.Allow(rbac.Request{
+		User:          *u,
+		InstallNS:     deps.InstallNS,
+		PermissionSet: ps,
+		Module:        "metrics",
+		Action:        "view",
+		ClusterScoped: true,
+	}) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	scope := strings.TrimSpace(r.URL.Query().Get("scope"))
+	q := streams.MetricsQuery{
+		Scope:     scope,
+		Namespace: strings.TrimSpace(r.URL.Query().Get("namespace")),
+		Name:      strings.TrimSpace(r.URL.Query().Get("name")),
+	}
+
+	provider := metricsProviderFor(deps)
+	if provider == nil {
+		writeJSON(w, http.StatusOK, streams.MetricsResult{Available: false})
+		return
+	}
+
+	res, err := provider.Query(r.Context(), q)
+	if err != nil {
+		if isMetricsBadRequest(err) {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		log.Printf("metrics query: scope=%s err=%v", scope, err)
+		writeJSON(w, http.StatusOK, streams.MetricsResult{Available: false})
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+func isMetricsBadRequest(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "invalid scope") ||
+		strings.Contains(msg, "required for")
+}
+
+func metricsProviderFor(deps Deps) streams.MetricsProvider {
+	if deps.MetricsProvider != nil {
+		return deps.MetricsProvider
+	}
+	if deps.Kube != nil {
+		return streams.NewAutoMetricsProvider(deps.Kube, deps.PrometheusURL, nil)
+	}
+	return nil
 }
 
 func execUpgraderFor(deps Deps) streams.ExecUpgrader {

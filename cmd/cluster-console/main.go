@@ -42,8 +42,9 @@ func main() {
 		Store:      st,
 		Audit:      auditor,
 		InstallNS:  cfg.PodNamespace,
-		TrustProxy: cfg.TrustProxy,
-		Kube:       kubeClient,
+		TrustProxy:    cfg.TrustProxy,
+		Kube:          kubeClient,
+		PrometheusURL: cfg.PrometheusURL,
 	})
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, handler))
 }

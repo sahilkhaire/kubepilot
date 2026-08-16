@@ -14,6 +14,7 @@ type Config struct {
 	OwnerPassword  string
 	PodNamespace   string
 	TrustProxy     bool // default true; "false" disables
+	PrometheusURL  string // optional; PROMETHEUS_URL env
 }
 
 func Load() (Config, error) {
@@ -25,6 +26,7 @@ func Load() (Config, error) {
 		OwnerPassword: os.Getenv("OWNER_PASSWORD"),
 		PodNamespace:  os.Getenv("POD_NAMESPACE"),
 		TrustProxy:    trustProxyFromEnv(),
+		PrometheusURL: os.Getenv("PROMETHEUS_URL"),
 	}
 
 	if c.MongoURI == "" {

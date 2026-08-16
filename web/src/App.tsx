@@ -18,14 +18,16 @@ import SettingsMembers from './pages/SettingsMembers'
 import SettingsSets from './pages/SettingsSets'
 import Storage from './pages/Storage'
 import Workloads from './pages/Workloads'
+import MetricsPanel from './components/MetricsPanel'
 
 function Home({ user }: { user: User }) {
   return (
-    <div style={{ maxWidth: '24rem', margin: '2rem auto', padding: '0 1rem' }}>
+    <div style={{ maxWidth: '40rem', margin: '2rem auto', padding: '0 1rem' }}>
       <h1>Cluster Console</h1>
       <p>
         <strong>{user.username}</strong> ({user.role})
       </p>
+      <MetricsPanel scope="cluster" title="Cluster metrics" />
     </div>
   )
 }
