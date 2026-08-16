@@ -14,6 +14,7 @@ type Deps struct {
 
 func New(deps Deps) http.Handler {
 	mux := http.NewServeMux()
+	registerSPARoutes(mux)
 	if deps.Auth != nil {
 		registerAuthRoutes(mux, deps.Auth)
 	}

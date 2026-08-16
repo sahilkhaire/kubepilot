@@ -7,6 +7,7 @@ bin/
 dist/
 web/node_modules/
 web/dist/
+web/*.tsbuildinfo
 .DS_Store
 .env
 .env.*
