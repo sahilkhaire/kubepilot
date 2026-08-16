@@ -42,6 +42,7 @@ func registerK8sRoutes(mux *http.ServeMux, deps Deps) {
 	mux.HandleFunc("GET /api/k8s/cluster/overview", func(w http.ResponseWriter, r *http.Request) {
 		handleClusterOverview(w, r, deps)
 	})
+	registerK8sMutationRoutes(mux, deps)
 }
 
 func handleListNamespaces(w http.ResponseWriter, r *http.Request, deps Deps) {
