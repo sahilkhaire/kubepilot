@@ -69,7 +69,7 @@ func handleListHelmReleases(w http.ResponseWriter, r *http.Request, deps Deps) {
 		nsFilter = ""
 	}
 	if nsFilter != "" {
-		if !namespaceAccessible(*u, deps.InstallNS, nsFilter) {
+		if !namespaceAccessible(*u, ps, deps.InstallNS, nsFilter) {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
@@ -104,7 +104,7 @@ func handleListHelmReleases(w http.ResponseWriter, r *http.Request, deps Deps) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	visible := rbac.VisibleNamespaces(*u, deps.InstallNS, clusterNS)
+	visible := rbac.VisibleNamespaces(*u, ps, deps.InstallNS, clusterNS)
 	var out []helmctrl.Release
 	for _, ns := range visible {
 		if !rbac.Allow(rbac.Request{
@@ -281,7 +281,7 @@ func handleUninstallHelmRelease(w http.ResponseWriter, r *http.Request, deps Dep
 	if !ok {
 		return
 	}
-	if !namespaceAccessible(*u, deps.InstallNS, body.Namespace) {
+	if !namespaceAccessible(*u, ps, deps.InstallNS, body.Namespace) {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}

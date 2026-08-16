@@ -36,14 +36,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { sortBy, useTableSort } from '@/lib/table-sort'
+import { namespaceGrantLabel } from '@/lib/grants'
 import { PageLoading } from '@/components/page-loading'
-
-function parseNamespaces(input: string): string[] {
-  return input
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-}
 
 export default function SettingsMembers() {
   const [members, setMembers] = useState<Member[]>([])
@@ -56,7 +50,6 @@ export default function SettingsMembers() {
   const [inviteUsername, setInviteUsername] = useState('')
   const [inviteDisplayName, setInviteDisplayName] = useState('')
   const [inviteSetId, setInviteSetId] = useState('')
-  const [inviteNamespaces, setInviteNamespaces] = useState('')
 
   async function load() {
     setError('')
@@ -90,7 +83,7 @@ export default function SettingsMembers() {
           case 'permissionSet':
             return sets.find((s) => s.id === m.permissionSetId)?.name ?? m.permissionSetId
           case 'namespaces':
-            return m.namespaces.join(', ')
+            return namespaceGrantLabel(sets.find((s) => s.id === m.permissionSetId) ?? {})
           case 'enabled':
             return m.enabled
           default:
@@ -122,12 +115,10 @@ export default function SettingsMembers() {
         username: inviteUsername,
         displayName: inviteDisplayName,
         permissionSetId: inviteSetId,
-        namespaces: parseNamespaces(inviteNamespaces),
       })
       setGeneratedPassword(result.password)
       setInviteUsername('')
       setInviteDisplayName('')
-      setInviteNamespaces('')
       await load()
     } catch {
       setError('Failed to invite member')
@@ -228,16 +219,6 @@ export default function SettingsMembers() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="invite-ns">Namespaces (comma-separated, * allowed)</Label>
-              <Input
-                id="invite-ns"
-                value={inviteNamespaces}
-                onChange={(e) => setInviteNamespaces(e.target.value)}
-                placeholder="dev, prod or *"
-                required
-              />
-            </div>
             <div>
               <Button type="submit">Invite</Button>
             </div>
@@ -267,7 +248,9 @@ export default function SettingsMembers() {
                   <TableCell className="font-medium">{m.username}</TableCell>
                   <TableCell>{m.displayName}</TableCell>
                   <TableCell>{sets.find((s) => s.id === m.permissionSetId)?.name ?? m.permissionSetId}</TableCell>
-                  <TableCell>{m.namespaces.join(', ')}</TableCell>
+                  <TableCell className="max-w-xs truncate">
+                    {namespaceGrantLabel(sets.find((s) => s.id === m.permissionSetId) ?? {})}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={m.enabled ? 'outline' : 'secondary'}>{m.enabled ? 'yes' : 'no'}</Badge>
                   </TableCell>

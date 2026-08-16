@@ -169,7 +169,7 @@ func TestResetPasswordDeletesSessions(t *testing.T) {
 	}
 }
 
-func TestCannotGrantInstallNS(t *testing.T) {
+func TestCreateMemberIgnoresNamespacesField(t *testing.T) {
 	t.Parallel()
 	st := store.NewMemory()
 	createPermissionSet(t, st, "ps1")
@@ -182,7 +182,7 @@ func TestCannotGrantInstallNS(t *testing.T) {
 	req.AddCookie(session)
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
+	if rec.Code != http.StatusCreated {
 		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
@@ -269,43 +269,29 @@ func TestDisableMemberDeletesSessions(t *testing.T) {
 	}
 }
 
-func TestCreateMemberEmptyNamespaces(t *testing.T) {
+func TestCreateMemberWithoutNamespaces(t *testing.T) {
 	t.Parallel()
 	st := store.NewMemory()
 	createPermissionSet(t, st, "ps1")
 	h := newMembersHandler(t, st)
 	session := login(t, h, "owner", "secret")
 
-	body := bytes.NewBufferString(`{"username":"frank","displayName":"Frank","permissionSetId":"ps1","namespaces":[]}`)
+	body := bytes.NewBufferString(`{"username":"frank","displayName":"Frank","permissionSetId":"ps1"}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/settings/members", body)
 	req.AddCookie(session)
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
+	if rec.Code != http.StatusCreated {
 		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
 	}
-}
-
-func TestCreateMemberBlankNamespaces(t *testing.T) {
-	t.Parallel()
-	st := store.NewMemory()
-	createPermissionSet(t, st, "ps1")
-	h := newMembersHandler(t, st)
-	session := login(t, h, "owner", "secret")
-
-	for _, namespaces := range []string{`[""]`, `["  "]`} {
-		t.Run(namespaces, func(t *testing.T) {
-			body := bytes.NewBufferString(`{"username":"blank","displayName":"Blank","permissionSetId":"ps1","namespaces":` + namespaces + `}`)
-			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/api/settings/members", body)
-			req.AddCookie(session)
-			h.ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusBadRequest {
-				t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
-			}
-		})
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	user := resp["user"].(map[string]any)
+	if _, ok := user["namespaces"]; ok {
+		t.Fatalf("member response should omit namespaces: %v", user["namespaces"])
 	}
 }
 

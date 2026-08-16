@@ -55,7 +55,7 @@ func registerK8sRoutes(mux *http.ServeMux, deps Deps) {
 }
 
 func handleListNamespaces(w http.ResponseWriter, r *http.Request, deps Deps) {
-	u, _, ok := authenticateForKube(w, r, deps.Auth, deps.Store)
+	u, ps, ok := authenticateForKube(w, r, deps.Auth, deps.Store)
 	if !ok {
 		return
 	}
@@ -70,7 +70,7 @@ func handleListNamespaces(w http.ResponseWriter, r *http.Request, deps Deps) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	visible := rbac.VisibleNamespaces(*u, deps.InstallNS, clusterNS)
+	visible := rbac.VisibleNamespaces(*u, ps, deps.InstallNS, clusterNS)
 	writeJSON(w, http.StatusOK, visible)
 }
 
@@ -92,7 +92,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request, deps Deps) {
 	nsFilter := strings.TrimSpace(r.URL.Query().Get("namespace"))
 	var searchNS []string
 	if nsFilter != "" {
-		if !namespaceAccessible(*u, deps.InstallNS, nsFilter) {
+		if !namespaceAccessible(*u, ps, deps.InstallNS, nsFilter) {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
@@ -104,7 +104,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request, deps Deps) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		searchNS = rbac.VisibleNamespaces(*u, deps.InstallNS, clusterNS)
+		searchNS = rbac.VisibleNamespaces(*u, ps, deps.InstallNS, clusterNS)
 	}
 
 	qLower := strings.ToLower(q)
@@ -203,7 +203,7 @@ func handleListAllNamespacedResource(w http.ResponseWriter, r *http.Request, dep
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	visible := rbac.VisibleNamespaces(*u, deps.InstallNS, clusterNS)
+	visible := rbac.VisibleNamespaces(*u, ps, deps.InstallNS, clusterNS)
 	allowed := map[string]bool{}
 	for _, ns := range visible {
 		if rbac.Allow(rbac.Request{
@@ -375,7 +375,7 @@ func handleWorkloadsOverview(w http.ResponseWriter, r *http.Request, deps Deps) 
 		handleWorkloadsOverviewAll(w, r, deps, u, ps)
 		return
 	}
-	if !namespaceAccessible(*u, deps.InstallNS, ns) {
+	if !namespaceAccessible(*u, ps, deps.InstallNS, ns) {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
@@ -429,7 +429,7 @@ func handleWorkloadsOverviewAll(w http.ResponseWriter, r *http.Request, deps Dep
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	visible := rbac.VisibleNamespaces(*u, deps.InstallNS, clusterNS)
+	visible := rbac.VisibleNamespaces(*u, ps, deps.InstallNS, clusterNS)
 	allowed := false
 	for _, ns := range visible {
 		if rbac.Allow(rbac.Request{
@@ -507,7 +507,7 @@ func handleClusterOverview(w http.ResponseWriter, r *http.Request, deps Deps) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	visible := rbac.VisibleNamespaces(*u, deps.InstallNS, clusterNS)
+	visible := rbac.VisibleNamespaces(*u, ps, deps.InstallNS, clusterNS)
 
 	counts := make(map[string]int)
 	for _, module := range kube.WorkloadModules {
@@ -557,19 +557,11 @@ func isAllNamespaces(ns string) bool {
 	}
 }
 
-func namespaceAccessible(u store.User, installNS, namespace string) bool {
+func namespaceAccessible(u store.User, ps *rbac.PermissionSet, installNS, namespace string) bool {
 	if u.Role == store.RoleOwner {
 		return true
 	}
-	if installNS != "" && namespace == installNS {
-		return false
-	}
-	for _, n := range u.Namespaces {
-		if n == "*" || n == namespace {
-			return true
-		}
-	}
-	return false
+	return rbac.NamespaceAllowed(ps, namespace, installNS)
 }
 
 func authenticateForKube(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store) (*store.User, *rbac.PermissionSet, bool) {

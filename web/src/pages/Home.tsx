@@ -59,7 +59,7 @@ export default function Home() {
   useLiveRefresh(() => load(false), canOverview)
 
   return (
-    <PageBody>
+    <PageBody className="overflow-auto">
       <PageHeader title="Overview" description="Workload counts across granted namespaces.">
         <Badge variant="outline" className="h-5 capitalize">
           {user.username} · {user.role}

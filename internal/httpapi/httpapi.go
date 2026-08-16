@@ -38,8 +38,8 @@ func New(deps Deps) http.Handler {
 		registerAuthRoutes(mux, deps.Auth, deps.Audit, deps.TrustProxy, deps.Store)
 	}
 	if deps.Auth != nil && deps.Store != nil {
-		registerPermissionSetRoutes(mux, deps.Auth, deps.Store, deps.Audit, deps.TrustProxy)
-		registerMemberRoutes(mux, deps.Auth, deps.Store, deps.InstallNS, deps.Audit, deps.TrustProxy)
+		registerPermissionSetRoutes(mux, deps.Auth, deps.Store, deps.InstallNS, deps.Audit, deps.TrustProxy)
+		registerMemberRoutes(mux, deps.Auth, deps.Store, deps.Audit, deps.TrustProxy)
 		registerAuditRoutes(mux, deps.Auth, deps.Store, deps.Audit, deps.TrustProxy)
 		registerAppSettingsRoutes(mux, deps)
 		registerHelmRoutes(mux, deps)

@@ -36,6 +36,9 @@ type PermissionSet struct {
 	Description     string
 	BuiltinTemplate string // viewer|operator|admin|empty for custom
 	Grants          map[string][]string
+	NamespaceScope  string
+	Namespaces      []string
+	NamespaceRegex  []string
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }

@@ -90,6 +90,9 @@ func TestClonePermissionSetFromTemplate(t *testing.T) {
 	if !ok || len(pods) != 1 || pods[0] != "view" {
 		t.Fatalf("pods grants=%v", grants["pods"])
 	}
+	if resp["namespaceScope"] != "all" {
+		t.Fatalf("namespaceScope=%v want all", resp["namespaceScope"])
+	}
 }
 
 func TestDeletePermissionSetInUseHTTP(t *testing.T) {
@@ -382,5 +385,95 @@ func TestMeOwnerOmitsGrants(t *testing.T) {
 	}
 	if _, ok := resp["grants"]; ok {
 		t.Fatalf("owner should omit grants: %v", resp["grants"])
+	}
+}
+
+func TestCreatePermissionSetSelectedNamespaces(t *testing.T) {
+	t.Parallel()
+	st := store.NewMemory()
+	h := newAuthHandlerWithOptions(t, st, httpapi.Deps{InstallNS: testInstallNS})
+	session := login(t, h, "owner", "secret")
+
+	body := bytes.NewBufferString(`{"name":"Team","grants":{"pods":["view"]},"namespaceScope":"selected","namespaces":["dev"],"namespaceRegex":["team-.*"]}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/settings/permission-sets", body)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["namespaceScope"] != "selected" {
+		t.Fatalf("namespaceScope=%v", resp["namespaceScope"])
+	}
+	names, _ := resp["namespaces"].([]any)
+	if len(names) != 1 || names[0] != "dev" {
+		t.Fatalf("namespaces=%v", resp["namespaces"])
+	}
+	pats, _ := resp["namespaceRegex"].([]any)
+	if len(pats) != 1 || pats[0] != "team-.*" {
+		t.Fatalf("namespaceRegex=%v", resp["namespaceRegex"])
+	}
+}
+
+func TestCreatePermissionSetRejectsInstallNamespace(t *testing.T) {
+	t.Parallel()
+	st := store.NewMemory()
+	h := newAuthHandlerWithOptions(t, st, httpapi.Deps{InstallNS: testInstallNS})
+	session := login(t, h, "owner", "secret")
+
+	body := bytes.NewBufferString(`{"name":"Bad","grants":{"pods":["view"]},"namespaceScope":"selected","namespaces":["` + testInstallNS + `"]}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/settings/permission-sets", body)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreatePermissionSetRejectsInvalidRegex(t *testing.T) {
+	t.Parallel()
+	h := newAuthHandler(t)
+	session := login(t, h, "owner", "secret")
+
+	body := bytes.NewBufferString(`{"name":"Bad","grants":{"pods":["view"]},"namespaceScope":"selected","namespaceRegex":["("]}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/settings/permission-sets", body)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdatePermissionSetNamespaceGrant(t *testing.T) {
+	t.Parallel()
+	st := store.NewMemory()
+	h := newHandlerWithStore(t, st)
+	session := login(t, h, "owner", "secret")
+	createPermissionSet(t, st, "ps-edit")
+
+	body := bytes.NewBufferString(`{"namespaceScope":"selected","namespaces":["prod"],"namespaceRegex":[]}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPatch, "/api/settings/permission-sets/ps-edit", body)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["namespaceScope"] != "selected" {
+		t.Fatalf("namespaceScope=%v", resp["namespaceScope"])
+	}
+	names, _ := resp["namespaces"].([]any)
+	if len(names) != 1 || names[0] != "prod" {
+		t.Fatalf("namespaces=%v", resp["namespaces"])
 	}
 }

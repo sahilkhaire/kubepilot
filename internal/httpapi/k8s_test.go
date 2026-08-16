@@ -15,6 +15,7 @@ import (
 	"github.com/sahilkhaire/kubepilot/internal/httpapi"
 	"github.com/sahilkhaire/kubepilot/internal/kube"
 	"github.com/sahilkhaire/kubepilot/internal/password"
+	"github.com/sahilkhaire/kubepilot/internal/rbac"
 	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
@@ -42,10 +43,40 @@ func createK8sMember(t *testing.T, st store.Store, username, plainPassword, perm
 		MustChangePassword: false,
 		Enabled:            true,
 		PermissionSetID:    permissionSetID,
-		Namespaces:         namespaces,
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}); err != nil {
+		t.Fatal(err)
+	}
+	applyMemberNamespacesToSet(t, st, permissionSetID, namespaces)
+}
+
+func applyMemberNamespacesToSet(t *testing.T, st store.Store, permissionSetID string, namespaces []string) {
+	t.Helper()
+	ps, err := st.PermissionSet(context.Background(), permissionSetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ps == nil {
+		t.Fatalf("permission set %s not found", permissionSetID)
+	}
+	star := false
+	for _, ns := range namespaces {
+		if ns == "*" {
+			star = true
+			break
+		}
+	}
+	if star {
+		ps.NamespaceScope = rbac.NamespaceScopeAll
+		ps.Namespaces = nil
+		ps.NamespaceRegex = nil
+	} else {
+		ps.NamespaceScope = rbac.NamespaceScopeSelected
+		ps.Namespaces = append([]string(nil), namespaces...)
+		ps.NamespaceRegex = nil
+	}
+	if err := st.UpdatePermissionSet(context.Background(), *ps); err != nil {
 		t.Fatal(err)
 	}
 }

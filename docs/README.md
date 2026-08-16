@@ -27,7 +27,7 @@ Decision log (short, links here, not a second copy of the spec):
 - **Cluster scope:** in-cluster only. Not multi-cluster. Not a desktop app.
 - **Perimeter:** Cloudflare Access. No in-app IP whitelist.
 - **Identity:** app username/password. Owner password comes from env on every boot and cannot be changed in the UI. Owner invites members by sharing generated credentials.
-- **Authorization:** permission sets (module + action) plus a per-member namespace list. Owner bypasses all of this. Members never see the install namespace.
+- **Authorization:** permission sets (module + action + namespace grant). Owner bypasses all of this. Members never see the install namespace.
 - **Data:** MongoDB via `MONGODB_URI` for users, sets, sessions, settings, audit. Kubernetes is the source of truth for cluster objects.
 - **Enforcement:** the Go API is the only caller of the Kubernetes API. Members never receive a kubeconfig.
 

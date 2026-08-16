@@ -59,3 +59,15 @@ export function grantSummary(grants: Record<string, string[]> | undefined): {
     actions: entries.reduce((sum, [, actions]) => sum + actions.length, 0),
   }
 }
+
+export function namespaceGrantLabel(ps: {
+  namespaceScope?: string
+  namespaces?: string[]
+  namespaceRegex?: string[]
+}): string {
+  if (ps.namespaceScope !== 'selected') return 'All namespaces'
+  const names = ps.namespaces ?? []
+  const patterns = (ps.namespaceRegex ?? []).map((pattern) => `/${pattern}/`)
+  const parts = [...names, ...patterns]
+  return parts.length > 0 ? parts.join(', ') : 'None'
+}

@@ -5,7 +5,6 @@ export type User = {
   mustChangePassword: boolean
   enabled?: boolean
   permissionSetId?: string
-  namespaces?: string[]
   grants?: Record<string, string[]>
 }
 
@@ -17,11 +16,12 @@ export type Member = {
   mustChangePassword: boolean
   enabled: boolean
   permissionSetId: string
-  namespaces: string[]
   createdAt?: string
   updatedAt?: string
   createdBy?: string
 }
+
+export type NamespaceScope = 'all' | 'selected'
 
 export type PermissionSet = {
   id: string
@@ -29,6 +29,9 @@ export type PermissionSet = {
   description: string
   builtinTemplate?: string
   grants: Record<string, string[]>
+  namespaceScope: NamespaceScope
+  namespaces: string[]
+  namespaceRegex: string[]
   memberCount?: number
   createdAt?: string
   updatedAt?: string
@@ -148,7 +151,6 @@ export async function createMember(data: {
   username: string
   displayName: string
   permissionSetId: string
-  namespaces: string[]
 }): Promise<{ user: Member; password: string }> {
   const res = await apiFetch('/api/settings/members', {
     method: 'POST',
@@ -166,7 +168,6 @@ export async function updateMember(
   data: {
     displayName?: string
     permissionSetId?: string
-    namespaces?: string[]
     enabled?: boolean
   },
 ): Promise<Member> {
@@ -235,6 +236,9 @@ export async function createPermissionSet(data: {
   description: string
   grants?: Record<string, string[]>
   cloneFromTemplate?: string
+  namespaceScope?: NamespaceScope
+  namespaces?: string[]
+  namespaceRegex?: string[]
 }): Promise<PermissionSet> {
   const res = await apiFetch('/api/settings/permission-sets', {
     method: 'POST',
@@ -253,6 +257,9 @@ export async function updatePermissionSet(
     name?: string
     description?: string
     grants?: Record<string, string[]>
+    namespaceScope?: NamespaceScope
+    namespaces?: string[]
+    namespaceRegex?: string[]
   },
 ): Promise<PermissionSet> {
   const res = await apiFetch(`/api/settings/permission-sets/${id}`, {

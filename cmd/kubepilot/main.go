@@ -29,6 +29,9 @@ func main() {
 	if err := bootstrap.SyncOwner(ctx, st, cfg.OwnerUsername, cfg.OwnerPassword, audit.New(st)); err != nil {
 		log.Fatal(err)
 	}
+	if err := bootstrap.MigrateNamespaceGrants(ctx, st, cfg.PodNamespace); err != nil {
+		log.Fatal(err)
+	}
 
 	kubeClient, err := kube.NewInCluster()
 	if err != nil {
@@ -52,11 +55,11 @@ func main() {
 		})
 	}
 	handler := httpapi.New(httpapi.Deps{
-		Ready:      st.Ping,
-		Auth:       authSvc,
-		Store:      st,
-		Audit:      auditor,
-		InstallNS:  cfg.PodNamespace,
+		Ready:         st.Ping,
+		Auth:          authSvc,
+		Store:         st,
+		Audit:         auditor,
+		InstallNS:     cfg.PodNamespace,
 		TrustProxy:    cfg.TrustProxy,
 		Kube:          kubeClient,
 		PrometheusURL: cfg.PrometheusURL,

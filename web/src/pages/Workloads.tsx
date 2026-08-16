@@ -101,7 +101,7 @@ export default function Workloads() {
         <NamespaceSelect namespaces={namespaces} value={namespace} onChange={setNamespace} />
       </PageHeader>
       <ErrorAlert message={error} />
-      <div className="min-h-0 overflow-auto overscroll-contain">
+      <div className="min-h-0 flex-1 overflow-auto">
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>

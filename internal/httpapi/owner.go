@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sahilkhaire/kubepilot/internal/auth"
+	"github.com/sahilkhaire/kubepilot/internal/rbac"
 	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
@@ -27,6 +28,9 @@ type permissionSetResponse struct {
 	Description     string              `json:"description"`
 	BuiltinTemplate string              `json:"builtinTemplate,omitempty"`
 	Grants          map[string][]string `json:"grants"`
+	NamespaceScope  string              `json:"namespaceScope"`
+	Namespaces      []string            `json:"namespaces"`
+	NamespaceRegex  []string            `json:"namespaceRegex"`
 	MemberCount     int                 `json:"memberCount"`
 	CreatedAt       string              `json:"createdAt,omitempty"`
 	UpdatedAt       string              `json:"updatedAt,omitempty"`
@@ -37,12 +41,18 @@ type createPermissionSetRequest struct {
 	Description       string              `json:"description"`
 	Grants            map[string][]string `json:"grants"`
 	CloneFromTemplate string              `json:"cloneFromTemplate"`
+	NamespaceScope    string              `json:"namespaceScope"`
+	Namespaces        []string            `json:"namespaces"`
+	NamespaceRegex    []string            `json:"namespaceRegex"`
 }
 
 type updatePermissionSetRequest struct {
-	Name        *string             `json:"name"`
-	Description *string             `json:"description"`
-	Grants      map[string][]string `json:"grants"`
+	Name           *string             `json:"name"`
+	Description    *string             `json:"description"`
+	Grants         map[string][]string `json:"grants"`
+	NamespaceScope *string             `json:"namespaceScope"`
+	Namespaces     *[]string           `json:"namespaces"`
+	NamespaceRegex *[]string           `json:"namespaceRegex"`
 }
 
 func permissionSetPublic(ps *store.PermissionSet) permissionSetResponse {
@@ -56,7 +66,19 @@ func permissionSetPublicWithCount(ps *store.PermissionSet, memberCount int) perm
 		Description:     ps.Description,
 		BuiltinTemplate: ps.BuiltinTemplate,
 		Grants:          ps.Grants,
+		NamespaceScope:  ps.NamespaceScope,
+		Namespaces:      ps.Namespaces,
+		NamespaceRegex:  ps.NamespaceRegex,
 		MemberCount:     memberCount,
+	}
+	if resp.Namespaces == nil {
+		resp.Namespaces = []string{}
+	}
+	if resp.NamespaceRegex == nil {
+		resp.NamespaceRegex = []string{}
+	}
+	if resp.NamespaceScope == "" {
+		resp.NamespaceScope = rbac.NamespaceScopeAll
 	}
 	if !ps.CreatedAt.IsZero() {
 		resp.CreatedAt = ps.CreatedAt.UTC().Format(time.RFC3339)

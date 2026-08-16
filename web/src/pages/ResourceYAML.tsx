@@ -37,7 +37,7 @@ export default function ResourceYAML({ backLink, backLabel }: ResourceYAMLProps)
         </Button>
       </PageHeader>
       {name ? (
-        <div className="min-h-0 flex-1 p-3">
+        <div className="flex min-h-0 flex-1 flex-col p-3">
           <ResourceYAMLEditor
             module={module}
             name={name}

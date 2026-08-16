@@ -7,6 +7,7 @@ import {
   listPermissionSets,
   updatePermissionSet,
   type CatalogGroup,
+  type NamespaceScope,
   type PermissionSet,
 } from '@/api'
 import { SortableHead } from '@/components/sortable-head'
@@ -43,17 +44,40 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { grantSummary } from '@/lib/grants'
+import { grantSummary, namespaceGrantLabel } from '@/lib/grants'
 import { sortBy, useTableSort } from '@/lib/table-sort'
+import { NamespaceGrantEditor } from '@/components/namespace-grant-editor'
 
 type EditorState = {
   id?: string
   name: string
   description: string
   grants: Record<string, string[]>
+  namespaceScope: NamespaceScope
+  namespaces: string[]
+  namespaceRegex: string[]
 }
 
-const emptyEditor: EditorState = { name: '', description: '', grants: {} }
+const emptyEditor: EditorState = {
+  name: '',
+  description: '',
+  grants: {},
+  namespaceScope: 'all',
+  namespaces: [],
+  namespaceRegex: [],
+}
+
+function editorFromSet(ps: PermissionSet, name = ps.name): EditorState {
+  return {
+    id: ps.id,
+    name,
+    description: ps.description,
+    grants: { ...ps.grants },
+    namespaceScope: ps.namespaceScope === 'selected' ? 'selected' : 'all',
+    namespaces: [...(ps.namespaces ?? [])],
+    namespaceRegex: [...(ps.namespaceRegex ?? [])],
+  }
+}
 
 export default function SettingsSets() {
   const [sets, setSets] = useState<PermissionSet[]>([])
@@ -99,6 +123,8 @@ export default function SettingsSets() {
             return ps.description
           case 'grants':
             return grantSummary(ps.grants).modules
+          case 'namespaces':
+            return namespaceGrantLabel(ps)
           case 'members':
             return ps.memberCount ?? 0
           default:
@@ -119,26 +145,24 @@ export default function SettingsSets() {
 
   function openCreate() {
     setStartFrom('')
-    setEditor({ ...emptyEditor })
+    setEditor({
+      ...emptyEditor,
+      grants: {},
+      namespaces: [],
+      namespaceRegex: [],
+    })
   }
 
   function openEdit(ps: PermissionSet) {
     setStartFrom('')
-    setEditor({
-      id: ps.id,
-      name: ps.name,
-      description: ps.description,
-      grants: { ...ps.grants },
-    })
+    setEditor(editorFromSet(ps))
   }
 
   function openClone(ps: PermissionSet) {
     setStartFrom('')
-    setEditor({
-      name: `${ps.name} copy`,
-      description: ps.description,
-      grants: { ...ps.grants },
-    })
+    const next = editorFromSet(ps, `${ps.name} copy`)
+    delete next.id
+    setEditor(next)
   }
 
   function applyTemplate(id: string) {
@@ -169,12 +193,18 @@ export default function SettingsSets() {
           name: editor.name,
           description: editor.description,
           grants: editor.grants,
+          namespaceScope: editor.namespaceScope,
+          namespaces: editor.namespaces,
+          namespaceRegex: editor.namespaceRegex,
         })
       } else {
         await createPermissionSet({
           name: editor.name,
           description: editor.description,
           grants: editor.grants,
+          namespaceScope: editor.namespaceScope,
+          namespaces: editor.namespaces,
+          namespaceRegex: editor.namespaceRegex,
         })
       }
       setEditor(null)
@@ -228,6 +258,7 @@ export default function SettingsSets() {
                 <SortableHead column="name" label="Name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <SortableHead column="description" label="Description" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <SortableHead column="grants" label="Grants" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortableHead column="namespaces" label="Namespaces" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <SortableHead column="members" label="Members" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -245,6 +276,9 @@ export default function SettingsSets() {
                       <Badge variant="outline">
                         {summary.modules} module{summary.modules === 1 ? '' : 's'}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate text-muted-foreground">
+                      {namespaceGrantLabel(ps)}
                     </TableCell>
                     <TableCell>{ps.memberCount ?? 0}</TableCell>
                     <TableCell className="text-right">
@@ -325,7 +359,15 @@ export default function SettingsSets() {
                   </div>
                 ) : null}
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 max-h-[calc(90vh-14rem)]">
+              <NamespaceGrantEditor
+                value={{
+                  namespaceScope: editor.namespaceScope,
+                  namespaces: editor.namespaces,
+                  namespaceRegex: editor.namespaceRegex,
+                }}
+                onChange={(next) => setEditor({ ...editor, ...next })}
+              />
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 max-h-[calc(90vh-18rem)]">
                 <PermissionGrantEditor
                   catalog={catalog}
                   grants={editor.grants}
@@ -336,7 +378,16 @@ export default function SettingsSets() {
                 <Button type="button" variant="outline" onClick={() => setEditor(null)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={saving || !editor.name.trim()}>
+                <Button
+                  type="submit"
+                  disabled={
+                    saving ||
+                    !editor.name.trim() ||
+                    (editor.namespaceScope === 'selected' &&
+                      editor.namespaces.length === 0 &&
+                      editor.namespaceRegex.length === 0)
+                  }
+                >
                   {saving ? 'Saving…' : editor.id ? 'Save' : 'Create'}
                 </Button>
               </DialogFooter>

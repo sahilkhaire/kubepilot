@@ -427,6 +427,12 @@ func clonePermissionSet(ps *PermissionSet) *PermissionSet {
 			clone.Grants[k] = append([]string(nil), v...)
 		}
 	}
+	if ps.Namespaces != nil {
+		clone.Namespaces = append([]string(nil), ps.Namespaces...)
+	}
+	if ps.NamespaceRegex != nil {
+		clone.NamespaceRegex = append([]string(nil), ps.NamespaceRegex...)
+	}
 	return &clone
 }
 

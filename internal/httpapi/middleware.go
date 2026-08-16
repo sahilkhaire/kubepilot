@@ -93,10 +93,5 @@ func permissionSetForRBAC(ctx context.Context, st store.Store, id string) (*rbac
 	if ps == nil {
 		return nil, nil
 	}
-	return &rbac.PermissionSet{
-		ID:          ps.ID,
-		Name:        ps.Name,
-		Description: ps.Description,
-		Grants:      ps.Grants,
-	}, nil
+	return rbac.FromStore(ps), nil
 }

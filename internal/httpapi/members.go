@@ -19,24 +19,22 @@ import (
 var usernameRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{1,31}$`)
 
 type memberResponse struct {
-	ID                 string   `json:"id"`
-	Username           string   `json:"username"`
-	DisplayName        string   `json:"displayName"`
-	Role               string   `json:"role"`
-	MustChangePassword bool     `json:"mustChangePassword"`
-	Enabled            bool     `json:"enabled"`
-	PermissionSetID    string   `json:"permissionSetId"`
-	Namespaces         []string `json:"namespaces"`
-	CreatedAt          string   `json:"createdAt,omitempty"`
-	UpdatedAt          string   `json:"updatedAt,omitempty"`
-	CreatedBy          string   `json:"createdBy,omitempty"`
+	ID                 string `json:"id"`
+	Username           string `json:"username"`
+	DisplayName        string `json:"displayName"`
+	Role               string `json:"role"`
+	MustChangePassword bool   `json:"mustChangePassword"`
+	Enabled            bool   `json:"enabled"`
+	PermissionSetID    string `json:"permissionSetId"`
+	CreatedAt          string `json:"createdAt,omitempty"`
+	UpdatedAt          string `json:"updatedAt,omitempty"`
+	CreatedBy          string `json:"createdBy,omitempty"`
 }
 
 type createMemberRequest struct {
-	Username        string   `json:"username"`
-	DisplayName     string   `json:"displayName"`
-	PermissionSetID string   `json:"permissionSetId"`
-	Namespaces      []string `json:"namespaces"`
+	Username        string `json:"username"`
+	DisplayName     string `json:"displayName"`
+	PermissionSetID string `json:"permissionSetId"`
 }
 
 type createMemberResponse struct {
@@ -45,25 +43,24 @@ type createMemberResponse struct {
 }
 
 type updateMemberRequest struct {
-	DisplayName     *string   `json:"displayName"`
-	PermissionSetID *string   `json:"permissionSetId"`
-	Namespaces      *[]string `json:"namespaces"`
-	Enabled         *bool     `json:"enabled"`
+	DisplayName     *string `json:"displayName"`
+	PermissionSetID *string `json:"permissionSetId"`
+	Enabled         *bool   `json:"enabled"`
 }
 
 type resetPasswordResponse struct {
 	Password string `json:"password"`
 }
 
-func registerMemberRoutes(mux *http.ServeMux, authSvc *auth.Service, st store.Store, installNS string, auditor *audit.Auditor, trustProxy bool) {
+func registerMemberRoutes(mux *http.ServeMux, authSvc *auth.Service, st store.Store, auditor *audit.Auditor, trustProxy bool) {
 	mux.HandleFunc("GET /api/settings/members", func(w http.ResponseWriter, r *http.Request) {
 		handleListMembers(w, r, authSvc, st)
 	})
 	mux.HandleFunc("POST /api/settings/members", func(w http.ResponseWriter, r *http.Request) {
-		handleCreateMember(w, r, authSvc, st, installNS, auditor, trustProxy)
+		handleCreateMember(w, r, authSvc, st, auditor, trustProxy)
 	})
 	mux.HandleFunc("PATCH /api/settings/members/{id}", func(w http.ResponseWriter, r *http.Request) {
-		handleUpdateMember(w, r, authSvc, st, installNS, auditor, trustProxy)
+		handleUpdateMember(w, r, authSvc, st, auditor, trustProxy)
 	})
 	mux.HandleFunc("DELETE /api/settings/members/{id}", func(w http.ResponseWriter, r *http.Request) {
 		handleDeleteMember(w, r, authSvc, st, auditor, trustProxy)
@@ -89,7 +86,7 @@ func handleListMembers(w http.ResponseWriter, r *http.Request, authSvc *auth.Ser
 	writeJSON(w, http.StatusOK, out)
 }
 
-func handleCreateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, installNS string, auditor *audit.Auditor, trustProxy bool) {
+func handleCreateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, auditor *audit.Auditor, trustProxy bool) {
 	owner, ok := requireOwner(w, r, authSvc)
 	if !ok {
 		return
@@ -113,10 +110,6 @@ func handleCreateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Se
 	}
 	if strings.TrimSpace(req.PermissionSetID) == "" {
 		writeError(w, http.StatusBadRequest, "permission set required")
-		return
-	}
-	if err := validateNamespaces(req.Namespaces, installNS); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -162,7 +155,6 @@ func handleCreateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Se
 		MustChangePassword: true,
 		Enabled:            true,
 		PermissionSetID:    req.PermissionSetID,
-		Namespaces:         append([]string(nil), req.Namespaces...),
 		CreatedAt:          now,
 		UpdatedAt:          now,
 		CreatedBy:          owner.ID,
@@ -184,7 +176,7 @@ func handleCreateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Se
 	})
 }
 
-func handleUpdateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, installNS string, auditor *audit.Auditor, trustProxy bool) {
+func handleUpdateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, auditor *audit.Auditor, trustProxy bool) {
 	owner, ok := requireOwner(w, r, authSvc)
 	if !ok {
 		return
@@ -236,13 +228,6 @@ func handleUpdateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Se
 			return
 		}
 		updated.PermissionSetID = psID
-	}
-	if req.Namespaces != nil {
-		if err := validateNamespaces(*req.Namespaces, installNS); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		updated.Namespaces = append([]string(nil), (*req.Namespaces)...)
 	}
 	wasEnabled := existing.Enabled
 	if req.Enabled != nil {
@@ -359,31 +344,6 @@ func handleResetMemberPassword(w http.ResponseWriter, r *http.Request, authSvc *
 	writeJSON(w, http.StatusOK, resetPasswordResponse{Password: plain})
 }
 
-func validateNamespaces(namespaces []string, installNS string) error {
-	if len(namespaces) == 0 {
-		return errEmptyNamespaces
-	}
-	for _, ns := range namespaces {
-		if strings.TrimSpace(ns) == "" {
-			return errBlankNamespace
-		}
-		if installNS != "" && ns == installNS {
-			return errInstallNSForbidden
-		}
-	}
-	return nil
-}
-
-var (
-	errEmptyNamespaces    = &namespaceError{"namespaces required"}
-	errBlankNamespace     = &namespaceError{"namespace required"}
-	errInstallNSForbidden = &namespaceError{"install namespace not allowed"}
-)
-
-type namespaceError struct{ msg string }
-
-func (e *namespaceError) Error() string { return e.msg }
-
 func memberPublic(u *store.User) memberResponse {
 	resp := memberResponse{
 		ID:                 u.ID,
@@ -393,7 +353,6 @@ func memberPublic(u *store.User) memberResponse {
 		MustChangePassword: u.MustChangePassword,
 		Enabled:            u.Enabled,
 		PermissionSetID:    u.PermissionSetID,
-		Namespaces:         u.Namespaces,
 		CreatedBy:          u.CreatedBy,
 	}
 	if !u.CreatedAt.IsZero() {

@@ -51,13 +51,16 @@ type mongoSession struct {
 }
 
 type mongoPermissionSet struct {
-	ID              bson.ObjectID `bson:"_id,omitempty"`
-	Name            string        `bson:"name"`
-	Description     string        `bson:"description"`
-	BuiltinTemplate string        `bson:"builtinTemplate,omitempty"`
+	ID              bson.ObjectID       `bson:"_id,omitempty"`
+	Name            string              `bson:"name"`
+	Description     string              `bson:"description"`
+	BuiltinTemplate string              `bson:"builtinTemplate,omitempty"`
 	Grants          map[string][]string `bson:"grants"`
-	CreatedAt       time.Time     `bson:"createdAt"`
-	UpdatedAt       time.Time     `bson:"updatedAt"`
+	NamespaceScope  string              `bson:"namespaceScope,omitempty"`
+	Namespaces      []string            `bson:"namespaces,omitempty"`
+	NamespaceRegex  []string            `bson:"namespaceRegex,omitempty"`
+	CreatedAt       time.Time           `bson:"createdAt"`
+	UpdatedAt       time.Time           `bson:"updatedAt"`
 }
 
 type mongoAuditLog struct {
@@ -84,8 +87,8 @@ type mongoAuditLog struct {
 }
 
 type mongoAppSettings struct {
-	ID               string             `bson:"_id"`
-	HelmRepositories []HelmRepository   `bson:"helmRepositories"`
+	ID               string           `bson:"_id"`
+	HelmRepositories []HelmRepository `bson:"helmRepositories"`
 }
 
 func OpenMongo(ctx context.Context, uri string) (Store, error) {
@@ -617,6 +620,9 @@ func permissionSetToMongo(ps PermissionSet) (mongoPermissionSet, error) {
 		Description:     ps.Description,
 		BuiltinTemplate: ps.BuiltinTemplate,
 		Grants:          cloneGrantsMap(ps.Grants),
+		NamespaceScope:  ps.NamespaceScope,
+		Namespaces:      append([]string(nil), ps.Namespaces...),
+		NamespaceRegex:  append([]string(nil), ps.NamespaceRegex...),
 		CreatedAt:       ps.CreatedAt,
 		UpdatedAt:       ps.UpdatedAt,
 	}
@@ -641,6 +647,9 @@ func mongoPermissionSetToPermissionSet(doc *mongoPermissionSet) *PermissionSet {
 		Description:     doc.Description,
 		BuiltinTemplate: doc.BuiltinTemplate,
 		Grants:          cloneGrantsMap(doc.Grants),
+		NamespaceScope:  doc.NamespaceScope,
+		Namespaces:      append([]string(nil), doc.Namespaces...),
+		NamespaceRegex:  append([]string(nil), doc.NamespaceRegex...),
 		CreatedAt:       doc.CreatedAt,
 		UpdatedAt:       doc.UpdatedAt,
 	}

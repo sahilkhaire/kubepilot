@@ -52,8 +52,19 @@ func registerK8sClusterRoutes(mux *http.ServeMux, deps Deps) {
 }
 
 func handleListEvents(w http.ResponseWriter, r *http.Request, deps Deps) {
-	u, ok := requireKubeAllow(w, r, deps.Auth, deps.Store, deps.InstallNS, "events", "view", "", true)
+	u, ps, ok := authenticateForKube(w, r, deps.Auth, deps.Store)
 	if !ok {
+		return
+	}
+	if !rbac.Allow(rbac.Request{
+		User:          *u,
+		InstallNS:     deps.InstallNS,
+		PermissionSet: ps,
+		Module:        "events",
+		Action:        "view",
+		ClusterScoped: true,
+	}) {
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 	if deps.Kube == nil {
@@ -67,7 +78,7 @@ func handleListEvents(w http.ResponseWriter, r *http.Request, deps Deps) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	searchNS := rbac.VisibleNamespaces(*u, deps.InstallNS, clusterNS)
+	searchNS := rbac.VisibleNamespaces(*u, ps, deps.InstallNS, clusterNS)
 	if u.Role == store.RoleOwner {
 		searchNS = clusterNS
 	}
@@ -258,7 +269,7 @@ func handleNodePods(w http.ResponseWriter, r *http.Request, deps Deps) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		for _, ns := range rbac.VisibleNamespaces(*u, deps.InstallNS, clusterNS) {
+		for _, ns := range rbac.VisibleNamespaces(*u, ps, deps.InstallNS, clusterNS) {
 			visibleSet[ns] = true
 		}
 	}

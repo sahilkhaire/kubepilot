@@ -21,7 +21,7 @@ const (
 	permissionSetDescriptionMax = 240
 )
 
-func registerPermissionSetRoutes(mux *http.ServeMux, authSvc *auth.Service, st store.Store, auditor *audit.Auditor, trustProxy bool) {
+func registerPermissionSetRoutes(mux *http.ServeMux, authSvc *auth.Service, st store.Store, installNS string, auditor *audit.Auditor, trustProxy bool) {
 	mux.HandleFunc("GET /api/settings/permission-sets", func(w http.ResponseWriter, r *http.Request) {
 		handleListPermissionSets(w, r, authSvc, st)
 	})
@@ -35,10 +35,10 @@ func registerPermissionSetRoutes(mux *http.ServeMux, authSvc *auth.Service, st s
 		handleGetPermissionSet(w, r, authSvc, st)
 	})
 	mux.HandleFunc("POST /api/settings/permission-sets", func(w http.ResponseWriter, r *http.Request) {
-		handleCreatePermissionSet(w, r, authSvc, st, auditor, trustProxy)
+		handleCreatePermissionSet(w, r, authSvc, st, installNS, auditor, trustProxy)
 	})
 	mux.HandleFunc("PATCH /api/settings/permission-sets/{id}", func(w http.ResponseWriter, r *http.Request) {
-		handleUpdatePermissionSet(w, r, authSvc, st, auditor, trustProxy)
+		handleUpdatePermissionSet(w, r, authSvc, st, installNS, auditor, trustProxy)
 	})
 	mux.HandleFunc("DELETE /api/settings/permission-sets/{id}", func(w http.ResponseWriter, r *http.Request) {
 		handleDeletePermissionSet(w, r, authSvc, st, auditor, trustProxy)
@@ -108,7 +108,7 @@ func handleGetPermissionSet(w http.ResponseWriter, r *http.Request, authSvc *aut
 	writeJSON(w, http.StatusOK, permissionSetPublicWithCount(existing, count))
 }
 
-func handleCreatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, auditor *audit.Auditor, trustProxy bool) {
+func handleCreatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, installNS string, auditor *audit.Auditor, trustProxy bool) {
 	owner, ok := requireOwner(w, r, authSvc)
 	if !ok {
 		return
@@ -131,6 +131,9 @@ func handleCreatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 	}
 
 	grants := req.Grants
+	scope := req.NamespaceScope
+	names := req.Namespaces
+	patterns := req.NamespaceRegex
 	if req.CloneFromTemplate != "" {
 		tmpl, ok := rbac.TemplateByBuiltin(req.CloneFromTemplate)
 		if !ok {
@@ -138,8 +141,18 @@ func handleCreatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 			return
 		}
 		grants = tmpl.Grants
+		if scope == "" && len(names) == 0 && len(patterns) == 0 {
+			scope = tmpl.NamespaceScope
+			names = tmpl.Namespaces
+			patterns = tmpl.NamespaceRegex
+		}
 	}
 	grants, err = prepareGrants(grants)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	scope, names, patterns, err = rbac.ValidateNamespaceGrant(scope, names, patterns, installNS)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -157,6 +170,9 @@ func handleCreatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 		Description:     description,
 		BuiltinTemplate: "",
 		Grants:          grants,
+		NamespaceScope:  scope,
+		Namespaces:      names,
+		NamespaceRegex:  patterns,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
@@ -174,7 +190,7 @@ func handleCreatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 	writeJSON(w, http.StatusCreated, permissionSetPublic(&ps))
 }
 
-func handleUpdatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, auditor *audit.Auditor, trustProxy bool) {
+func handleUpdatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, installNS string, auditor *audit.Auditor, trustProxy bool) {
 	owner, ok := requireOwner(w, r, authSvc)
 	if !ok {
 		return
@@ -221,6 +237,28 @@ func handleUpdatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 			return
 		}
 		updated.Grants = grants
+	}
+	if req.NamespaceScope != nil || req.Namespaces != nil || req.NamespaceRegex != nil {
+		scope := updated.NamespaceScope
+		names := updated.Namespaces
+		patterns := updated.NamespaceRegex
+		if req.NamespaceScope != nil {
+			scope = *req.NamespaceScope
+		}
+		if req.Namespaces != nil {
+			names = *req.Namespaces
+		}
+		if req.NamespaceRegex != nil {
+			patterns = *req.NamespaceRegex
+		}
+		scope, names, patterns, err := rbac.ValidateNamespaceGrant(scope, names, patterns, installNS)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		updated.NamespaceScope = scope
+		updated.Namespaces = names
+		updated.NamespaceRegex = patterns
 	}
 	updated.UpdatedAt = time.Now().UTC()
 

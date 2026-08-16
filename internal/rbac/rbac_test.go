@@ -12,18 +12,31 @@ const installNS = "kubepilot"
 func TestAllow(t *testing.T) {
 	owner := store.User{Role: store.RoleOwner, Enabled: true}
 	member := func(namespaces []string, grants map[string][]string) rbac.Request {
+		ps := &rbac.PermissionSet{
+			ID:     "ps1",
+			Name:   "test",
+			Grants: grants,
+		}
+		star := false
+		for _, ns := range namespaces {
+			if ns == "*" {
+				star = true
+				break
+			}
+		}
+		if star || len(namespaces) == 0 {
+			ps.NamespaceScope = rbac.NamespaceScopeAll
+		} else {
+			ps.NamespaceScope = rbac.NamespaceScopeSelected
+			ps.Namespaces = append([]string(nil), namespaces...)
+		}
 		return rbac.Request{
 			User: store.User{
-				Role:      store.RoleMember,
-				Enabled:   true,
-				Namespaces: namespaces,
+				Role:    store.RoleMember,
+				Enabled: true,
 			},
-			InstallNS: installNS,
-			PermissionSet: &rbac.PermissionSet{
-				ID:     "ps1",
-				Name:   "test",
-				Grants: grants,
-			},
+			InstallNS:     installNS,
+			PermissionSet: ps,
 		}
 	}
 

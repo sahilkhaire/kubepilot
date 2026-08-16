@@ -120,7 +120,7 @@ func handleListCustomResources(w http.ResponseWriter, r *http.Request, deps Deps
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		searchNS := rbac.VisibleNamespaces(*u, deps.InstallNS, clusterNS)
+		searchNS := rbac.VisibleNamespaces(*u, ps, deps.InstallNS, clusterNS)
 		if u.Role == store.RoleOwner {
 			searchNS = clusterNS
 		}

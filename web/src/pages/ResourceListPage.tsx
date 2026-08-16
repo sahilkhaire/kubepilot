@@ -449,7 +449,7 @@ export default function ResourceListPage({
         />
       </PageHeader>
       <ErrorAlert message={error} />
-      <div className="min-h-0 overflow-auto overscroll-contain">
+      <div className="min-h-0 flex-1 overflow-auto">
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>

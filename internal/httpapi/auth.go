@@ -32,7 +32,6 @@ type publicUser struct {
 	MustChangePassword bool                `json:"mustChangePassword"`
 	Enabled            bool                `json:"enabled"`
 	PermissionSetID    string              `json:"permissionSetId,omitempty"`
-	Namespaces         []string            `json:"namespaces,omitempty"`
 	Grants             map[string][]string `json:"grants,omitempty"`
 }
 
@@ -221,7 +220,6 @@ func userPublic(u *store.User) publicUser {
 		MustChangePassword: u.MustChangePassword,
 		Enabled:            u.Enabled,
 		PermissionSetID:    u.PermissionSetID,
-		Namespaces:         u.Namespaces,
 	}
 }
 

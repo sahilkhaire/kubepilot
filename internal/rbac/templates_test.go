@@ -27,6 +27,9 @@ func TestViewerTemplatePodsViewNotReveal(t *testing.T) {
 	if contains(actions, "reveal") {
 		t.Fatalf("pods grants=%v must not include reveal", actions)
 	}
+	if viewer.NamespaceScope != rbac.NamespaceScopeAll {
+		t.Fatalf("namespaceScope=%q want all", viewer.NamespaceScope)
+	}
 }
 
 func TestAdminTemplateHasExec(t *testing.T) {

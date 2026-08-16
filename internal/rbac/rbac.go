@@ -7,20 +7,38 @@ import (
 )
 
 type Request struct {
-	User            store.User
-	InstallNS       string
-	PermissionSet   *PermissionSet // nil for owner
-	Module          string
-	Action          string
-	Namespace       string // empty if cluster-scoped
-	ClusterScoped   bool
+	User          store.User
+	InstallNS     string
+	PermissionSet *PermissionSet // nil for owner
+	Module        string
+	Action        string
+	Namespace     string // empty if cluster-scoped
+	ClusterScoped bool
 }
 
 type PermissionSet struct {
-	ID          string
-	Name        string
-	Description string
-	Grants      map[string][]string
+	ID             string
+	Name           string
+	Description    string
+	Grants         map[string][]string
+	NamespaceScope string
+	Namespaces     []string
+	NamespaceRegex []string
+}
+
+func FromStore(ps *store.PermissionSet) *PermissionSet {
+	if ps == nil {
+		return nil
+	}
+	return &PermissionSet{
+		ID:             ps.ID,
+		Name:           ps.Name,
+		Description:    ps.Description,
+		Grants:         ps.Grants,
+		NamespaceScope: ps.NamespaceScope,
+		Namespaces:     append([]string(nil), ps.Namespaces...),
+		NamespaceRegex: append([]string(nil), ps.NamespaceRegex...),
+	}
 }
 
 func Allow(req Request) bool {
@@ -39,7 +57,7 @@ func Allow(req Request) bool {
 	if req.InstallNS != "" && req.Namespace == req.InstallNS {
 		return false
 	}
-	if !req.ClusterScoped && !namespaceAllowed(req.User.Namespaces, req.Namespace) {
+	if !req.ClusterScoped && !NamespaceAllowed(req.PermissionSet, req.Namespace, req.InstallNS) {
 		return false
 	}
 	actions, ok := req.PermissionSet.Grants[req.Module]
@@ -53,15 +71,6 @@ func Allow(req Request) bool {
 		return false
 	}
 	return true
-}
-
-func namespaceAllowed(namespaces []string, ns string) bool {
-	for _, n := range namespaces {
-		if n == "*" || n == ns {
-			return true
-		}
-	}
-	return false
 }
 
 func hasAction(actions []string, action string) bool {

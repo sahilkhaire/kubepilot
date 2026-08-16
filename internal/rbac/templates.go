@@ -28,6 +28,7 @@ func viewerTemplate() store.PermissionSet {
 		Description:     "Read-only access to all catalog modules; secrets without reveal.",
 		BuiltinTemplate: BuiltinViewer,
 		Grants:          grants,
+		NamespaceScope:  NamespaceScopeAll,
 	}
 }
 
@@ -45,6 +46,7 @@ func operatorTemplate() store.PermissionSet {
 		Description:     "Viewer plus logs, restart, scale, trigger, and pod delete.",
 		BuiltinTemplate: BuiltinOperator,
 		Grants:          grants,
+		NamespaceScope:  NamespaceScopeAll,
 	}
 }
 
@@ -59,6 +61,7 @@ func adminTemplate() store.PermissionSet {
 		Description:     "Full catalog module access except owner settings.",
 		BuiltinTemplate: BuiltinAdmin,
 		Grants:          grants,
+		NamespaceScope:  NamespaceScopeAll,
 	}
 }
 

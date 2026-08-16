@@ -14,6 +14,7 @@ export function AppShell({
 }) {
   return (
     <SidebarProvider
+      className="h-svh overflow-hidden"
       style={
         {
           '--sidebar-width': '16.5rem',
