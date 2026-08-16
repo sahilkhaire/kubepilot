@@ -191,7 +191,7 @@ func (c *Client) TriggerCronJob(ctx context.Context, ns, name string) (string, e
 	return created.Name, nil
 }
 
-// DeleteResource deletes a workload by module path segment.
+// DeleteResource deletes a catalog resource by module path segment.
 func (c *Client) DeleteResource(ctx context.Context, module, ns, name string) error {
 	switch module {
 	case "pods":
@@ -208,6 +208,38 @@ func (c *Client) DeleteResource(ctx context.Context, module, ns, name string) er
 		return c.DeleteJob(ctx, ns, name)
 	case "cronjobs":
 		return c.DeleteCronJob(ctx, ns, name)
+	case "configmaps":
+		return c.Inner.CoreV1().ConfigMaps(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	case "secrets":
+		return c.Inner.CoreV1().Secrets(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	case "resourcequotas":
+		return c.Inner.CoreV1().ResourceQuotas(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	case "limitranges":
+		return c.Inner.CoreV1().LimitRanges(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	case "hpas":
+		return c.Inner.AutoscalingV2().HorizontalPodAutoscalers(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	case "pdbs":
+		return c.Inner.PolicyV1().PodDisruptionBudgets(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	case "leases":
+		return c.Inner.CoordinationV1().Leases(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	case "priorityclasses":
+		return c.Inner.SchedulingV1().PriorityClasses().Delete(ctx, name, metav1.DeleteOptions{})
+	case "runtimeclasses":
+		return c.Inner.NodeV1().RuntimeClasses().Delete(ctx, name, metav1.DeleteOptions{})
+	case "services":
+		return c.Inner.CoreV1().Services(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	case "ingresses":
+		return c.Inner.NetworkingV1().Ingresses(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	case "ingressclasses":
+		return c.Inner.NetworkingV1().IngressClasses().Delete(ctx, name, metav1.DeleteOptions{})
+	case "networkpolicies":
+		return c.Inner.NetworkingV1().NetworkPolicies(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	case "pvcs":
+		return c.Inner.CoreV1().PersistentVolumeClaims(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	case "pvs":
+		return c.Inner.CoreV1().PersistentVolumes().Delete(ctx, name, metav1.DeleteOptions{})
+	case "storageclasses":
+		return c.Inner.StorageV1().StorageClasses().Delete(ctx, name, metav1.DeleteOptions{})
 	default:
 		return fmt.Errorf("unknown resource %q", module)
 	}

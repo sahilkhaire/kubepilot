@@ -40,7 +40,7 @@ func handleGetYAML(w http.ResponseWriter, r *http.Request, deps Deps) {
 	gvkParam := strings.TrimSpace(r.URL.Query().Get("gvk"))
 	ns := strings.TrimSpace(r.URL.Query().Get("namespace"))
 	name := strings.TrimSpace(r.URL.Query().Get("name"))
-	if gvkParam == "" || ns == "" || name == "" {
+	if gvkParam == "" || name == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -53,6 +53,35 @@ func handleGetYAML(w http.ResponseWriter, r *http.Request, deps Deps) {
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		return
+	}
+	clusterScoped := kube.ResourceClusterScoped(module)
+	if !clusterScoped && ns == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	reveal := false
+	if module == "secrets" && secretRevealRequested(r) {
+		var ps *rbac.PermissionSet
+		if u.Role != store.RoleOwner {
+			ps, err = permissionSetForRBAC(r.Context(), deps.Store, u.PermissionSetID)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		}
+		if !rbac.Allow(rbac.Request{
+			User:          *u,
+			InstallNS:     deps.InstallNS,
+			PermissionSet: ps,
+			Module:        "secrets",
+			Action:        "reveal",
+			Namespace:     ns,
+		}) {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		reveal = true
 	}
 
 	var ps *rbac.PermissionSet
@@ -70,6 +99,7 @@ func handleGetYAML(w http.ResponseWriter, r *http.Request, deps Deps) {
 		Module:        module,
 		Action:        "view",
 		Namespace:     ns,
+		ClusterScoped: clusterScoped,
 	}) {
 		w.WriteHeader(http.StatusForbidden)
 		return
@@ -89,6 +119,17 @@ func handleGetYAML(w http.ResponseWriter, r *http.Request, deps Deps) {
 		log.Printf("kube get yaml %s: ns=%s name=%s err=%v", module, ns, name, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
+	}
+
+	if module == "secrets" && !reveal {
+		out, err = kube.StripSecretYAML(out)
+		if err != nil {
+			log.Printf("strip secret yaml: err=%v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	} else if module == "secrets" && reveal {
+		writeSecretRevealAudit(r, deps, u, ns, name)
 	}
 
 	w.Header().Set("Content-Type", "application/yaml")
@@ -121,19 +162,22 @@ func handleApplyYAML(w http.ResponseWriter, r *http.Request, deps Deps) {
 	}
 
 	kind := kube.KindForModule(module)
+	clusterScoped := kube.ResourceClusterScoped(module)
 	ns := nsOverride
-	if ns == "" {
-		obj, parseErr := kube.ParseYAMLNamespace(doc)
-		if parseErr == nil {
-			ns = obj
+	if !clusterScoped {
+		if ns == "" {
+			obj, parseErr := kube.ParseYAMLNamespace(doc)
+			if parseErr == nil {
+				ns = obj
+			}
+		}
+		if ns == "" {
+			writeError(w, http.StatusBadRequest, "namespace required")
+			return
 		}
 	}
-	if ns == "" {
-		writeError(w, http.StatusBadRequest, "namespace required")
-		return
-	}
 
-	if !kubeMutationAllowed(w, r, deps, u, module, "yaml_edit", ns) {
+	if !kubeMutationAllowed(w, r, deps, u, module, "yaml_edit", ns, clusterScoped) {
 		return
 	}
 

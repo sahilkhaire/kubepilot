@@ -10,25 +10,21 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 )
 
-// WorkloadModules lists namespace-scoped workload resource path segments.
-var WorkloadModules = []string{
-	"pods",
-	"deployments",
-	"statefulsets",
-	"daemonsets",
-	"replicasets",
-	"jobs",
-	"cronjobs",
-}
-
 type resourceSpec struct {
-	kind string
-	list func(ctx context.Context, c *Client, ns string) (any, error)
-	get  func(ctx context.Context, c *Client, ns, name string) (any, error)
+	kind          string
+	clusterScoped bool
+	list          func(ctx context.Context, c *Client, ns string) (any, error)
+	get           func(ctx context.Context, c *Client, ns, name string) (any, error)
 }
 
-var resources = map[string]resourceSpec{
-	"pods": {
+var resources = map[string]resourceSpec{}
+
+func registerResource(module string, spec resourceSpec) {
+	resources[module] = spec
+}
+
+func init() {
+	registerResource("pods", resourceSpec{
 		kind: "Pod",
 		list: func(ctx context.Context, c *Client, ns string) (any, error) {
 			list, err := c.Inner.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{})
@@ -40,8 +36,8 @@ var resources = map[string]resourceSpec{
 		get: func(ctx context.Context, c *Client, ns, name string) (any, error) {
 			return c.Inner.CoreV1().Pods(ns).Get(ctx, name, metav1.GetOptions{})
 		},
-	},
-	"deployments": {
+	})
+	registerResource("deployments", resourceSpec{
 		kind: "Deployment",
 		list: func(ctx context.Context, c *Client, ns string) (any, error) {
 			list, err := c.Inner.AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{})
@@ -53,8 +49,8 @@ var resources = map[string]resourceSpec{
 		get: func(ctx context.Context, c *Client, ns, name string) (any, error) {
 			return c.Inner.AppsV1().Deployments(ns).Get(ctx, name, metav1.GetOptions{})
 		},
-	},
-	"statefulsets": {
+	})
+	registerResource("statefulsets", resourceSpec{
 		kind: "StatefulSet",
 		list: func(ctx context.Context, c *Client, ns string) (any, error) {
 			list, err := c.Inner.AppsV1().StatefulSets(ns).List(ctx, metav1.ListOptions{})
@@ -66,8 +62,8 @@ var resources = map[string]resourceSpec{
 		get: func(ctx context.Context, c *Client, ns, name string) (any, error) {
 			return c.Inner.AppsV1().StatefulSets(ns).Get(ctx, name, metav1.GetOptions{})
 		},
-	},
-	"daemonsets": {
+	})
+	registerResource("daemonsets", resourceSpec{
 		kind: "DaemonSet",
 		list: func(ctx context.Context, c *Client, ns string) (any, error) {
 			list, err := c.Inner.AppsV1().DaemonSets(ns).List(ctx, metav1.ListOptions{})
@@ -79,8 +75,8 @@ var resources = map[string]resourceSpec{
 		get: func(ctx context.Context, c *Client, ns, name string) (any, error) {
 			return c.Inner.AppsV1().DaemonSets(ns).Get(ctx, name, metav1.GetOptions{})
 		},
-	},
-	"replicasets": {
+	})
+	registerResource("replicasets", resourceSpec{
 		kind: "ReplicaSet",
 		list: func(ctx context.Context, c *Client, ns string) (any, error) {
 			list, err := c.Inner.AppsV1().ReplicaSets(ns).List(ctx, metav1.ListOptions{})
@@ -92,8 +88,8 @@ var resources = map[string]resourceSpec{
 		get: func(ctx context.Context, c *Client, ns, name string) (any, error) {
 			return c.Inner.AppsV1().ReplicaSets(ns).Get(ctx, name, metav1.GetOptions{})
 		},
-	},
-	"jobs": {
+	})
+	registerResource("jobs", resourceSpec{
 		kind: "Job",
 		list: func(ctx context.Context, c *Client, ns string) (any, error) {
 			list, err := c.Inner.BatchV1().Jobs(ns).List(ctx, metav1.ListOptions{})
@@ -105,8 +101,8 @@ var resources = map[string]resourceSpec{
 		get: func(ctx context.Context, c *Client, ns, name string) (any, error) {
 			return c.Inner.BatchV1().Jobs(ns).Get(ctx, name, metav1.GetOptions{})
 		},
-	},
-	"cronjobs": {
+	})
+	registerResource("cronjobs", resourceSpec{
 		kind: "CronJob",
 		list: func(ctx context.Context, c *Client, ns string) (any, error) {
 			list, err := c.Inner.BatchV1().CronJobs(ns).List(ctx, metav1.ListOptions{})
@@ -118,7 +114,15 @@ var resources = map[string]resourceSpec{
 		get: func(ctx context.Context, c *Client, ns, name string) (any, error) {
 			return c.Inner.BatchV1().CronJobs(ns).Get(ctx, name, metav1.GetOptions{})
 		},
-	},
+	})
+}
+
+func ResourceClusterScoped(module string) bool {
+	spec, ok := resources[module]
+	if !ok {
+		return false
+	}
+	return spec.clusterScoped
 }
 
 func ResourceKind(module string) (string, bool) {

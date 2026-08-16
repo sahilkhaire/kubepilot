@@ -537,7 +537,7 @@ func TestUnknownResource404(t *testing.T) {
 	session := login(t, h, "member", "pass")
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/k8s/namespaces/dev/secrets", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/namespaces/dev/unknownresource", nil)
 	req.AddCookie(session)
 	h.ServeHTTP(rec, req)
 

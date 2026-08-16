@@ -2,13 +2,17 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom'
 import { logout, me, type User } from './api'
 import ChangePassword from './pages/ChangePassword'
+import Config from './pages/Config'
 import Login from './pages/Login'
+import Network from './pages/Network'
 import PodLogs from './pages/PodLogs'
+import ResourceYAML from './pages/ResourceYAML'
 import WorkloadYAML from './pages/WorkloadYAML'
 import SettingsAudit from './pages/SettingsAudit'
 import SettingsLayout from './pages/SettingsLayout'
 import SettingsMembers from './pages/SettingsMembers'
 import SettingsSets from './pages/SettingsSets'
+import Storage from './pages/Storage'
 import Workloads from './pages/Workloads'
 
 function Home({ user }: { user: User }) {
@@ -46,6 +50,9 @@ function AppShell({
         <nav>
           <Link to="/" style={linkStyle}>Home</Link>
           <Link to="/workloads" style={linkStyle}>Workloads</Link>
+          <Link to="/config" style={linkStyle}>Config</Link>
+          <Link to="/network" style={linkStyle}>Network</Link>
+          <Link to="/storage" style={linkStyle}>Storage</Link>
           {user.role === 'owner' && (
             <Link to="/settings/members" style={linkStyle}>Settings</Link>
           )}
@@ -113,6 +120,15 @@ export default function App() {
           <Route path="/workloads" element={<Workloads />} />
           <Route path="/workloads/:ns/:resource/:name/yaml" element={<WorkloadYAML />} />
           <Route path="/workloads/:ns/pods/:pod/logs" element={<PodLogs />} />
+          <Route path="/config" element={<Config />} />
+          <Route path="/config/:ns/:resource/:name/yaml" element={<ResourceYAML backLink="/config" backLabel="Config" />} />
+          <Route path="/config/cluster/:resource/:name/yaml" element={<ResourceYAML backLink="/config" backLabel="Config" />} />
+          <Route path="/network" element={<Network />} />
+          <Route path="/network/:ns/:resource/:name/yaml" element={<ResourceYAML backLink="/network" backLabel="Network" />} />
+          <Route path="/network/cluster/:resource/:name/yaml" element={<ResourceYAML backLink="/network" backLabel="Network" />} />
+          <Route path="/storage" element={<Storage />} />
+          <Route path="/storage/:ns/:resource/:name/yaml" element={<ResourceYAML backLink="/storage" backLabel="Storage" />} />
+          <Route path="/storage/cluster/:resource/:name/yaml" element={<ResourceYAML backLink="/storage" backLabel="Storage" />} />
           <Route path="/settings" element={<OwnerGuard user={user} />}>
             <Route index element={<Navigate to="members" replace />} />
             <Route path="members" element={<SettingsMembers />} />

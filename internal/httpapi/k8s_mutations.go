@@ -26,26 +26,11 @@ type rollbackRequest struct {
 }
 
 func registerK8sMutationRoutes(mux *http.ServeMux, deps Deps) {
-	mux.HandleFunc("POST /api/k8s/namespaces/{ns}/pods/{name}/delete", func(w http.ResponseWriter, r *http.Request) {
-		handleWorkloadDelete(w, r, deps, "pods")
+	mux.HandleFunc("POST /api/k8s/namespaces/{ns}/{resource}/{name}/delete", func(w http.ResponseWriter, r *http.Request) {
+		handleNamespacedDelete(w, r, deps)
 	})
-	mux.HandleFunc("POST /api/k8s/namespaces/{ns}/deployments/{name}/delete", func(w http.ResponseWriter, r *http.Request) {
-		handleWorkloadDelete(w, r, deps, "deployments")
-	})
-	mux.HandleFunc("POST /api/k8s/namespaces/{ns}/statefulsets/{name}/delete", func(w http.ResponseWriter, r *http.Request) {
-		handleWorkloadDelete(w, r, deps, "statefulsets")
-	})
-	mux.HandleFunc("POST /api/k8s/namespaces/{ns}/daemonsets/{name}/delete", func(w http.ResponseWriter, r *http.Request) {
-		handleWorkloadDelete(w, r, deps, "daemonsets")
-	})
-	mux.HandleFunc("POST /api/k8s/namespaces/{ns}/replicasets/{name}/delete", func(w http.ResponseWriter, r *http.Request) {
-		handleWorkloadDelete(w, r, deps, "replicasets")
-	})
-	mux.HandleFunc("POST /api/k8s/namespaces/{ns}/jobs/{name}/delete", func(w http.ResponseWriter, r *http.Request) {
-		handleWorkloadDelete(w, r, deps, "jobs")
-	})
-	mux.HandleFunc("POST /api/k8s/namespaces/{ns}/cronjobs/{name}/delete", func(w http.ResponseWriter, r *http.Request) {
-		handleWorkloadDelete(w, r, deps, "cronjobs")
+	mux.HandleFunc("POST /api/k8s/{resource}/{name}/delete", func(w http.ResponseWriter, r *http.Request) {
+		handleClusterDelete(w, r, deps)
 	})
 
 	mux.HandleFunc("POST /api/k8s/namespaces/{ns}/deployments/{name}/scale", func(w http.ResponseWriter, r *http.Request) {
@@ -77,19 +62,33 @@ func registerK8sMutationRoutes(mux *http.ServeMux, deps Deps) {
 	})
 }
 
-func handleWorkloadDelete(w http.ResponseWriter, r *http.Request, deps Deps, module string) {
-	if !isWorkloadModule(module) {
+func handleNamespacedDelete(w http.ResponseWriter, r *http.Request, deps Deps) {
+	module := r.PathValue("resource")
+	if !isNamespacedCatalogModule(module) || !moduleAllowsDelete(module) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 	ns := r.PathValue("ns")
 	name := r.PathValue("name")
+	handleResourceDelete(w, r, deps, module, ns, name, false)
+}
 
+func handleClusterDelete(w http.ResponseWriter, r *http.Request, deps Deps) {
+	module := r.PathValue("resource")
+	if !isClusterCatalogModule(module) || !moduleAllowsDelete(module) {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	name := r.PathValue("name")
+	handleResourceDelete(w, r, deps, module, "", name, true)
+}
+
+func handleResourceDelete(w http.ResponseWriter, r *http.Request, deps Deps, module, ns, name string, clusterScoped bool) {
 	u, ok := authenticateKubeMutation(w, r, deps)
 	if !ok {
 		return
 	}
-	if !kubeMutationAllowed(w, r, deps, u, module, "delete", ns) {
+	if !kubeMutationAllowed(w, r, deps, u, module, "delete", ns, clusterScoped) {
 		return
 	}
 	if !confirmMatches(r, name) {
@@ -134,7 +133,7 @@ func handleWorkloadScale(w http.ResponseWriter, r *http.Request, deps Deps, modu
 	if !ok {
 		return
 	}
-	if !kubeMutationAllowed(w, r, deps, u, module, "scale", ns) {
+	if !kubeMutationAllowed(w, r, deps, u, module, "scale", ns, false) {
 		return
 	}
 	replicas, ok := parseScaleRequest(w, r)
@@ -179,7 +178,7 @@ func handleWorkloadRestart(w http.ResponseWriter, r *http.Request, deps Deps, mo
 	if !ok {
 		return
 	}
-	if !kubeMutationAllowed(w, r, deps, u, module, "restart", ns) {
+	if !kubeMutationAllowed(w, r, deps, u, module, "restart", ns, false) {
 		return
 	}
 	if deps.Kube == nil {
@@ -221,7 +220,7 @@ func handleDeploymentRollback(w http.ResponseWriter, r *http.Request, deps Deps)
 	if !ok {
 		return
 	}
-	if !kubeMutationAllowed(w, r, deps, u, module, "rollback", ns) {
+	if !kubeMutationAllowed(w, r, deps, u, module, "rollback", ns, false) {
 		return
 	}
 	revision, ok := parseRollbackRequest(w, r)
@@ -267,7 +266,7 @@ func handleCronJobTrigger(w http.ResponseWriter, r *http.Request, deps Deps) {
 	if !ok {
 		return
 	}
-	if !kubeMutationAllowed(w, r, deps, u, module, "trigger", ns) {
+	if !kubeMutationAllowed(w, r, deps, u, module, "trigger", ns, false) {
 		return
 	}
 	if deps.Kube == nil {
@@ -310,7 +309,7 @@ func authenticateKubeMutation(w http.ResponseWriter, r *http.Request, deps Deps)
 	return u, true
 }
 
-func kubeMutationAllowed(w http.ResponseWriter, r *http.Request, deps Deps, u *store.User, module, action, namespace string) bool {
+func kubeMutationAllowed(w http.ResponseWriter, r *http.Request, deps Deps, u *store.User, module, action, namespace string, clusterScoped bool) bool {
 	var ps *rbac.PermissionSet
 	if u.Role != store.RoleOwner {
 		var loadErr error
@@ -327,6 +326,7 @@ func kubeMutationAllowed(w http.ResponseWriter, r *http.Request, deps Deps, u *s
 		Module:        module,
 		Action:        action,
 		Namespace:     namespace,
+		ClusterScoped: clusterScoped,
 	}) {
 		w.WriteHeader(http.StatusForbidden)
 		return false

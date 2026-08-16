@@ -31,10 +31,16 @@ func registerK8sRoutes(mux *http.ServeMux, deps Deps) {
 		handleResourceEvents(w, r, deps)
 	})
 	mux.HandleFunc("GET /api/k8s/namespaces/{ns}/{resource}/{name}", func(w http.ResponseWriter, r *http.Request) {
-		handleGetResource(w, r, deps)
+		handleGetNamespacedResource(w, r, deps)
 	})
 	mux.HandleFunc("GET /api/k8s/namespaces/{ns}/{resource}", func(w http.ResponseWriter, r *http.Request) {
-		handleListResource(w, r, deps)
+		handleListNamespacedResource(w, r, deps)
+	})
+	mux.HandleFunc("GET /api/k8s/{resource}/{name}", func(w http.ResponseWriter, r *http.Request) {
+		handleGetClusterResource(w, r, deps)
+	})
+	mux.HandleFunc("GET /api/k8s/{resource}", func(w http.ResponseWriter, r *http.Request) {
+		handleListClusterResource(w, r, deps)
 	})
 	mux.HandleFunc("GET /api/k8s/workloads/overview", func(w http.ResponseWriter, r *http.Request) {
 		handleWorkloadsOverview(w, r, deps)
@@ -133,12 +139,19 @@ func handleSearch(w http.ResponseWriter, r *http.Request, deps Deps) {
 	writeJSON(w, http.StatusOK, hits)
 }
 
-func handleListResource(w http.ResponseWriter, r *http.Request, deps Deps) {
+func handleListNamespacedResource(w http.ResponseWriter, r *http.Request, deps Deps) {
 	ns := r.PathValue("ns")
 	module := r.PathValue("resource")
-	if !isWorkloadModule(module) {
+	if !isNamespacedCatalogModule(module) {
 		w.WriteHeader(http.StatusNotFound)
 		return
+	}
+	reveal := false
+	if module == "secrets" && secretRevealRequested(r) {
+		if _, ok := requireKubeAllow(w, r, deps.Auth, deps.Store, deps.InstallNS, "secrets", "reveal", ns, false); !ok {
+			return
+		}
+		reveal = true
 	}
 	if _, ok := requireKubeAllow(w, r, deps.Auth, deps.Store, deps.InstallNS, module, "view", ns, false); !ok {
 		return
@@ -154,16 +167,29 @@ func handleListResource(w http.ResponseWriter, r *http.Request, deps Deps) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	if module == "secrets" {
+		items = sanitizeSecretList(items, reveal)
+	}
 	writeJSON(w, http.StatusOK, items)
 }
 
-func handleGetResource(w http.ResponseWriter, r *http.Request, deps Deps) {
+func handleGetNamespacedResource(w http.ResponseWriter, r *http.Request, deps Deps) {
 	ns := r.PathValue("ns")
 	module := r.PathValue("resource")
 	name := r.PathValue("name")
-	if !isWorkloadModule(module) {
+	if !isNamespacedCatalogModule(module) {
 		w.WriteHeader(http.StatusNotFound)
 		return
+	}
+	reveal := false
+	var revealUser *store.User
+	if module == "secrets" && secretRevealRequested(r) {
+		u, ok := requireKubeAllow(w, r, deps.Auth, deps.Store, deps.InstallNS, "secrets", "reveal", ns, false)
+		if !ok {
+			return
+		}
+		reveal = true
+		revealUser = u
 	}
 	if _, ok := requireKubeAllow(w, r, deps.Auth, deps.Store, deps.InstallNS, module, "view", ns, false); !ok {
 		return
@@ -183,6 +209,63 @@ func handleGetResource(w http.ResponseWriter, r *http.Request, deps Deps) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	if module == "secrets" {
+		obj = sanitizeSecretGet(obj, reveal)
+		if reveal && revealUser != nil {
+			writeSecretRevealAudit(r, deps, revealUser, ns, name)
+		}
+	}
+	writeJSON(w, http.StatusOK, obj)
+}
+
+func handleListClusterResource(w http.ResponseWriter, r *http.Request, deps Deps) {
+	module := r.PathValue("resource")
+	if !isClusterCatalogModule(module) {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	if _, ok := requireKubeAllow(w, r, deps.Auth, deps.Store, deps.InstallNS, module, "view", "", true); !ok {
+		return
+	}
+	if deps.Kube == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	items, err := deps.Kube.ListResource(r.Context(), module, "")
+	if err != nil {
+		log.Printf("kube list %s: err=%v", module, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func handleGetClusterResource(w http.ResponseWriter, r *http.Request, deps Deps) {
+	module := r.PathValue("resource")
+	name := r.PathValue("name")
+	if !isClusterCatalogModule(module) {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	if _, ok := requireKubeAllow(w, r, deps.Auth, deps.Store, deps.InstallNS, module, "view", "", true); !ok {
+		return
+	}
+	if deps.Kube == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	obj, err := deps.Kube.GetResource(r.Context(), module, "", name)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		log.Printf("kube get %s: name=%s err=%v", module, name, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	writeJSON(w, http.StatusOK, obj)
 }
 
@@ -190,7 +273,7 @@ func handleResourceEvents(w http.ResponseWriter, r *http.Request, deps Deps) {
 	ns := r.PathValue("ns")
 	module := r.PathValue("resource")
 	name := r.PathValue("name")
-	if !isWorkloadModule(module) {
+	if !kube.IsCatalogModule(module) || kube.ResourceClusterScoped(module) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -311,13 +394,12 @@ func handleClusterOverview(w http.ResponseWriter, r *http.Request, deps Deps) {
 	writeJSON(w, http.StatusOK, counts)
 }
 
-func isWorkloadModule(module string) bool {
-	for _, m := range kube.WorkloadModules {
-		if m == module {
-			return true
-		}
-	}
-	return false
+func isNamespacedCatalogModule(module string) bool {
+	return kube.IsCatalogModule(module) && !kube.ResourceClusterScoped(module)
+}
+
+func isClusterCatalogModule(module string) bool {
+	return kube.IsCatalogModule(module) && kube.ResourceClusterScoped(module)
 }
 
 func namespaceAccessible(u store.User, installNS, namespace string) bool {

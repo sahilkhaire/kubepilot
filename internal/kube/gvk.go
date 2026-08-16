@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// GVK query param format: slash-separated apiVersion and kind, e.g. "v1/Pod" or "apps/v1/Deployment".
+// ParseGVK query param format: slash-separated apiVersion and kind, e.g. "v1/Pod" or "apps/v1/Deployment".
 func ParseGVK(gvk string) (apiVersion, kind string, ok bool) {
 	gvk = strings.TrimSpace(gvk)
 	if gvk == "" {
@@ -22,7 +22,7 @@ func ParseGVK(gvk string) (apiVersion, kind string, ok bool) {
 	}
 }
 
-// ModuleForKind maps a Kubernetes kind to a workload module path segment.
+// ModuleForKind maps a Kubernetes kind to a catalog resource module path segment.
 func ModuleForKind(kind string) (string, bool) {
 	for module, spec := range resources {
 		if spec.kind == kind {
@@ -32,20 +32,38 @@ func ModuleForKind(kind string) (string, bool) {
 	return "", false
 }
 
-// GVKForModule returns the slash GVK form for a workload module.
+var moduleGVK = map[string]string{
+	"pods":              "v1/Pod",
+	"deployments":       "apps/v1/Deployment",
+	"statefulsets":      "apps/v1/StatefulSet",
+	"daemonsets":        "apps/v1/DaemonSet",
+	"replicasets":       "apps/v1/ReplicaSet",
+	"jobs":              "batch/v1/Job",
+	"cronjobs":          "batch/v1/CronJob",
+	"configmaps":        "v1/ConfigMap",
+	"secrets":           "v1/Secret",
+	"resourcequotas":    "v1/ResourceQuota",
+	"limitranges":       "v1/LimitRange",
+	"hpas":              "autoscaling/v2/HorizontalPodAutoscaler",
+	"pdbs":              "policy/v1/PodDisruptionBudget",
+	"leases":            "coordination.k8s.io/v1/Lease",
+	"priorityclasses":   "scheduling.k8s.io/v1/PriorityClass",
+	"runtimeclasses":    "node.k8s.io/v1/RuntimeClass",
+	"services":          "v1/Service",
+	"endpoints":         "v1/Endpoints",
+	"ingresses":         "networking.k8s.io/v1/Ingress",
+	"ingressclasses":    "networking.k8s.io/v1/IngressClass",
+	"networkpolicies":   "networking.k8s.io/v1/NetworkPolicy",
+	"pvcs":              "v1/PersistentVolumeClaim",
+	"pvs":               "v1/PersistentVolume",
+	"storageclasses":    "storage.k8s.io/v1/StorageClass",
+}
+
+// GVKForModule returns the slash GVK form for a catalog resource module.
 func GVKForModule(module string) (string, error) {
-	spec, ok := resources[module]
+	gvk, ok := moduleGVK[module]
 	if !ok {
 		return "", fmt.Errorf("unknown resource %q", module)
 	}
-	switch module {
-	case "pods":
-		return "v1/Pod", nil
-	case "deployments", "statefulsets", "daemonsets", "replicasets":
-		return "apps/v1/" + spec.kind, nil
-	case "jobs", "cronjobs":
-		return "batch/v1/" + spec.kind, nil
-	default:
-		return "", fmt.Errorf("unknown resource %q", module)
-	}
+	return gvk, nil
 }
