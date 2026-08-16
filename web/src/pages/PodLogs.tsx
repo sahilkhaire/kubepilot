@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { ErrorAlert } from '@/components/error-alert'
+import { PageBody, PageHeader } from '@/components/page-header'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 
 /** Maximum number of log lines kept in memory and rendered. */
 const MAX_DISPLAY_LOG_LINES = 5000
@@ -116,33 +120,28 @@ export default function PodLogs() {
   }, [text])
 
   if (!ns || !pod) {
-    return <p>Missing pod.</p>
+    return (
+      <PageBody>
+        <PageHeader title="Logs" description="Missing pod." />
+      </PageBody>
+    )
   }
 
   return (
-    <div style={{ maxWidth: '56rem', margin: '2rem auto', padding: '0 1rem' }}>
-      <p>
-        <Link to="/workloads">← Workloads</Link>
-      </p>
-      <h1>
-        Logs: {pod} <span style={{ fontWeight: 'normal', color: '#666' }}>({ns})</span>
-      </h1>
-      {loading && <p>Streaming…</p>}
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
+    <PageBody>
+      <PageHeader title={`Logs: ${pod}`} description={`Namespace ${ns}`}>
+        {loading ? <Badge variant="outline">Streaming</Badge> : null}
+        <Button variant="outline" asChild>
+          <Link to="/workloads">Back to Workloads</Link>
+        </Button>
+      </PageHeader>
+      <ErrorAlert message={error} />
       <pre
         ref={preRef}
-        style={{
-          background: '#111',
-          color: '#eee',
-          padding: '1rem',
-          overflow: 'auto',
-          maxHeight: '70vh',
-          fontSize: '0.85rem',
-          lineHeight: 1.4,
-        }}
+        className="max-h-[70vh] overflow-auto rounded-xl bg-zinc-950 p-4 font-mono text-[0.85rem] leading-relaxed text-zinc-100"
       >
         {text || (loading ? '' : '(empty)')}
       </pre>
-    </div>
+    </PageBody>
   )
 }

@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react'
+import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
+import { Skeleton } from '@/components/ui/skeleton'
 
 type ResourceMetric = {
   usage: number
@@ -38,7 +41,12 @@ function usagePercent(usage: number, capacity?: number): number | null {
   return Math.min(100, (usage / capacity) * 100)
 }
 
-function MetricBar({ label, usage, capacity, format }: {
+function MetricCard({
+  label,
+  usage,
+  capacity,
+  format,
+}: {
   label: string
   usage: number
   capacity?: number
@@ -46,27 +54,21 @@ function MetricBar({ label, usage, capacity, format }: {
 }) {
   const pct = usagePercent(usage, capacity)
   return (
-    <div style={{ marginBottom: '0.75rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.25rem' }}>
-        <span>{label}</span>
-        <span style={{ color: '#444' }}>
+    <Card className="@container/card shadow-sm">
+      <CardHeader>
+        <CardDescription>{label}</CardDescription>
+        <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
           {format(usage)}
-          {capacity ? ` / ${format(capacity)}` : ''}
-          {pct != null ? ` (${pct.toFixed(0)}%)` : ''}
-        </span>
-      </div>
-      {pct != null && (
-        <div style={{ background: '#eee', borderRadius: 4, height: 8, overflow: 'hidden' }}>
-          <div
-            style={{
-              width: `${pct}%`,
-              height: '100%',
-              background: pct > 85 ? '#d73a49' : '#0366d6',
-            }}
-          />
-        </div>
-      )}
-    </div>
+          {capacity ? <span className="text-base font-normal text-muted-foreground"> / {format(capacity)}</span> : null}
+        </CardTitle>
+      </CardHeader>
+      {pct != null ? (
+        <CardFooter className="flex-col items-stretch gap-2">
+          <Progress value={pct} className={pct > 85 ? '*:data-[slot=progress-indicator]:bg-destructive' : undefined} />
+          <p className="text-sm text-muted-foreground">{pct.toFixed(0)}% of capacity</p>
+        </CardFooter>
+      ) : null}
+    </Card>
   )
 }
 
@@ -101,32 +103,51 @@ export default function MetricsPanel({ scope, namespace, name, title, compact }:
     }
   }, [scope, namespace, name])
 
-  if (loading || !data?.available) {
+  if (loading) {
+    if (compact) return <Skeleton className="h-4 w-24" />
+    return (
+      <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2">
+        <Skeleton className="h-32 rounded-xl" />
+        <Skeleton className="h-32 rounded-xl" />
+      </div>
+    )
+  }
+
+  if (!data?.available) {
     return null
   }
 
-  const content = (
-    <>
-      {data.cpu && (
-        <MetricBar label="CPU" usage={data.cpu.usage} capacity={data.cpu.capacity} format={formatCores} />
-      )}
-      {data.memory && (
-        <MetricBar label="Memory" usage={data.memory.usage} capacity={data.memory.capacity} format={formatBytes} />
-      )}
-      {data.source && !compact && (
-        <p style={{ fontSize: '0.8rem', color: '#888', margin: '0.5rem 0 0' }}>Source: {data.source}</p>
-      )}
-    </>
-  )
-
   if (compact) {
-    return <div style={{ minWidth: '10rem' }}>{content}</div>
+    return (
+      <div className="min-w-40 space-y-2">
+        {data.cpu ? (
+          <p className="text-sm text-muted-foreground">
+            CPU {formatCores(data.cpu.usage)}
+            {data.cpu.capacity ? ` / ${formatCores(data.cpu.capacity)}` : ''}
+          </p>
+        ) : null}
+        {data.memory ? (
+          <p className="text-sm text-muted-foreground">
+            Memory {formatBytes(data.memory.usage)}
+            {data.memory.capacity ? ` / ${formatBytes(data.memory.capacity)}` : ''}
+          </p>
+        ) : null}
+      </div>
+    )
   }
 
   return (
-    <section style={{ marginBottom: '1.5rem', padding: '1rem', background: '#fafafa', border: '1px solid #eee', borderRadius: 6 }}>
-      {title && <h2 style={{ marginTop: 0, fontSize: '1.1rem' }}>{title}</h2>}
-      {content}
+    <section className="@container/main space-y-3">
+      {title ? <h2 className="text-sm font-medium text-muted-foreground">{title}</h2> : null}
+      <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2">
+        {data.cpu ? (
+          <MetricCard label="CPU" usage={data.cpu.usage} capacity={data.cpu.capacity} format={formatCores} />
+        ) : null}
+        {data.memory ? (
+          <MetricCard label="Memory" usage={data.memory.usage} capacity={data.memory.capacity} format={formatBytes} />
+        ) : null}
+      </div>
+      {data.source ? <p className="text-xs text-muted-foreground">Source: {data.source}</p> : null}
     </section>
   )
 }
@@ -164,5 +185,5 @@ export function MetricsCell({ scope, namespace, name }: Pick<MetricsPanelProps, 
     }
   }, [scope, namespace, name])
 
-  return <span style={{ fontSize: '0.85rem', color: '#444' }}>{text}</span>
+  return <span className="font-mono text-sm text-muted-foreground tabular-nums">{text}</span>
 }

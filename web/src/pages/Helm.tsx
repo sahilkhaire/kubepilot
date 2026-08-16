@@ -1,5 +1,21 @@
 import { useEffect, useState } from 'react'
-import EmptyState from '../components/EmptyState'
+import EmptyState from '@/components/EmptyState'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { ErrorAlert } from '@/components/error-alert'
+import { NamespaceSelect } from '@/components/namespace-select'
+import { PageBody, PageHeader } from '@/components/page-header'
+import { PageLoading } from '@/components/page-loading'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 type HelmRelease = {
   name: string
@@ -18,6 +34,7 @@ export default function Helm() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [pending, setPending] = useState('')
+  const [toUninstall, setToUninstall] = useState<HelmRelease | null>(null)
 
   async function loadNamespaces() {
     const res = await fetch('/api/k8s/namespaces', { credentials: 'same-origin' })
@@ -88,11 +105,9 @@ export default function Helm() {
     }
   }, [namespace])
 
-  async function onUninstall(rel: HelmRelease) {
-    const ok = window.confirm(
-      `Uninstall release "${rel.name}" in namespace "${rel.namespace}"? This cannot be undone.`,
-    )
-    if (!ok) return
+  async function onUninstall() {
+    if (!toUninstall) return
+    const rel = toUninstall
     setPending(rel.name)
     setError('')
     try {
@@ -106,6 +121,7 @@ export default function Helm() {
         throw new Error('uninstall failed')
       }
       setReleases((prev) => prev.filter((r) => r.name !== rel.name || r.namespace !== rel.namespace))
+      setToUninstall(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'uninstall failed')
     } finally {
@@ -114,60 +130,72 @@ export default function Helm() {
   }
 
   if (loading && namespaces.length === 0) {
-    return <p>Loading…</p>
+    return <PageLoading />
   }
 
   return (
-    <div style={{ maxWidth: '56rem', margin: '2rem auto', padding: '0 1rem' }}>
-      <h1>Helm</h1>
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
-      <label style={{ display: 'block', marginBottom: '1rem' }}>
-        Namespace{' '}
-        <select
-          value={namespace}
-          onChange={(e) => setNamespace(e.target.value)}
-          style={{ marginLeft: '0.5rem' }}
-        >
-          {namespaces.map((ns) => (
-            <option key={ns} value={ns}>
-              {ns}
-            </option>
-          ))}
-        </select>
-      </label>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Name</th>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Chart</th>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Revision</th>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Status</th>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {releases.map((rel) => (
-            <tr key={`${rel.namespace}/${rel.name}`}>
-              <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{rel.name}</td>
-              <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{rel.chart}</td>
-              <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{rel.revision}</td>
-              <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{rel.status}</td>
-              <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
-                <button
-                  type="button"
-                  disabled={pending === rel.name}
-                  onClick={() => onUninstall(rel)}
-                >
-                  {pending === rel.name ? 'Uninstalling…' : 'Uninstall'}
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {releases.length === 0 && namespace && !error && (
-        <EmptyState>No releases in this namespace.</EmptyState>
-      )}
-    </div>
+    <PageBody>
+      <PageHeader title="Helm" description="Releases in the selected namespace.">
+        <NamespaceSelect namespaces={namespaces} value={namespace} onChange={setNamespace} />
+      </PageHeader>
+      <ErrorAlert message={error} />
+      <Card className="shadow-sm">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Chart</TableHead>
+                <TableHead>Revision</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {releases.map((rel) => (
+                <TableRow key={`${rel.namespace}/${rel.name}`}>
+                  <TableCell className="font-medium">{rel.name}</TableCell>
+                  <TableCell>{rel.chart}</TableCell>
+                  <TableCell>{rel.revision}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="capitalize">
+                      {rel.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      disabled={pending === rel.name}
+                      onClick={() => setToUninstall(rel)}
+                    >
+                      {pending === rel.name ? 'Uninstalling…' : 'Uninstall'}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {releases.length === 0 && namespace && !error ? (
+            <EmptyState>No releases in this namespace.</EmptyState>
+          ) : null}
+        </CardContent>
+      </Card>
+      <ConfirmDialog
+        open={toUninstall != null}
+        title="Uninstall release"
+        description={
+          toUninstall
+            ? `Uninstall release "${toUninstall.name}" in namespace "${toUninstall.namespace}"? This cannot be undone.`
+            : ''
+        }
+        confirmLabel="Uninstall"
+        destructive
+        pending={Boolean(toUninstall && pending === toUninstall.name)}
+        onConfirm={onUninstall}
+        onCancel={() => setToUninstall(null)}
+      />
+    </PageBody>
   )
 }

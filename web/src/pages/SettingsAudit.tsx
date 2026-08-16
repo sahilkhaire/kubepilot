@@ -5,7 +5,24 @@ import {
   queryAudit,
   type AuditFilters,
   type AuditLog,
-} from '../api'
+} from '@/api'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import EmptyState from '@/components/EmptyState'
+import { ErrorAlert } from '@/components/error-alert'
+import { PageLoading } from '@/components/page-loading'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 function toRFC3339(datetimeLocal: string): string | undefined {
   if (!datetimeLocal) return undefined
@@ -19,6 +36,7 @@ export default function SettingsAudit() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [confirm, setConfirm] = useState<'selected' | 'filter' | null>(null)
 
   const [fromLocal, setFromLocal] = useState('')
   const [toLocal, setToLocal] = useState('')
@@ -93,119 +111,141 @@ export default function SettingsAudit() {
     }
   }
 
-  async function onDeleteSelected() {
-    if (selected.size === 0) return
-    if (!confirm(`Delete ${selected.size} audit entries?`)) return
+  async function onConfirmDelete() {
     setError('')
     try {
-      await deleteAuditIds([...selected])
+      if (confirm === 'selected') {
+        await deleteAuditIds([...selected])
+      } else if (confirm === 'filter') {
+        await deleteAuditFilter(buildFilters())
+      }
+      setConfirm(null)
       await load()
     } catch {
       setError('Failed to delete audit entries')
     }
   }
 
-  async function onDeleteFilter() {
-    if (!confirm('Delete all entries matching the current filter?')) return
-    setError('')
-    try {
-      await deleteAuditFilter(buildFilters())
-      await load()
-    } catch {
-      setError('Failed to delete audit entries')
-    }
-  }
-
-  if (loading && logs.length === 0) return <p>Loading…</p>
+  if (loading && logs.length === 0) return <PageLoading compact />
 
   return (
-    <div>
-      {error && <p style={{ color: '#b00020' }}>{error}</p>}
+    <div className="space-y-6">
+      <ErrorAlert message={error} />
 
-      <h2>Filters</h2>
-      <form onSubmit={onFilterSubmit} style={{ marginBottom: '1rem' }}>
-        <label>
-          From
-          <input type="datetime-local" value={fromLocal} onChange={(e) => setFromLocal(e.target.value)} />
-        </label>
-        <label>
-          To
-          <input type="datetime-local" value={toLocal} onChange={(e) => setToLocal(e.target.value)} />
-        </label>
-        <label>
-          Username
-          <input value={username} onChange={(e) => setUsername(e.target.value)} />
-        </label>
-        <label>
-          Module
-          <input value={module} onChange={(e) => setModule(e.target.value)} />
-        </label>
-        <label>
-          Action
-          <input value={action} onChange={(e) => setAction(e.target.value)} />
-        </label>
-        <label>
-          Result
-          <input value={result} onChange={(e) => setResult(e.target.value)} />
-        </label>
-        <label>
-          Namespace
-          <input value={namespace} onChange={(e) => setNamespace(e.target.value)} />
-        </label>
-        <label>
-          Kind
-          <input value={kind} onChange={(e) => setKind(e.target.value)} />
-        </label>
-        <button type="submit">Apply</button>
-        <button type="button" onClick={onClearFilters}>Clear</button>
-      </form>
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">Filters</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={onFilterSubmit} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-2">
+              <Label htmlFor="from">From</Label>
+              <Input id="from" type="datetime-local" value={fromLocal} onChange={(e) => setFromLocal(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="to">To</Label>
+              <Input id="to" type="datetime-local" value={toLocal} onChange={(e) => setToLocal(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="username">Username</Label>
+              <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="module">Module</Label>
+              <Input id="module" value={module} onChange={(e) => setModule(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="action">Action</Label>
+              <Input id="action" value={action} onChange={(e) => setAction(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="result">Result</Label>
+              <Input id="result" value={result} onChange={(e) => setResult(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="namespace">Namespace</Label>
+              <Input id="namespace" value={namespace} onChange={(e) => setNamespace(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="kind">Kind</Label>
+              <Input id="kind" value={kind} onChange={(e) => setKind(e.target.value)} />
+            </div>
+            <div className="flex items-end gap-2 sm:col-span-2">
+              <Button type="submit">Apply</Button>
+              <Button type="button" variant="outline" onClick={onClearFilters}>
+                Clear
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
-      <div style={{ marginBottom: '1rem' }}>
-        <button type="button" onClick={onDeleteSelected} disabled={selected.size === 0}>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="destructive" onClick={() => setConfirm('selected')} disabled={selected.size === 0}>
           Delete selected ({selected.size})
-        </button>
-        <button type="button" onClick={onDeleteFilter}>Delete matching filter</button>
+        </Button>
+        <Button type="button" variant="outline" onClick={() => setConfirm('filter')}>
+          Delete matching filter
+        </Button>
       </div>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-        <thead>
-          <tr>
-            <th style={{ borderBottom: '1px solid #ccc' }}>
-              <input
-                type="checkbox"
-                checked={logs.length > 0 && selected.size === logs.length}
-                onChange={toggleAll}
-              />
-            </th>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>Time</th>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>User</th>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>Module</th>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>Action</th>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>Result</th>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>Path</th>
-          </tr>
-        </thead>
-        <tbody>
-          {logs.map((log) => (
-            <tr key={log.id}>
-              <td style={{ borderBottom: '1px solid #eee' }}>
-                <input
-                  type="checkbox"
-                  checked={selected.has(log.id)}
-                  onChange={() => toggleSelect(log.id)}
-                />
-              </td>
-              <td style={{ borderBottom: '1px solid #eee' }}>{log.timestamp ?? ''}</td>
-              <td style={{ borderBottom: '1px solid #eee' }}>{log.username ?? ''}</td>
-              <td style={{ borderBottom: '1px solid #eee' }}>{log.module ?? ''}</td>
-              <td style={{ borderBottom: '1px solid #eee' }}>{log.action ?? ''}</td>
-              <td style={{ borderBottom: '1px solid #eee' }}>{log.result ?? ''}</td>
-              <td style={{ borderBottom: '1px solid #eee' }}>{log.path ?? ''}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {logs.length === 0 && <p>No audit entries.</p>}
+      <Card className="shadow-sm">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={logs.length > 0 && selected.size === logs.length}
+                    onCheckedChange={toggleAll}
+                    aria-label="Select all"
+                  />
+                </TableHead>
+                <TableHead>Time</TableHead>
+                <TableHead>User</TableHead>
+                <TableHead>Module</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Result</TableHead>
+                <TableHead>Path</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {logs.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell>
+                    <Checkbox
+                      checked={selected.has(log.id)}
+                      onCheckedChange={() => toggleSelect(log.id)}
+                      aria-label={`Select ${log.id}`}
+                    />
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">{log.timestamp ?? ''}</TableCell>
+                  <TableCell>{log.username ?? ''}</TableCell>
+                  <TableCell>{log.module ?? ''}</TableCell>
+                  <TableCell>{log.action ?? ''}</TableCell>
+                  <TableCell>{log.result ?? ''}</TableCell>
+                  <TableCell className="max-w-xs truncate font-mono text-xs">{log.path ?? ''}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {logs.length === 0 ? <EmptyState>No audit entries.</EmptyState> : null}
+        </CardContent>
+      </Card>
+
+      <ConfirmDialog
+        open={confirm != null}
+        title={confirm === 'selected' ? 'Delete selected entries' : 'Delete matching entries'}
+        description={
+          confirm === 'selected'
+            ? `Delete ${selected.size} audit entries?`
+            : 'Delete all entries matching the current filter?'
+        }
+        confirmLabel="Delete"
+        destructive
+        onConfirm={onConfirmDelete}
+        onCancel={() => setConfirm(null)}
+      />
     </div>
   )
 }

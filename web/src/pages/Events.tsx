@@ -1,4 +1,18 @@
 import { useEffect, useState } from 'react'
+import EmptyState from '@/components/EmptyState'
+import { ErrorAlert } from '@/components/error-alert'
+import { PageBody, PageHeader } from '@/components/page-header'
+import { PageLoading } from '@/components/page-loading'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 type EventItem = {
   metadata?: { name?: string; namespace?: string }
@@ -45,47 +59,54 @@ export default function Events() {
   }, [])
 
   if (loading) {
-    return <p>Loading…</p>
+    return <PageLoading />
   }
 
   return (
-    <div style={{ maxWidth: '72rem', margin: '2rem auto', padding: '0 1rem' }}>
-      <h1>Events</h1>
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
-      {events.length === 0 ? (
-        <p style={{ color: '#666' }}>No events.</p>
-      ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Namespace</th>
-              <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Object</th>
-              <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Reason</th>
-              <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Type</th>
-              <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Message</th>
-            </tr>
-          </thead>
-          <tbody>
-            {events.map((ev) => {
-              const ns = ev.metadata?.namespace ?? ''
-              const obj = ev.involvedObject
-              const objLabel = obj
-                ? `${obj.kind ?? ''}/${obj.namespace ? obj.namespace + '/' : ''}${obj.name ?? ''}`
-                : ''
-              const key = `${ns}/${ev.metadata?.name ?? objLabel}`
-              return (
-                <tr key={key}>
-                  <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{ns}</td>
-                  <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{objLabel}</td>
-                  <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{ev.reason ?? ''}</td>
-                  <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{ev.type ?? ''}</td>
-                  <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{ev.message ?? ''}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      )}
-    </div>
+    <PageBody>
+      <PageHeader title="Events" description="Recent cluster and namespaced events." />
+      <ErrorAlert message={error} />
+      <Card className="shadow-sm">
+        <CardContent className="p-0">
+          {events.length === 0 ? (
+            <EmptyState>No events.</EmptyState>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Namespace</TableHead>
+                  <TableHead>Object</TableHead>
+                  <TableHead>Reason</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Message</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {events.map((ev) => {
+                  const ns = ev.metadata?.namespace ?? ''
+                  const obj = ev.involvedObject
+                  const objLabel = obj
+                    ? `${obj.kind ?? ''}/${obj.namespace ? obj.namespace + '/' : ''}${obj.name ?? ''}`
+                    : ''
+                  const key = `${ns}/${ev.metadata?.name ?? objLabel}`
+                  const warning = (ev.type ?? '').toLowerCase() === 'warning'
+                  return (
+                    <TableRow key={key}>
+                      <TableCell>{ns}</TableCell>
+                      <TableCell className="font-medium">{objLabel}</TableCell>
+                      <TableCell>{ev.reason ?? ''}</TableCell>
+                      <TableCell>
+                        <Badge variant={warning ? 'destructive' : 'outline'}>{ev.type ?? ''}</Badge>
+                      </TableCell>
+                      <TableCell className="max-w-md truncate whitespace-normal">{ev.message ?? ''}</TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </PageBody>
   )
 }

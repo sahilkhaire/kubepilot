@@ -1,84 +1,29 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom'
-import { logout, me, type User } from './api'
-import AccessControl from './pages/AccessControl'
-import ChangePassword from './pages/ChangePassword'
-import Config from './pages/Config'
-import CustomResources from './pages/CustomResources'
-import Events from './pages/Events'
-import Helm from './pages/Helm'
-import Login from './pages/Login'
-import Network from './pages/Network'
-import Nodes from './pages/Nodes'
-import PodExec from './pages/PodExec'
-import PodLogs from './pages/PodLogs'
-import ResourceYAML from './pages/ResourceYAML'
-import WorkloadYAML from './pages/WorkloadYAML'
-import SettingsAudit from './pages/SettingsAudit'
-import SettingsApp from './pages/SettingsApp'
-import SettingsLayout from './pages/SettingsLayout'
-import SettingsMembers from './pages/SettingsMembers'
-import SettingsSets from './pages/SettingsSets'
-import Storage from './pages/Storage'
-import Workloads from './pages/Workloads'
-import MetricsPanel from './components/MetricsPanel'
-
-function Home({ user }: { user: User }) {
-  return (
-    <div style={{ maxWidth: '40rem', margin: '2rem auto', padding: '0 1rem' }}>
-      <h1>KubePilot</h1>
-      <p>
-        <strong>{user.username}</strong> ({user.role})
-      </p>
-      <MetricsPanel scope="cluster" title="Cluster metrics" />
-    </div>
-  )
-}
-
-function AppShell({
-  user,
-  onLogout,
-  children,
-}: {
-  user: User
-  onLogout: () => void
-  children: React.ReactNode
-}) {
-  const linkStyle = { display: 'block', marginBottom: '0.75rem', textDecoration: 'none', color: '#0366d6' }
-  return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <aside
-        style={{
-          width: '11rem',
-          borderRight: '1px solid #ccc',
-          padding: '1rem',
-          background: '#f8f8f8',
-        }}
-      >
-        <div style={{ fontWeight: 'bold', marginBottom: '1rem' }}>KubePilot</div>
-        <nav>
-          <Link to="/" style={linkStyle}>Home</Link>
-          <Link to="/workloads" style={linkStyle}>Workloads</Link>
-          <Link to="/nodes" style={linkStyle}>Nodes</Link>
-          <Link to="/events" style={linkStyle}>Events</Link>
-          <Link to="/access" style={linkStyle}>Access Control</Link>
-          <Link to="/config" style={linkStyle}>Config</Link>
-          <Link to="/network" style={linkStyle}>Network</Link>
-          <Link to="/storage" style={linkStyle}>Storage</Link>
-          <Link to="/custom-resources" style={linkStyle}>Custom Resources</Link>
-          <Link to="/helm" style={linkStyle}>Helm</Link>
-          {user.role === 'owner' && (
-            <Link to="/settings/members" style={linkStyle}>Settings</Link>
-          )}
-        </nav>
-        <button type="button" onClick={onLogout} style={{ marginTop: '1rem' }}>
-          Log out
-        </button>
-      </aside>
-      <main style={{ flex: 1 }}>{children}</main>
-    </div>
-  )
-}
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { logout, me, type User } from '@/api'
+import { AppShell } from '@/components/app-shell'
+import AccessControl from '@/pages/AccessControl'
+import ChangePassword from '@/pages/ChangePassword'
+import Config from '@/pages/Config'
+import CustomResources from '@/pages/CustomResources'
+import Events from '@/pages/Events'
+import Helm from '@/pages/Helm'
+import Home from '@/pages/Home'
+import Login from '@/pages/Login'
+import Network from '@/pages/Network'
+import Nodes from '@/pages/Nodes'
+import PodExec from '@/pages/PodExec'
+import PodLogs from '@/pages/PodLogs'
+import ResourceYAML from '@/pages/ResourceYAML'
+import WorkloadYAML from '@/pages/WorkloadYAML'
+import SettingsAudit from '@/pages/SettingsAudit'
+import SettingsApp from '@/pages/SettingsApp'
+import SettingsLayout from '@/pages/SettingsLayout'
+import SettingsMembers from '@/pages/SettingsMembers'
+import SettingsSets from '@/pages/SettingsSets'
+import Storage from '@/pages/Storage'
+import Workloads from '@/pages/Workloads'
+import { PageLoading } from '@/components/page-loading'
 
 function OwnerGuard({ user }: { user: User }) {
   if (user.role !== 'owner') {
@@ -115,7 +60,11 @@ export default function App() {
   }
 
   if (loading) {
-    return <p>Loading…</p>
+    return (
+      <div className="flex min-h-svh items-center justify-center bg-muted/40">
+        <PageLoading />
+      </div>
+    )
   }
 
   if (!user) {

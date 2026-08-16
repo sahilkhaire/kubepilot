@@ -1,4 +1,20 @@
 import { useEffect, useState } from 'react'
+import EmptyState from '@/components/EmptyState'
+import { ErrorAlert } from '@/components/error-alert'
+import { NamespaceSelect } from '@/components/namespace-select'
+import { PageBody, PageHeader } from '@/components/page-header'
+import { PageLoading } from '@/components/page-loading'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 type CRDItem = {
   metadata?: { name?: string }
@@ -118,108 +134,99 @@ export default function CustomResources() {
   }, [selected, namespace])
 
   if (loading && crds.length === 0) {
-    return <p>Loading…</p>
+    return <PageLoading />
   }
 
   const namespaced = selected?.spec?.scope === 'Namespaced'
 
   return (
-    <div style={{ maxWidth: '56rem', margin: '2rem auto', padding: '0 1rem' }}>
-      <h1>Custom Resources</h1>
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
+    <PageBody>
+      <PageHeader title="Custom Resources" description="CRD definitions and instances." />
+      <ErrorAlert message={error} />
 
-      <section style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>CRD definitions</h2>
-        {crds.length === 0 ? (
-          <p style={{ color: '#666' }}>No custom resource definitions.</p>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Name</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Group</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Resource</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Scope</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {crds.map((crd) => {
-                const name = crd.metadata?.name ?? ''
-                const group = crd.spec?.group ?? ''
-                const resource = crd.spec?.names?.plural ?? ''
-                const scope = crd.spec?.scope ?? ''
-                const isSelected = selected?.metadata?.name === name
-                return (
-                  <tr key={name}>
-                    <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{name}</td>
-                    <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{group}</td>
-                    <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{resource}</td>
-                    <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{scope}</td>
-                    <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
-                      <button
-                        type="button"
-                        onClick={() => setSelected(isSelected ? null : crd)}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        {isSelected ? 'Hide instances' : 'View instances'}
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
-      </section>
-
-      {selected && (
-        <section>
-          <h2 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>
-            Instances — {selected.metadata?.name}
-          </h2>
-          {namespaced && (
-            <label style={{ display: 'block', marginBottom: '1rem' }}>
-              Namespace{' '}
-              <select
-                value={namespace}
-                onChange={(e) => setNamespace(e.target.value)}
-                style={{ marginLeft: '0.5rem' }}
-              >
-                {namespaces.map((ns) => (
-                  <option key={ns} value={ns}>
-                    {ns}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          {instances.length === 0 ? (
-            <p style={{ color: '#666' }}>No instances.</p>
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">CRD definitions</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {crds.length === 0 ? (
+            <EmptyState>No custom resource definitions.</EmptyState>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Name</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Namespace</th>
-                </tr>
-              </thead>
-              <tbody>
-                {instances.map((item) => {
-                  const name = item.metadata?.name ?? ''
-                  const ns = item.metadata?.namespace ?? ''
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Group</TableHead>
+                  <TableHead>Resource</TableHead>
+                  <TableHead>Scope</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {crds.map((crd) => {
+                  const name = crd.metadata?.name ?? ''
+                  const group = crd.spec?.group ?? ''
+                  const resource = crd.spec?.names?.plural ?? ''
+                  const scope = crd.spec?.scope ?? ''
+                  const isSelected = selected?.metadata?.name === name
                   return (
-                    <tr key={ns ? `${ns}/${name}` : name}>
-                      <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{name}</td>
-                      <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{ns || '—'}</td>
-                    </tr>
+                    <TableRow key={name}>
+                      <TableCell className="font-medium">{name}</TableCell>
+                      <TableCell>{group}</TableCell>
+                      <TableCell>{resource}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{scope}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button type="button" variant={isSelected ? 'secondary' : 'ghost'} size="sm" onClick={() => setSelected(isSelected ? null : crd)}>
+                          {isSelected ? 'Hide instances' : 'View instances'}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   )
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
-        </section>
-      )}
-    </div>
+        </CardContent>
+      </Card>
+
+      {selected ? (
+        <Card className="shadow-sm">
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">Instances — {selected.metadata?.name}</CardTitle>
+            {namespaced ? (
+              <NamespaceSelect namespaces={namespaces} value={namespace} onChange={setNamespace} />
+            ) : null}
+          </CardHeader>
+          <CardContent className="p-0">
+            {instances.length === 0 ? (
+              <EmptyState>No instances.</EmptyState>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Namespace</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {instances.map((item) => {
+                    const name = item.metadata?.name ?? ''
+                    const ns = item.metadata?.namespace ?? ''
+                    return (
+                      <TableRow key={ns ? `${ns}/${name}` : name}>
+                        <TableCell className="font-medium">{name}</TableCell>
+                        <TableCell>{ns || '—'}</TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+    </PageBody>
   )
 }

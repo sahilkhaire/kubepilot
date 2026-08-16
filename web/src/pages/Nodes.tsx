@@ -1,6 +1,20 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import MetricsPanel, { MetricsCell } from '../components/MetricsPanel'
+import EmptyState from '@/components/EmptyState'
+import { ErrorAlert } from '@/components/error-alert'
+import { PageBody, PageHeader } from '@/components/page-header'
+import { PageLoading } from '@/components/page-loading'
+import MetricsPanel, { MetricsCell } from '@/components/MetricsPanel'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 type NodeItem = {
   metadata?: { name?: string }
@@ -42,44 +56,50 @@ export default function Nodes() {
   }, [])
 
   if (loading) {
-    return <p>Loading…</p>
+    return <PageLoading />
   }
 
   return (
-    <div style={{ maxWidth: '56rem', margin: '2rem auto', padding: '0 1rem' }}>
-      <h1>Nodes</h1>
+    <PageBody>
+      <PageHeader title="Nodes" description="Cluster nodes and live CPU / memory." />
       <MetricsPanel scope="cluster" title="Cluster metrics" />
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
-      {nodes.length === 0 ? (
-        <p style={{ color: '#666' }}>No nodes.</p>
-      ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Name</th>
-              <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>CPU / Memory</th>
-              <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {nodes.map((node) => {
-              const name = node.metadata?.name ?? ''
-              if (!name) return null
-              return (
-                <tr key={name}>
-                  <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{name}</td>
-                  <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
-                    <MetricsCell scope="node" name={name} />
-                  </td>
-                  <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
-                    <Link to={`/nodes/cluster/nodes/${encodeURIComponent(name)}/yaml`}>YAML</Link>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      )}
-    </div>
+      <ErrorAlert message={error} />
+      <Card className="shadow-sm">
+        <CardContent className="p-0">
+          {nodes.length === 0 ? (
+            <EmptyState>No nodes.</EmptyState>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>CPU / Memory</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {nodes.map((node) => {
+                  const name = node.metadata?.name ?? ''
+                  if (!name) return null
+                  return (
+                    <TableRow key={name}>
+                      <TableCell className="font-medium">{name}</TableCell>
+                      <TableCell>
+                        <MetricsCell scope="node" name={name} />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="sm" asChild>
+                          <Link to={`/nodes/cluster/nodes/${encodeURIComponent(name)}/yaml`}>YAML</Link>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </PageBody>
   )
 }

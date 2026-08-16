@@ -5,8 +5,31 @@ import {
   listPermissionSets,
   updatePermissionSet,
   type PermissionSet,
-} from '../api'
-import EmptyState from '../components/EmptyState'
+} from '@/api'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import EmptyState from '@/components/EmptyState'
+import { ErrorAlert } from '@/components/error-alert'
+import { PageLoading } from '@/components/page-loading'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Textarea } from '@/components/ui/textarea'
 
 type CreateMode = 'template' | 'custom'
 
@@ -24,6 +47,7 @@ export default function SettingsSets() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
+  const [setToDelete, setSetToDelete] = useState<PermissionSet | null>(null)
 
   async function load() {
     setError('')
@@ -83,108 +107,152 @@ export default function SettingsSets() {
     }
   }
 
-  async function onDelete(ps: PermissionSet) {
-    if (!confirm(`Delete permission set "${ps.name}"? This cannot be undone.`)) return
+  async function onDelete() {
+    if (!setToDelete) return
     setError('')
     try {
-      await deletePermissionSet(ps.id)
+      await deletePermissionSet(setToDelete.id)
+      setSetToDelete(null)
       await load()
     } catch {
       setError('Failed to delete permission set')
     }
   }
 
-  if (loading) return <p>Loading…</p>
+  if (loading) return <PageLoading compact />
 
   return (
-    <div>
-      {error && <p style={{ color: '#b00020' }}>{error}</p>}
+    <div className="space-y-6">
+      <ErrorAlert message={error} />
 
-      <h2>Create permission set</h2>
-      <form onSubmit={onCreate} style={{ marginBottom: '2rem' }}>
-        <label>
-          Name
-          <input value={createName} onChange={(e) => setCreateName(e.target.value)} required />
-        </label>
-        <label>
-          Description
-          <input value={createDescription} onChange={(e) => setCreateDescription(e.target.value)} />
-        </label>
-        <label>
-          Source
-          <select value={createMode} onChange={(e) => setCreateMode(e.target.value as CreateMode)}>
-            <option value="template">Clone from template</option>
-            <option value="custom">Custom grants (JSON)</option>
-          </select>
-        </label>
-        {createMode === 'template' ? (
-          <label>
-            Template
-            <select value={createTemplate} onChange={(e) => setCreateTemplate(e.target.value)}>
-              <option value="viewer">Viewer</option>
-              <option value="operator">Operator</option>
-              <option value="admin">Admin</option>
-            </select>
-          </label>
-        ) : (
-          <label>
-            Grants JSON
-            <textarea
-              value={createGrantsJson}
-              onChange={(e) => setCreateGrantsJson(e.target.value)}
-              rows={4}
-              style={{ width: '100%' }}
-              required
-            />
-          </label>
-        )}
-        <button type="submit">Create</button>
-      </form>
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">Create permission set</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={onCreate} className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="set-name">Name</Label>
+              <Input id="set-name" value={createName} onChange={(e) => setCreateName(e.target.value)} required />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="set-desc">Description</Label>
+              <Input id="set-desc" value={createDescription} onChange={(e) => setCreateDescription(e.target.value)} />
+            </div>
+            <div className="grid gap-2">
+              <Label>Source</Label>
+              <Select value={createMode} onValueChange={(v) => setCreateMode(v as CreateMode)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="template">Clone from template</SelectItem>
+                  <SelectItem value="custom">Custom grants (JSON)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {createMode === 'template' ? (
+              <div className="grid gap-2">
+                <Label>Template</Label>
+                <Select value={createTemplate} onValueChange={setCreateTemplate}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="viewer">Viewer</SelectItem>
+                    <SelectItem value="operator">Operator</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="grid gap-2 sm:col-span-2">
+                <Label htmlFor="grants-json">Grants JSON</Label>
+                <Textarea
+                  id="grants-json"
+                  value={createGrantsJson}
+                  onChange={(e) => setCreateGrantsJson(e.target.value)}
+                  rows={4}
+                  className="font-mono text-sm"
+                  required
+                />
+              </div>
+            )}
+            <div>
+              <Button type="submit">Create</Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
-      <h2>Permission sets</h2>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>Name</th>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>Description</th>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sets.map((ps) => (
-            <tr key={ps.id}>
-              <td style={{ borderBottom: '1px solid #eee' }}>
-                {editingId === ps.id ? (
-                  <input value={editName} onChange={(e) => setEditName(e.target.value)} />
-                ) : (
-                  ps.name
-                )}
-              </td>
-              <td style={{ borderBottom: '1px solid #eee' }}>
-                {editingId === ps.id ? (
-                  <input value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
-                ) : (
-                  ps.description
-                )}
-              </td>
-              <td style={{ borderBottom: '1px solid #eee' }}>
-                {editingId === ps.id ? (
-                  <>
-                    <button type="button" onClick={() => onSaveEdit(ps.id)}>Save</button>
-                    <button type="button" onClick={() => setEditingId(null)}>Cancel</button>
-                  </>
-                ) : (
-                  <>
-                    <button type="button" onClick={() => startEdit(ps)}>Edit</button>
-                    <button type="button" onClick={() => onDelete(ps)}>Delete</button>
-                  </>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {sets.length === 0 && <EmptyState>No permission sets yet.</EmptyState>}
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">Permission sets</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sets.map((ps) => (
+                <TableRow key={ps.id}>
+                  <TableCell className="font-medium">
+                    {editingId === ps.id ? (
+                      <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+                    ) : (
+                      ps.name
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {editingId === ps.id ? (
+                      <Input value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
+                    ) : (
+                      ps.description
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {editingId === ps.id ? (
+                      <div className="flex justify-end gap-1">
+                        <Button type="button" size="sm" onClick={() => onSaveEdit(ps.id)}>
+                          Save
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setEditingId(null)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex justify-end gap-1">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => startEdit(ps)}>
+                          Edit
+                        </Button>
+                        <Button type="button" variant="destructive" size="sm" onClick={() => setSetToDelete(ps)}>
+                          Delete
+                        </Button>
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {sets.length === 0 ? <EmptyState>No permission sets yet.</EmptyState> : null}
+        </CardContent>
+      </Card>
+
+      <ConfirmDialog
+        open={setToDelete != null}
+        title="Delete permission set"
+        description={setToDelete ? `Delete permission set "${setToDelete.name}"? This cannot be undone.` : ''}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={onDelete}
+        onCancel={() => setSetToDelete(null)}
+      />
     </div>
   )
 }

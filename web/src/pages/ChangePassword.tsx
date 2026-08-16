@@ -1,5 +1,10 @@
 import { useState } from 'react'
-import { changePassword } from '../api'
+import { changePassword } from '@/api'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 type Props = {
   onChanged: () => void
@@ -9,10 +14,12 @@ export default function ChangePassword({ onChanged }: Props) {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [error, setError] = useState('')
+  const [pending, setPending] = useState(false)
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    setPending(true)
     try {
       await changePassword(currentPassword, newPassword)
       setCurrentPassword('')
@@ -20,37 +27,53 @@ export default function ChangePassword({ onChanged }: Props) {
       onChanged()
     } catch {
       setError('Password change failed')
+    } finally {
+      setPending(false)
     }
   }
 
   return (
-    <main style={{ maxWidth: '24rem', margin: '2rem auto', padding: '0 1rem' }}>
-      <h1>Change password</h1>
-      <p>You must change your password before continuing.</p>
-      <form onSubmit={onSubmit}>
-        <label>
-          Current password
-          <input
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            autoComplete="current-password"
-            required
-          />
-        </label>
-        <label>
-          New password
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            autoComplete="new-password"
-            required
-          />
-        </label>
-        <button type="submit">Change password</button>
-      </form>
-      {error && <p style={{ color: '#b00020' }}>{error}</p>}
+    <main className="flex min-h-svh items-center justify-center bg-muted/40 p-6">
+      <Card className="w-full max-w-sm shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-2xl font-semibold tracking-tight">Change password</CardTitle>
+          <CardDescription>You must change your password before continuing.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={onSubmit} className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="current-password">Current password</Label>
+              <Input
+                id="current-password"
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="new-password">New password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password"
+                required
+              />
+            </div>
+            {error ? (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            ) : null}
+            <Button type="submit" disabled={pending}>
+              {pending ? 'Saving…' : 'Change password'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </main>
   )
 }

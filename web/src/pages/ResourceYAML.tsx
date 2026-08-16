@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { deleteK8sResource } from '../api'
-import DeleteConfirm from '../components/DeleteConfirm'
+import { deleteK8sResource } from '@/api'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import DeleteConfirm from '@/components/DeleteConfirm'
+import { ErrorAlert } from '@/components/error-alert'
+import { PageBody, PageHeader } from '@/components/page-header'
+import { PageLoading } from '@/components/page-loading'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Textarea } from '@/components/ui/textarea'
 
 const gvkForModule: Record<string, string> = {
   pods: 'v1/Pod',
@@ -154,68 +161,56 @@ export default function ResourceYAML({ backLink, backLabel }: ResourceYAMLProps)
   }
 
   if (loading) {
-    return <p>Loading…</p>
+    return <PageLoading />
   }
 
   return (
-    <div style={{ maxWidth: '56rem', margin: '2rem auto', padding: '0 1rem' }}>
-      <p>
-        <Link to={backLink}>← {backLabel}</Link>
-      </p>
-      <h1>YAML: {module}/{name}</h1>
-      {!clusterScoped && ns && <p style={{ color: '#666' }}>Namespace: {ns}</p>}
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
-      <textarea
-        value={yaml}
-        onChange={(e) => setYaml(e.target.value)}
-        rows={24}
-        style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.875rem' }}
-      />
-      <div style={{ marginTop: '1rem' }}>
-        <button type="button" onClick={() => setConfirmOpen(true)} disabled={applying || deleting}>
+    <PageBody>
+      <PageHeader
+        title={`YAML: ${module}/${name}`}
+        description={!clusterScoped && ns ? `Namespace ${ns}` : 'Cluster-scoped resource'}
+      >
+        <Button variant="outline" asChild>
+          <Link to={backLink}>Back to {backLabel}</Link>
+        </Button>
+        <Button type="button" onClick={() => setConfirmOpen(true)} disabled={applying || deleting}>
           Apply
-        </button>
-        <button
-          type="button"
-          onClick={() => setDeleteOpen(true)}
-          disabled={applying || deleting}
-          style={{ marginLeft: '0.5rem' }}
-        >
+        </Button>
+        <Button type="button" variant="destructive" onClick={() => setDeleteOpen(true)} disabled={applying || deleting}>
           Delete
-        </button>
-      </div>
-      {confirmOpen && (
-        <div
-          style={{
-            marginTop: '1rem',
-            padding: '1rem',
-            border: '1px solid #ccc',
-            background: '#fafafa',
-          }}
-        >
-          <p>Apply this YAML with server-side apply?</p>
-          <button type="button" onClick={applyYAML} disabled={applying}>
-            {applying ? 'Applying…' : 'Confirm apply'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmOpen(false)}
-            disabled={applying}
-            style={{ marginLeft: '0.5rem' }}
-          >
-            Cancel
-          </button>
-        </div>
-      )}
-      {deleteOpen && name && (
+        </Button>
+      </PageHeader>
+      <ErrorAlert message={error} />
+      <Card className="shadow-sm">
+        <CardHeader className="sr-only">YAML editor</CardHeader>
+        <CardContent>
+          <Textarea
+            value={yaml}
+            onChange={(e) => setYaml(e.target.value)}
+            rows={24}
+            className="min-h-112 font-mono text-sm"
+          />
+        </CardContent>
+      </Card>
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Apply YAML"
+        description="Apply this YAML with server-side apply?"
+        confirmLabel={applying ? 'Applying…' : 'Confirm apply'}
+        pending={applying}
+        onConfirm={applyYAML}
+        onCancel={() => setConfirmOpen(false)}
+      />
+      {name ? (
         <DeleteConfirm
+          open={deleteOpen}
           resourceName={name}
           resourceLabel={module}
           pending={deleting}
           onConfirm={onDelete}
           onCancel={() => setDeleteOpen(false)}
         />
-      )}
-    </div>
+      ) : null}
+    </PageBody>
   )
 }

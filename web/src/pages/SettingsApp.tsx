@@ -1,4 +1,11 @@
 import { useEffect, useState } from 'react'
+import { ErrorAlert } from '@/components/error-alert'
+import { PageLoading } from '@/components/page-loading'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 type HelmRepository = {
   name: string
@@ -84,41 +91,62 @@ export default function SettingsApp() {
   }
 
   if (loading) {
-    return <p>Loading…</p>
+    return <PageLoading compact />
   }
 
   return (
-    <div>
-      <h2>App settings</h2>
-      <p>Configure Helm chart repositories. No public repos are added by default.</p>
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
-      {message && <p style={{ color: 'green' }}>{message}</p>}
-      <form onSubmit={onSave}>
-        {repos.map((repo, index) => (
-          <div key={index} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
-            <input
-              type="text"
-              placeholder="Name"
-              value={repo.name}
-              onChange={(e) => updateRepo(index, 'name', e.target.value)}
-              required
-            />
-            <input
-              type="url"
-              placeholder="https://charts.example.com"
-              value={repo.url}
-              onChange={(e) => updateRepo(index, 'url', e.target.value)}
-              required
-              style={{ flex: 1 }}
-            />
-            <button type="button" onClick={() => removeRepo(index)}>Remove</button>
+    <Card className="shadow-sm">
+      <CardHeader>
+        <CardTitle className="text-base">App settings</CardTitle>
+        <CardDescription>Configure Helm chart repositories. No public repos are added by default.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <ErrorAlert message={error} />
+        {message ? (
+          <Alert>
+            <AlertDescription>{message}</AlertDescription>
+          </Alert>
+        ) : null}
+        <form onSubmit={onSave} className="space-y-4">
+          {repos.map((repo, index) => (
+            <div key={index} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="grid flex-1 gap-2">
+                <Label htmlFor={`repo-name-${index}`}>Name</Label>
+                <Input
+                  id={`repo-name-${index}`}
+                  type="text"
+                  placeholder="Name"
+                  value={repo.name}
+                  onChange={(e) => updateRepo(index, 'name', e.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid flex-[2] gap-2">
+                <Label htmlFor={`repo-url-${index}`}>URL</Label>
+                <Input
+                  id={`repo-url-${index}`}
+                  type="url"
+                  placeholder="https://charts.example.com"
+                  value={repo.url}
+                  onChange={(e) => updateRepo(index, 'url', e.target.value)}
+                  required
+                />
+              </div>
+              <Button type="button" variant="outline" onClick={() => removeRepo(index)}>
+                Remove
+              </Button>
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={addRepo}>
+              Add repository
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
           </div>
-        ))}
-        <div style={{ marginTop: '1rem' }}>
-          <button type="button" onClick={addRepo} style={{ marginRight: '0.5rem' }}>Add repository</button>
-          <button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-        </div>
-      </form>
-    </div>
+        </form>
+      </CardContent>
+    </Card>
   )
 }

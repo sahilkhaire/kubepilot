@@ -3,6 +3,10 @@ import { Link, useParams } from 'react-router-dom'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import { ErrorAlert } from '@/components/error-alert'
+import { PageBody, PageHeader } from '@/components/page-header'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 
 const wsStreamStdin = 0
 const wsStreamStdout = 1
@@ -104,27 +108,25 @@ export default function PodExec() {
   }, [ns, pod])
 
   if (!ns || !pod) {
-    return <p>Missing pod.</p>
+    return (
+      <PageBody>
+        <PageHeader title="Terminal" description="Missing pod." />
+      </PageBody>
+    )
   }
 
   return (
-    <div style={{ maxWidth: '56rem', margin: '2rem auto', padding: '0 1rem' }}>
-      <p>
-        <Link to="/workloads">← Workloads</Link>
-      </p>
-      <h1>
-        Terminal: {pod} <span style={{ fontWeight: 'normal', color: '#666' }}>({ns})</span>
-      </h1>
-      <p style={{ color: '#666', fontSize: '0.9rem' }}>Status: {status}</p>
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
-      <div
-        ref={termRef}
-        style={{
-          height: '70vh',
-          background: '#111',
-          padding: '0.5rem',
-        }}
-      />
-    </div>
+    <PageBody>
+      <PageHeader title={`Terminal: ${pod}`} description={`Namespace ${ns}`}>
+        <Badge variant="outline" className="capitalize">
+          {status}
+        </Badge>
+        <Button variant="outline" asChild>
+          <Link to="/workloads">Back to Workloads</Link>
+        </Button>
+      </PageHeader>
+      <ErrorAlert message={error} />
+      <div ref={termRef} className="h-[70vh] rounded-xl bg-zinc-950 p-2" />
+    </PageBody>
   )
 }

@@ -1,21 +1,38 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { PageBody, PageHeader } from '@/components/page-header'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
-const tabStyle = ({ isActive }: { isActive: boolean }) => ({
-  marginRight: '1rem',
-  fontWeight: isActive ? 'bold' : 'normal',
-})
+const tabs = [
+  { value: 'members', label: 'Members', to: '/settings/members' },
+  { value: 'sets', label: 'Permission sets', to: '/settings/sets' },
+  { value: 'audit', label: 'Audit', to: '/settings/audit' },
+  { value: 'app', label: 'App', to: '/settings/app' },
+]
 
 export default function SettingsLayout() {
+  const { pathname } = useLocation()
+  const navigate = useNavigate()
+  const current = tabs.find((t) => pathname.startsWith(t.to))?.value ?? 'members'
+
   return (
-    <div style={{ maxWidth: '56rem', margin: '2rem auto', padding: '0 1rem' }}>
-      <h1>Settings</h1>
-      <nav style={{ marginBottom: '1.5rem' }}>
-        <NavLink to="/settings/members" style={tabStyle}>Members</NavLink>
-        <NavLink to="/settings/sets" style={tabStyle}>Permission sets</NavLink>
-        <NavLink to="/settings/audit" style={tabStyle}>Audit</NavLink>
-        <NavLink to="/settings/app" style={tabStyle}>App</NavLink>
-      </nav>
+    <PageBody>
+      <PageHeader title="Settings" description="Owner-only members, grants, audit, and app configuration." />
+      <Tabs
+        value={current}
+        onValueChange={(value) => {
+          const tab = tabs.find((t) => t.value === value)
+          if (tab) navigate(tab.to)
+        }}
+      >
+        <TabsList variant="line">
+          {tabs.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value}>
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
       <Outlet />
-    </div>
+    </PageBody>
   )
 }

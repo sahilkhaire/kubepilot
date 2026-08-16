@@ -1,7 +1,21 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import EmptyState from '../components/EmptyState'
-import MetricsPanel, { MetricsCell } from '../components/MetricsPanel'
+import EmptyState from '@/components/EmptyState'
+import { ErrorAlert } from '@/components/error-alert'
+import { NamespaceSelect } from '@/components/namespace-select'
+import { PageBody, PageHeader } from '@/components/page-header'
+import { PageLoading } from '@/components/page-loading'
+import MetricsPanel, { MetricsCell } from '@/components/MetricsPanel'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 type Pod = {
   metadata?: { name?: string; namespace?: string }
@@ -78,67 +92,63 @@ export default function Workloads() {
   }, [namespace])
 
   if (loading && namespaces.length === 0) {
-    return <p>Loading…</p>
+    return <PageLoading />
   }
 
   return (
-    <div style={{ maxWidth: '56rem', margin: '2rem auto', padding: '0 1rem' }}>
-      <h1>Workloads</h1>
+    <PageBody>
+      <PageHeader title="Workloads" description="Pods in the selected namespace.">
+        <NamespaceSelect namespaces={namespaces} value={namespace} onChange={setNamespace} />
+      </PageHeader>
       <MetricsPanel scope="cluster" title="Cluster metrics" />
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
-      <label style={{ display: 'block', marginBottom: '1rem' }}>
-        Namespace{' '}
-        <select
-          value={namespace}
-          onChange={(e) => setNamespace(e.target.value)}
-          style={{ marginLeft: '0.5rem' }}
-        >
-          {namespaces.map((ns) => (
-            <option key={ns} value={ns}>
-              {ns}
-            </option>
-          ))}
-        </select>
-      </label>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Name</th>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>CPU / Memory</th>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {pods.map((pod) => {
-            const name = pod.metadata?.name ?? ''
-            if (!name) return null
-            return (
-              <tr key={name}>
-                <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{name}</td>
-                <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
-                  <MetricsCell scope="pod" namespace={namespace} name={name} />
-                </td>
-                <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
-                  <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/logs`}>
-                    Logs
-                  </Link>
-                  {' · '}
-                  <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/exec`}>
-                    Exec
-                  </Link>
-                  {' · '}
-                  <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/yaml`}>
-                    YAML
-                  </Link>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-      {pods.length === 0 && namespace && !error && (
-        <EmptyState>No pods in this namespace.</EmptyState>
-      )}
-    </div>
+      <ErrorAlert message={error} />
+      <Card className="shadow-sm">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>CPU / Memory</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pods.map((pod) => {
+                const name = pod.metadata?.name ?? ''
+                if (!name) return null
+                return (
+                  <TableRow key={name}>
+                    <TableCell className="font-medium">{name}</TableCell>
+                    <TableCell>
+                      <MetricsCell scope="pod" namespace={namespace} name={name} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" asChild>
+                          <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/logs`}>
+                            Logs
+                          </Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" asChild>
+                          <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/exec`}>
+                            Exec
+                          </Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" asChild>
+                          <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/yaml`}>
+                            YAML
+                          </Link>
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+          {pods.length === 0 && namespace && !error ? <EmptyState>No pods in this namespace.</EmptyState> : null}
+        </CardContent>
+      </Card>
+    </PageBody>
   )
 }

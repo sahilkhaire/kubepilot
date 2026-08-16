@@ -3,5 +3,5 @@ type EmptyStateProps = {
 }
 
 export default function EmptyState({ children }: EmptyStateProps) {
-  return <p style={{ color: '#666', margin: '0.5rem 0' }}>{children}</p>
+  return <p className="py-8 text-center text-sm text-muted-foreground">{children}</p>
 }

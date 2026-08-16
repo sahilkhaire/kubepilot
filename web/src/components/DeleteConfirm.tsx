@@ -1,4 +1,16 @@
 import { useState } from 'react'
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 type DeleteConfirmProps = {
   resourceName: string
@@ -6,6 +18,7 @@ type DeleteConfirmProps = {
   onConfirm: () => void | Promise<void>
   onCancel: () => void
   pending?: boolean
+  open?: boolean
 }
 
 export default function DeleteConfirm({
@@ -14,39 +27,40 @@ export default function DeleteConfirm({
   onConfirm,
   onCancel,
   pending = false,
+  open = true,
 }: DeleteConfirmProps) {
   const [typed, setTyped] = useState('')
-
   const matches = typed === resourceName
 
   return (
-    <div
-      style={{
-        marginTop: '1rem',
-        padding: '1rem',
-        border: '1px solid #ccc',
-        background: '#fafafa',
-      }}
-    >
-      <p style={{ margin: '0 0 0.5rem' }}>
-        Delete {resourceLabel} <strong>{resourceName}</strong>? This cannot be undone.
-      </p>
-      <p style={{ margin: '0 0 0.5rem', color: '#666' }}>Type the name to confirm:</p>
-      <input
-        value={typed}
-        onChange={(e) => setTyped(e.target.value)}
-        placeholder={resourceName}
-        disabled={pending}
-        style={{ width: '100%', maxWidth: '20rem', marginBottom: '0.75rem' }}
-      />
-      <div>
-        <button type="button" onClick={onConfirm} disabled={!matches || pending}>
-          {pending ? 'Deleting…' : 'Delete'}
-        </button>
-        <button type="button" onClick={onCancel} disabled={pending} style={{ marginLeft: '0.5rem' }}>
-          Cancel
-        </button>
-      </div>
-    </div>
+    <AlertDialog open={open} onOpenChange={(next) => !next && !pending && onCancel()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            Delete {resourceLabel} {resourceName}?
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            This cannot be undone. Type the name to confirm.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="grid gap-2">
+          <Label htmlFor="confirm-name">Resource name</Label>
+          <Input
+            id="confirm-name"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            placeholder={resourceName}
+            disabled={pending}
+            autoComplete="off"
+          />
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+          <Button variant="destructive" disabled={!matches || pending} onClick={() => void onConfirm()}>
+            {pending ? 'Deleting…' : 'Delete'}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

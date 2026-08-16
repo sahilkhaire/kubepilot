@@ -1,6 +1,21 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import EmptyState from '../components/EmptyState'
+import EmptyState from '@/components/EmptyState'
+import { ErrorAlert } from '@/components/error-alert'
+import { NamespaceSelect } from '@/components/namespace-select'
+import { PageBody, PageHeader } from '@/components/page-header'
+import { PageLoading } from '@/components/page-loading'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 type ResourceItem = {
   metadata?: { name?: string; namespace?: string }
@@ -99,69 +114,63 @@ export default function ResourceGroupPage({ title, basePath, modules }: Resource
   }, [namespace, modules])
 
   if (loading && namespaces.length === 0) {
-    return <p>Loading…</p>
+    return <PageLoading />
   }
 
   return (
-    <div style={{ maxWidth: '56rem', margin: '2rem auto', padding: '0 1rem' }}>
-      <h1>{title}</h1>
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
-      <label style={{ display: 'block', marginBottom: '1rem' }}>
-        Namespace{' '}
-        <select
-          value={namespace}
-          onChange={(e) => setNamespace(e.target.value)}
-          style={{ marginLeft: '0.5rem' }}
-        >
-          {namespaces.map((ns) => (
-            <option key={ns} value={ns}>
-              {ns}
-            </option>
-          ))}
-        </select>
-      </label>
+    <PageBody>
+      <PageHeader title={title} description={`Resources grouped by kind.`}>
+        <NamespaceSelect namespaces={namespaces} value={namespace} onChange={setNamespace} />
+      </PageHeader>
+      <ErrorAlert message={error} />
       {modules.map((spec) => {
         const items = itemsByModule[spec.module] ?? []
         return (
-          <section key={spec.module} style={{ marginBottom: '2rem' }}>
-            <h2 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>
-              {spec.label}
-              {spec.clusterScoped && <span style={{ color: '#666', fontWeight: 'normal' }}> (cluster)</span>}
-            </h2>
-            {items.length === 0 ? (
-              <EmptyState>No {spec.label.toLowerCase()}.</EmptyState>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Name</th>
-                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => {
-                    const name = item.metadata?.name ?? ''
-                    if (!name) return null
-                    const itemNs = spec.clusterScoped ? '' : namespace
-                    const yamlPath = spec.clusterScoped
-                      ? `${basePath}/cluster/${encodeURIComponent(spec.module)}/${encodeURIComponent(name)}/yaml`
-                      : `${basePath}/${encodeURIComponent(namespace)}/${encodeURIComponent(spec.module)}/${encodeURIComponent(name)}/yaml`
-                    return (
-                      <tr key={name}>
-                        <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{name}</td>
-                        <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
-                          <Link to={yamlPath}>YAML</Link>
-                          {itemNs && <span style={{ color: '#999' }}> · {itemNs}</span>}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            )}
-          </section>
+          <Card key={spec.module} className="shadow-sm">
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">{spec.label}</CardTitle>
+              {spec.clusterScoped ? <Badge variant="outline">cluster</Badge> : null}
+            </CardHeader>
+            <CardContent className="p-0">
+              {items.length === 0 ? (
+                <EmptyState>No {spec.label.toLowerCase()}.</EmptyState>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((item) => {
+                      const name = item.metadata?.name ?? ''
+                      if (!name) return null
+                      const itemNs = spec.clusterScoped ? '' : namespace
+                      const yamlPath = spec.clusterScoped
+                        ? `${basePath}/cluster/${encodeURIComponent(spec.module)}/${encodeURIComponent(name)}/yaml`
+                        : `${basePath}/${encodeURIComponent(namespace)}/${encodeURIComponent(spec.module)}/${encodeURIComponent(name)}/yaml`
+                      return (
+                        <TableRow key={name}>
+                          <TableCell className="font-medium">
+                            {name}
+                            {itemNs ? <span className="ml-2 text-muted-foreground">{itemNs}</span> : null}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm" asChild>
+                              <Link to={yamlPath}>YAML</Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         )
       })}
-    </div>
+    </PageBody>
   )
 }
