@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import EmptyState from '@/components/EmptyState'
 import { SortableHead } from '@/components/sortable-head'
 import { ErrorAlert } from '@/components/error-alert'
@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/table'
 import { formatAge } from '@/lib/k8s-fields'
 import { sortBy, timestampSortValue, useTableSort } from '@/lib/table-sort'
+import { useLiveRefresh } from '@/hooks/use-live-refresh'
 
 type EventItem = {
   metadata?: { name?: string; namespace?: string; creationTimestamp?: string }
@@ -32,31 +33,32 @@ export default function Events() {
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
+  const load = useCallback(async (initial = false) => {
+    if (initial) {
       setLoading(true)
       setError('')
-      try {
-        const res = await fetch('/api/k8s/events', { credentials: 'same-origin' })
-        if (res.status === 403) {
-          if (!cancelled) setEvents([])
-          return
-        }
-        if (!res.ok) throw new Error('failed to load events')
-        const data: EventItem[] = await res.json()
-        if (!cancelled) setEvents(Array.isArray(data) ? data : [])
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'load failed')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
     }
-    load()
-    return () => {
-      cancelled = true
+    try {
+      const res = await fetch('/api/k8s/events', { credentials: 'same-origin' })
+      if (res.status === 403) {
+        setEvents([])
+        return
+      }
+      if (!res.ok) throw new Error('failed to load events')
+      const data: EventItem[] = await res.json()
+      setEvents(Array.isArray(data) ? data : [])
+      setError('')
+    } catch (e) {
+      if (initial) setError(e instanceof Error ? e.message : 'load failed')
+    } finally {
+      if (initial) setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    void load(true)
+  }, [load])
+  useLiveRefresh(() => load(false))
 
   const visible = useMemo(() => {
     const q = query.toLowerCase()

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { SortableHead } from '@/components/sortable-head'
 import { ErrorAlert } from '@/components/error-alert'
@@ -15,6 +15,7 @@ import {
 import { useUser } from '@/lib/auth-context'
 import { can } from '@/lib/grants'
 import { sortBy, useTableSort } from '@/lib/table-sort'
+import { useLiveRefresh } from '@/hooks/use-live-refresh'
 
 const rows = [
   { module: 'pods', label: 'Pods', href: '/workloads/pods' },
@@ -61,28 +62,26 @@ export default function Workloads() {
     }
   }, [])
 
-  useEffect(() => {
+  const loadCounts = useCallback(async (quiet = false) => {
     if (!namespace) return
-    let cancelled = false
-    async function load() {
+    try {
+      const qs = isAllNamespaces(namespace) ? '' : `?namespace=${encodeURIComponent(namespace)}`
+      const res = await fetch(`/api/k8s/workloads/overview${qs}`, {
+        credentials: 'same-origin',
+      })
+      if (!res.ok) throw new Error('failed to load workloads overview')
+      const data: Record<string, number> = await res.json()
+      setCounts(data)
       setError('')
-      try {
-        const qs = isAllNamespaces(namespace) ? '' : `?namespace=${encodeURIComponent(namespace)}`
-        const res = await fetch(`/api/k8s/workloads/overview${qs}`, {
-          credentials: 'same-origin',
-        })
-        if (!res.ok) throw new Error('failed to load workloads overview')
-        const data: Record<string, number> = await res.json()
-        if (!cancelled) setCounts(data)
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'load failed')
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
+    } catch (e) {
+      if (!quiet) setError(e instanceof Error ? e.message : 'load failed')
     }
   }, [namespace])
+
+  useEffect(() => {
+    void loadCounts(false)
+  }, [loadCounts])
+  useLiveRefresh(() => loadCounts(true), Boolean(namespace))
 
   const { sort, sortKey, sortDir, onSort } = useTableSort()
   const sortedRows = sortBy(visibleRows, sort, (row, key) =>

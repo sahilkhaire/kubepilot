@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronDownIcon,
   PauseIcon,
@@ -43,6 +43,7 @@ import {
   type K8sObject,
 } from '@/lib/k8s-fields'
 import { ratioSortValue, sortBy, useTableSort } from '@/lib/table-sort'
+import { useLiveRefresh } from '@/hooks/use-live-refresh'
 
 type EventItem = {
   metadata?: { name?: string; namespace?: string; creationTimestamp?: string }
@@ -128,56 +129,42 @@ export default function NodeDetailPanel({
   const [pods, setPods] = useState<K8sObject[]>([])
   const [events, setEvents] = useState<EventItem[]>([])
   const [refreshing, setRefreshing] = useState(false)
+  const onRefreshedRef = useRef(onRefreshed)
+  onRefreshedRef.current = onRefreshed
 
-  useEffect(() => {
-    let cancelled = false
-    async function loadSide() {
-      try {
-        const res = await fetch(`/api/k8s/nodes/${encodeURIComponent(name)}/pods`, { credentials: 'same-origin' })
-        if (!res.ok) {
-          if (!cancelled) setPods([])
-          return
-        }
-        const data: K8sObject[] = await res.json()
-        if (!cancelled) setPods(Array.isArray(data) ? data : [])
-      } catch {
-        if (!cancelled) setPods([])
+  const loadLive = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/k8s/nodes/${encodeURIComponent(name)}`, { credentials: 'same-origin' })
+      if (res.ok) {
+        const next: K8sObject = await res.json()
+        onRefreshedRef.current(next)
       }
-    }
-    loadSide()
-    return () => {
-      cancelled = true
-    }
-  }, [name])
-
-  useEffect(() => {
-    if (!canEvents(user)) {
-      setEvents([])
-      return
-    }
-    let cancelled = false
-    async function loadEvents() {
-      try {
-        const res = await fetch('/api/k8s/events', { credentials: 'same-origin' })
-        if (!res.ok) {
-          if (!cancelled) setEvents([])
-          return
-        }
-        const data: EventItem[] = await res.json()
-        if (cancelled) return
-        const mine = (Array.isArray(data) ? data : []).filter(
+      const podsRes = await fetch(`/api/k8s/nodes/${encodeURIComponent(name)}/pods`, { credentials: 'same-origin' })
+      if (podsRes.ok) {
+        const data: K8sObject[] = await podsRes.json()
+        setPods(Array.isArray(data) ? data : [])
+      }
+      if (!canEvents(user)) {
+        setEvents([])
+        return
+      }
+      const evRes = await fetch('/api/k8s/events', { credentials: 'same-origin' })
+      if (!evRes.ok) return
+      const data: EventItem[] = await evRes.json()
+      setEvents(
+        (Array.isArray(data) ? data : []).filter(
           (ev) => ev.involvedObject?.kind === 'Node' && ev.involvedObject?.name === name,
-        )
-        setEvents(mine)
-      } catch {
-        if (!cancelled) setEvents([])
-      }
-    }
-    loadEvents()
-    return () => {
-      cancelled = true
+        ),
+      )
+    } catch {
+      // keep last values on background refresh
     }
   }, [name, user])
+
+  useEffect(() => {
+    void loadLive()
+  }, [loadLive])
+  useLiveRefresh(loadLive, view === 'details')
 
   const { sort, sortKey, sortDir, onSort } = useTableSort()
   const sortedPods = useMemo(
@@ -202,16 +189,7 @@ export default function NodeDetailPanel({
   async function refresh() {
     setRefreshing(true)
     try {
-      const res = await fetch(`/api/k8s/nodes/${encodeURIComponent(name)}`, { credentials: 'same-origin' })
-      if (res.ok) {
-        const next: K8sObject = await res.json()
-        onRefreshed(next)
-      }
-      const podsRes = await fetch(`/api/k8s/nodes/${encodeURIComponent(name)}/pods`, { credentials: 'same-origin' })
-      if (podsRes.ok) {
-        const data: K8sObject[] = await podsRes.json()
-        setPods(Array.isArray(data) ? data : [])
-      }
+      await loadLive()
     } finally {
       setRefreshing(false)
     }

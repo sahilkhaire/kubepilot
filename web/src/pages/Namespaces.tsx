@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import EmptyState from '@/components/EmptyState'
 import ResourceYAMLSheet from '@/components/resource-yaml-sheet'
 import { SortableHead } from '@/components/sortable-head'
@@ -18,6 +18,7 @@ import {
 import { useUser } from '@/lib/auth-context'
 import { can } from '@/lib/grants'
 import { sortBy, useTableSort } from '@/lib/table-sort'
+import { useLiveRefresh } from '@/hooks/use-live-refresh'
 import type { YAMLTarget } from '@/lib/k8s-yaml'
 
 export default function Namespaces() {
@@ -28,27 +29,28 @@ export default function Namespaces() {
   const [query, setQuery] = useState('')
   const [yamlTarget, setYamlTarget] = useState<YAMLTarget | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
+  const load = useCallback(async (initial = false) => {
+    if (initial) {
       setLoading(true)
       setError('')
-      try {
-        const res = await fetch('/api/k8s/namespaces', { credentials: 'same-origin' })
-        if (!res.ok) throw new Error('failed to load namespaces')
-        const data: string[] = await res.json()
-        if (!cancelled) setNamespaces(data)
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'load failed')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
     }
-    load()
-    return () => {
-      cancelled = true
+    try {
+      const res = await fetch('/api/k8s/namespaces', { credentials: 'same-origin' })
+      if (!res.ok) throw new Error('failed to load namespaces')
+      const data: string[] = await res.json()
+      setNamespaces(data)
+      setError('')
+    } catch (e) {
+      if (initial) setError(e instanceof Error ? e.message : 'load failed')
+    } finally {
+      if (initial) setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    void load(true)
+  }, [load])
+  useLiveRefresh(() => load(false))
 
   const visible = useMemo(() => {
     const q = query.toLowerCase()

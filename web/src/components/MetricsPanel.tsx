@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useLiveRefresh } from '@/hooks/use-live-refresh'
 import { useUser } from '@/lib/auth-context'
 import { can } from '@/lib/grants'
 
@@ -121,37 +122,38 @@ export default function MetricsPanel({ scope, namespace, name, title, compact }:
   const [data, setData] = useState<MetricsResponse | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (!allowed) {
-      setLoading(false)
-      setData(null)
-      return
-    }
-    let cancelled = false
-    async function load() {
-      setLoading(true)
+  const load = useCallback(
+    async (initial = false) => {
+      if (!allowed) {
+        setLoading(false)
+        setData(null)
+        return
+      }
+      if (initial) setLoading(true)
       const params = new URLSearchParams({ scope })
       if (namespace) params.set('namespace', namespace)
       if (name) params.set('name', name)
       try {
         const res = await fetch(`/api/streams/metrics?${params}`, { credentials: 'same-origin' })
         if (res.status === 403 || res.status === 401) {
-          if (!cancelled) setData(null)
+          setData(null)
           return
         }
         const body: MetricsResponse = await res.json()
-        if (!cancelled) setData(body)
+        setData(body)
       } catch {
-        if (!cancelled) setData({ available: false })
+        setData((prev) => prev ?? { available: false })
       } finally {
-        if (!cancelled) setLoading(false)
+        if (initial) setLoading(false)
       }
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [scope, namespace, name, allowed])
+    },
+    [scope, namespace, name, allowed],
+  )
+
+  useEffect(() => {
+    void load(true)
+  }, [load])
+  useLiveRefresh(() => load(false), allowed)
 
   if (!allowed) {
     return null
@@ -211,40 +213,30 @@ export function MetricsCell({ scope, namespace, name }: Pick<MetricsPanelProps, 
   const allowed = can(user, 'metrics', 'view')
   const [text, setText] = useState('—')
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!allowed) {
       setText('—')
       return
     }
-    let cancelled = false
-    async function load() {
-      const params = new URLSearchParams({ scope })
-      if (namespace) params.set('namespace', namespace)
-      if (name) params.set('name', name)
-      try {
-        const res = await fetch(`/api/streams/metrics?${params}`, { credentials: 'same-origin' })
-        if (!res.ok) {
-          if (!cancelled) setText('—')
-          return
-        }
-        const body: MetricsResponse = await res.json()
-        if (!body.available || !body.cpu || !body.memory) {
-          if (!cancelled) setText('—')
-          return
-        }
-        rememberMetricSortValue(`pod:${namespace ?? ''}/${name ?? ''}`, metricRank(body.cpu))
-        if (!cancelled) {
-          setText(`${formatCores(body.cpu.usage)} / ${formatBytes(body.memory.usage)}`)
-        }
-      } catch {
-        if (!cancelled) setText('—')
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
+    const params = new URLSearchParams({ scope })
+    if (namespace) params.set('namespace', namespace)
+    if (name) params.set('name', name)
+    try {
+      const res = await fetch(`/api/streams/metrics?${params}`, { credentials: 'same-origin' })
+      if (!res.ok) return
+      const body: MetricsResponse = await res.json()
+      if (!body.available || !body.cpu || !body.memory) return
+      rememberMetricSortValue(`pod:${namespace ?? ''}/${name ?? ''}`, metricRank(body.cpu))
+      setText(`${formatCores(body.cpu.usage)} / ${formatBytes(body.memory.usage)}`)
+    } catch {
+      // keep last value on background refresh
     }
   }, [scope, namespace, name, allowed])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+  useLiveRefresh(load, allowed)
 
   return <span className="font-mono text-sm text-muted-foreground tabular-nums">{text}</span>
 }
@@ -296,36 +288,35 @@ function UsageBar({
 export function useNodeMetrics(name: string, enabled: boolean) {
   const [data, setData] = useState<MetricsResponse | null>(null)
 
+  const load = useCallback(async () => {
+    if (!enabled || !name) {
+      setData(null)
+      return
+    }
+    try {
+      const res = await fetch(`/api/streams/metrics?scope=node&name=${encodeURIComponent(name)}`, {
+        credentials: 'same-origin',
+      })
+      if (!res.ok) return
+      const body: MetricsResponse = await res.json()
+      const next = body.available ? body : null
+      rememberMetricSortValue(`node:${name}:cpu`, metricRank(next?.cpu))
+      rememberMetricSortValue(`node:${name}:memory`, metricRank(next?.memory))
+      rememberMetricSortValue(`node:${name}:disk`, metricRank(next?.disk))
+      setData(next)
+    } catch {
+      // keep last value on background refresh
+    }
+  }, [name, enabled])
+
   useEffect(() => {
     if (!enabled || !name) {
       setData(null)
       return
     }
-    let cancelled = false
-    async function load() {
-      try {
-        const res = await fetch(`/api/streams/metrics?scope=node&name=${encodeURIComponent(name)}`, {
-          credentials: 'same-origin',
-        })
-        if (!res.ok) {
-          if (!cancelled) setData(null)
-          return
-        }
-        const body: MetricsResponse = await res.json()
-        const next = body.available ? body : null
-        rememberMetricSortValue(`node:${name}:cpu`, metricRank(next?.cpu))
-        rememberMetricSortValue(`node:${name}:memory`, metricRank(next?.memory))
-        rememberMetricSortValue(`node:${name}:disk`, metricRank(next?.disk))
-        if (!cancelled) setData(next)
-      } catch {
-        if (!cancelled) setData(null)
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [name, enabled])
+    void load()
+  }, [load, enabled, name])
+  useLiveRefresh(load, enabled && Boolean(name))
 
   return data
 }

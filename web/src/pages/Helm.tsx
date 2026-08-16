@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import EmptyState from '@/components/EmptyState'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { SortableHead } from '@/components/sortable-head'
@@ -19,6 +19,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { sortBy, useTableSort } from '@/lib/table-sort'
+import { useLiveRefresh } from '@/hooks/use-live-refresh'
 
 type HelmRelease = {
   name: string
@@ -28,6 +29,15 @@ type HelmRelease = {
   status: string
   appVersion?: string
   updated?: string
+}
+
+async function fetchHelmReleases(ns: string) {
+  const qs = ns ? `?namespace=${encodeURIComponent(ns)}` : ''
+  const res = await fetch(`/api/helm/releases${qs}`, { credentials: 'same-origin' })
+  if (!res.ok) {
+    throw new Error('failed to load releases')
+  }
+  return res.json() as Promise<HelmRelease[]>
 }
 
 export default function Helm() {
@@ -53,14 +63,21 @@ export default function Helm() {
     }
   }
 
-  async function loadReleases(ns: string) {
-    const qs = ns ? `?namespace=${encodeURIComponent(ns)}` : ''
-    const res = await fetch(`/api/helm/releases${qs}`, { credentials: 'same-origin' })
-    if (!res.ok) {
-      throw new Error('failed to load releases')
+  const loadReleasesForNamespace = useCallback(async (quiet = false) => {
+    if (!namespace) {
+      setReleases([])
+      return
     }
-    return res.json() as Promise<HelmRelease[]>
-  }
+    try {
+      const data = await fetchHelmReleases(isAllNamespaces(namespace) ? '' : namespace)
+      setReleases(data)
+      setError('')
+    } catch (e) {
+      if (!quiet) {
+        setError(e instanceof Error ? e.message : 'load failed')
+      }
+    }
+  }, [namespace])
 
   useEffect(() => {
     let cancelled = false
@@ -86,29 +103,9 @@ export default function Helm() {
   }, [])
 
   useEffect(() => {
-    if (!namespace) {
-      setReleases([])
-      return
-    }
-    let cancelled = false
-    async function refresh() {
-      setError('')
-      try {
-        const data = await loadReleases(isAllNamespaces(namespace) ? '' : namespace)
-        if (!cancelled) {
-          setReleases(data)
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'load failed')
-        }
-      }
-    }
-    refresh()
-    return () => {
-      cancelled = true
-    }
-  }, [namespace])
+    void loadReleasesForNamespace(false)
+  }, [loadReleasesForNamespace])
+  useLiveRefresh(() => loadReleasesForNamespace(true), Boolean(namespace))
 
   const { sort, sortKey, sortDir, onSort } = useTableSort()
   const sorted = useMemo(

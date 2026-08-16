@@ -43,6 +43,7 @@ import {
   type K8sObject,
 } from '@/lib/k8s-fields'
 import { sortBy, timestampSortValue, useTableSort } from '@/lib/table-sort'
+import { useLiveRefresh } from '@/hooks/use-live-refresh'
 
 type PendingAction = 'cordon' | 'uncordon' | 'drain'
 
@@ -59,8 +60,7 @@ export default function Nodes() {
   const [selectedName, setSelectedName] = useState<string | null>(null)
   const [panelView, setPanelView] = useState<'details' | 'yaml'>('details')
 
-  const load = useCallback(async () => {
-    setError('')
+  const load = useCallback(async (quiet = false) => {
     try {
       const res = await fetch('/api/k8s/nodes', { credentials: 'same-origin' })
       if (res.status === 403) {
@@ -70,8 +70,11 @@ export default function Nodes() {
       if (!res.ok) throw new Error('failed to load nodes')
       const data: K8sObject[] = await res.json()
       setNodes(Array.isArray(data) ? data : [])
+      setError('')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'load failed')
+      if (!quiet) {
+        setError(e instanceof Error ? e.message : 'load failed')
+      }
     }
   }, [])
 
@@ -79,7 +82,7 @@ export default function Nodes() {
     let cancelled = false
     async function firstLoad() {
       setLoading(true)
-      await load()
+      await load(false)
       if (!cancelled) setLoading(false)
     }
     firstLoad()
@@ -87,6 +90,7 @@ export default function Nodes() {
       cancelled = true
     }
   }, [load])
+  useLiveRefresh(() => load(true))
 
   const visible = useMemo(() => nodes.filter((n) => matchesQuery(n, query)), [nodes, query])
   const { sort, sortKey, sortDir, onSort } = useTableSort()

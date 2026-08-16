@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { PageBody, PageHeader } from '@/components/page-header'
@@ -6,6 +6,7 @@ import { PageLoading } from '@/components/page-loading'
 import { ErrorAlert } from '@/components/error-alert'
 import MetricsPanel from '@/components/MetricsPanel'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useLiveRefresh } from '@/hooks/use-live-refresh'
 import { useUser } from '@/lib/auth-context'
 import { can } from '@/lib/grants'
 
@@ -28,33 +29,34 @@ export default function Home() {
   const canMetrics = can(user, 'metrics', 'view')
   const visibleCards = Object.entries(labels).filter(([key]) => can(user, key, 'view'))
 
-  useEffect(() => {
+  const load = useCallback(async (initial = false) => {
     if (!canOverview) {
       setLoading(false)
       setCounts({})
       return
     }
-    let cancelled = false
-    async function load() {
-      setLoading(true)
-      try {
-        const res = await fetch('/api/k8s/cluster/overview', { credentials: 'same-origin' })
-        if (!res.ok) {
-          throw new Error('failed to load cluster overview')
-        }
-        const data: Record<string, number> = await res.json()
-        if (!cancelled) setCounts(data)
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'load failed')
-      } finally {
-        if (!cancelled) setLoading(false)
+    if (initial) setLoading(true)
+    try {
+      const res = await fetch('/api/k8s/cluster/overview', { credentials: 'same-origin' })
+      if (!res.ok) {
+        throw new Error('failed to load cluster overview')
       }
-    }
-    load()
-    return () => {
-      cancelled = true
+      const data: Record<string, number> = await res.json()
+      setCounts(data)
+      setError('')
+    } catch (e) {
+      if (initial) {
+        setError(e instanceof Error ? e.message : 'load failed')
+      }
+    } finally {
+      if (initial) setLoading(false)
     }
   }, [canOverview])
+
+  useEffect(() => {
+    void load(true)
+  }, [load])
+  useLiveRefresh(() => load(false), canOverview)
 
   return (
     <PageBody>

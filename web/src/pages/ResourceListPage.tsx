@@ -57,6 +57,7 @@ import {
   type K8sObject,
 } from '@/lib/k8s-fields'
 import { ratioSortValue, sortBy, timestampSortValue, useTableSort } from '@/lib/table-sort'
+import { useLiveRefresh } from '@/hooks/use-live-refresh'
 import type { YAMLTarget } from '@/lib/k8s-yaml'
 
 function statusBadge(value: string) {
@@ -219,13 +220,12 @@ export default function ResourceListPage({
     }
   }, [module])
 
-  const loadItems = useCallback(async () => {
+  const loadItems = useCallback(async (quiet = false) => {
     if (!module || module === 'overview') return
     if (!clusterScoped && !namespace) {
       setItems([])
       return
     }
-    setError('')
     try {
       const nsPath = isAllNamespaces(namespace) ? '_all' : namespace
       const path = clusterScoped
@@ -241,14 +241,18 @@ export default function ResourceListPage({
       }
       const data: K8sObject[] = await res.json()
       setItems(Array.isArray(data) ? data : [])
+      setError('')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'load failed')
+      if (!quiet) {
+        setError(e instanceof Error ? e.message : 'load failed')
+      }
     }
   }, [module, namespace, clusterScoped])
 
   useEffect(() => {
-    void loadItems()
+    void loadItems(false)
   }, [loadItems])
+  useLiveRefresh(() => loadItems(true))
 
   const visible = useMemo(
     () => items.filter((item) => matchesQuery(item, query)),

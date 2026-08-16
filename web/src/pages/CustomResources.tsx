@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import EmptyState from '@/components/EmptyState'
 import { SortableHead } from '@/components/sortable-head'
 import { ErrorAlert } from '@/components/error-alert'
@@ -19,6 +19,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { sortBy, useTableSort } from '@/lib/table-sort'
+import { useLiveRefresh } from '@/hooks/use-live-refresh'
 
 type CRDItem = {
   metadata?: { name?: string }
@@ -54,47 +55,45 @@ export default function CustomResources() {
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
+  const loadCatalog = useCallback(async (initial = false) => {
+    if (initial) {
       setLoading(true)
       setError('')
-      try {
-        const [crdRes, nsRes] = await Promise.all([
-          fetch('/api/k8s/crds', { credentials: 'same-origin' }),
-          fetch('/api/k8s/namespaces', { credentials: 'same-origin' }),
-        ])
-        if (!crdRes.ok) {
-          throw new Error('failed to load CRDs')
-        }
-        if (!nsRes.ok) {
-          throw new Error('failed to load namespaces')
-        }
-        const crdData: CRDItem[] = await crdRes.json()
-        const nsData: string[] = await nsRes.json()
-        if (cancelled) return
-        setCrds(crdData)
-        setNamespaces(nsData)
-        if (nsData.length > 0) {
-          setNamespace((prev) => resolveNamespaceValue(prev, nsData))
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'load failed')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
     }
-    load()
-    return () => {
-      cancelled = true
+    try {
+      const [crdRes, nsRes] = await Promise.all([
+        fetch('/api/k8s/crds', { credentials: 'same-origin' }),
+        fetch('/api/k8s/namespaces', { credentials: 'same-origin' }),
+      ])
+      if (!crdRes.ok) {
+        throw new Error('failed to load CRDs')
+      }
+      if (!nsRes.ok) {
+        throw new Error('failed to load namespaces')
+      }
+      const crdData: CRDItem[] = await crdRes.json()
+      const nsData: string[] = await nsRes.json()
+      setCrds(crdData)
+      setNamespaces(nsData)
+      if (nsData.length > 0) {
+        setNamespace((prev) => resolveNamespaceValue(prev, nsData))
+      }
+      setError('')
+    } catch (e) {
+      if (initial) {
+        setError(e instanceof Error ? e.message : 'load failed')
+      }
+    } finally {
+      if (initial) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
+    void loadCatalog(true)
+  }, [loadCatalog])
+  useLiveRefresh(() => loadCatalog(false))
+
+  const loadInstances = useCallback(async (quiet = false) => {
     if (!selected) {
       setInstances([])
       return
@@ -107,38 +106,33 @@ export default function CustomResources() {
       setInstances([])
       return
     }
-
-    let cancelled = false
-    async function loadInstances() {
+    try {
+      const params = new URLSearchParams({ group, version, resource })
+      if (namespaced && namespace && !isAllNamespaces(namespace)) {
+        params.set('namespace', namespace)
+      }
+      const res = await fetch(`/api/k8s/custom-resources?${params}`, { credentials: 'same-origin' })
+      if (res.status === 403 || res.status === 404) {
+        setInstances([])
+        return
+      }
+      if (!res.ok) {
+        throw new Error('failed to load custom resources')
+      }
+      const data: ResourceItem[] = await res.json()
+      setInstances(data)
       setError('')
-      try {
-        const params = new URLSearchParams({ group, version, resource })
-        if (namespaced && namespace && !isAllNamespaces(namespace)) {
-          params.set('namespace', namespace)
-        }
-        const res = await fetch(`/api/k8s/custom-resources?${params}`, { credentials: 'same-origin' })
-        if (res.status === 403 || res.status === 404) {
-          if (!cancelled) setInstances([])
-          return
-        }
-        if (!res.ok) {
-          throw new Error('failed to load custom resources')
-        }
-        const data: ResourceItem[] = await res.json()
-        if (!cancelled) {
-          setInstances(data)
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'load failed')
-        }
+    } catch (e) {
+      if (!quiet) {
+        setError(e instanceof Error ? e.message : 'load failed')
       }
     }
-    loadInstances()
-    return () => {
-      cancelled = true
-    }
   }, [selected, namespace])
+
+  useEffect(() => {
+    void loadInstances(false)
+  }, [loadInstances])
+  useLiveRefresh(() => loadInstances(true), selected != null)
 
   const crdSort = useTableSort()
   const instanceSort = useTableSort()
