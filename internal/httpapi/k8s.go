@@ -148,6 +148,10 @@ func handleListNamespacedResource(w http.ResponseWriter, r *http.Request, deps D
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
+	if ns == "_all" {
+		handleListAllNamespacedResource(w, r, deps, module)
+		return
+	}
 	reveal := false
 	var revealUser *store.User
 	if module == "secrets" && secretRevealRequested(r) {
@@ -179,6 +183,54 @@ func handleListNamespacedResource(w http.ResponseWriter, r *http.Request, deps D
 				"count": len(kube.ObjectNames(items)),
 			})
 		}
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func handleListAllNamespacedResource(w http.ResponseWriter, r *http.Request, deps Deps, module string) {
+	u, ps, ok := authenticateForKube(w, r, deps.Auth, deps.Store)
+	if !ok {
+		return
+	}
+	if deps.Kube == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	clusterNS, err := deps.Kube.ClusterNamespaces(r.Context())
+	if err != nil {
+		log.Printf("kube list namespaces: err=%v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	visible := rbac.VisibleNamespaces(*u, deps.InstallNS, clusterNS)
+	allowed := map[string]bool{}
+	for _, ns := range visible {
+		if rbac.Allow(rbac.Request{
+			User:          *u,
+			InstallNS:     deps.InstallNS,
+			PermissionSet: ps,
+			Module:        module,
+			Action:        "view",
+			Namespace:     ns,
+		}) {
+			allowed[ns] = true
+		}
+	}
+	if len(allowed) == 0 {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	items, err := deps.Kube.ListResource(r.Context(), module, "")
+	if err != nil {
+		log.Printf("kube list %s: all-namespaces err=%v", module, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	items = kube.FilterObjects(items, func(ns string) bool { return allowed[ns] })
+	if module == "secrets" {
+		items = sanitizeSecretList(items, false)
 	}
 	writeJSON(w, http.StatusOK, items)
 }
@@ -319,8 +371,8 @@ func handleWorkloadsOverview(w http.ResponseWriter, r *http.Request, deps Deps) 
 		return
 	}
 	ns := strings.TrimSpace(r.URL.Query().Get("namespace"))
-	if ns == "" {
-		w.WriteHeader(http.StatusBadRequest)
+	if isAllNamespaces(ns) {
+		handleWorkloadsOverviewAll(w, r, deps, u, ps)
 		return
 	}
 	if !namespaceAccessible(*u, deps.InstallNS, ns) {
@@ -362,6 +414,68 @@ func handleWorkloadsOverview(w http.ResponseWriter, r *http.Request, deps Deps) 
 			return
 		}
 		counts[module] = n
+	}
+	writeJSON(w, http.StatusOK, counts)
+}
+
+func handleWorkloadsOverviewAll(w http.ResponseWriter, r *http.Request, deps Deps, u *store.User, ps *rbac.PermissionSet) {
+	if deps.Kube == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	clusterNS, err := deps.Kube.ClusterNamespaces(r.Context())
+	if err != nil {
+		log.Printf("kube list namespaces: err=%v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	visible := rbac.VisibleNamespaces(*u, deps.InstallNS, clusterNS)
+	allowed := false
+	for _, ns := range visible {
+		if rbac.Allow(rbac.Request{
+			User:          *u,
+			InstallNS:     deps.InstallNS,
+			PermissionSet: ps,
+			Module:        "workloads.overview",
+			Action:        "view",
+			Namespace:     ns,
+		}) {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	counts := make(map[string]int)
+	for _, module := range kube.WorkloadModules {
+		total := 0
+		moduleAllowed := false
+		for _, ns := range visible {
+			if !rbac.Allow(rbac.Request{
+				User:          *u,
+				InstallNS:     deps.InstallNS,
+				PermissionSet: ps,
+				Module:        module,
+				Action:        "view",
+				Namespace:     ns,
+			}) {
+				continue
+			}
+			moduleAllowed = true
+			n, err := deps.Kube.CountResource(r.Context(), module, ns)
+			if err != nil {
+				log.Printf("kube count %s: ns=%s err=%v", module, ns, err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			total += n
+		}
+		if moduleAllowed {
+			counts[module] = total
+		}
 	}
 	writeJSON(w, http.StatusOK, counts)
 }
@@ -432,6 +546,15 @@ func isNamespacedCatalogModule(module string) bool {
 
 func isClusterCatalogModule(module string) bool {
 	return kube.IsCatalogModule(module) && kube.ResourceClusterScoped(module)
+}
+
+func isAllNamespaces(ns string) bool {
+	switch strings.TrimSpace(ns) {
+	case "", "_all", "__all__":
+		return true
+	default:
+		return false
+	}
 }
 
 func namespaceAccessible(u store.User, installNS, namespace string) bool {

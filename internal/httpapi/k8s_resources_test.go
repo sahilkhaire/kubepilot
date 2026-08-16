@@ -66,6 +66,37 @@ func TestListSecretsWithoutRevealStripsData(t *testing.T) {
 	}
 }
 
+func TestListSecretsAllNamespacesIgnoresReveal(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"secrets": {"view", "reveal"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	h := newK8sHandler(t, st, seedSecretFakeClient())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/namespaces/_all/secrets?reveal=1", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), http.StatusOK)
+	}
+
+	var items []map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &items); err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("secrets=%d want 1", len(items))
+	}
+	for i, item := range items {
+		if _, ok := item["data"]; ok {
+			t.Fatalf("item[%d] data should be stripped on all-namespaces list: %s", i, rec.Body.String())
+		}
+	}
+}
+
 func TestGetSecretWithoutRevealStripsData(t *testing.T) {
 	t.Parallel()
 

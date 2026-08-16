@@ -72,6 +72,9 @@ func handleListCustomResources(w http.ResponseWriter, r *http.Request, deps Deps
 	version := strings.TrimSpace(r.URL.Query().Get("version"))
 	resource := strings.TrimSpace(r.URL.Query().Get("resource"))
 	ns := strings.TrimSpace(r.URL.Query().Get("namespace"))
+	if isAllNamespaces(ns) {
+		ns = ""
+	}
 	if group == "" || version == "" || resource == "" {
 		writeError(w, http.StatusBadRequest, "group, version, and resource required")
 		return

@@ -216,7 +216,7 @@ func ObjectNames(items any) []string {
 	}
 	out := make([]string, 0, n)
 	for i := 0; i < n; i++ {
-		meta := rv.Index(i).FieldByName("ObjectMeta")
+		meta := objectMetaValue(rv.Index(i))
 		if !meta.IsValid() {
 			continue
 		}
@@ -226,6 +226,41 @@ func ObjectNames(items any) []string {
 		}
 	}
 	return out
+}
+
+func objectMetaValue(el reflect.Value) reflect.Value {
+	if el.Kind() == reflect.Pointer {
+		if el.IsNil() {
+			return reflect.Value{}
+		}
+		el = el.Elem()
+	}
+	return el.FieldByName("ObjectMeta")
+}
+
+// FilterObjects keeps slice elements whose namespace passes keep.
+func FilterObjects(items any, keep func(namespace string) bool) any {
+	if items == nil {
+		return []any{}
+	}
+	rv := reflect.ValueOf(items)
+	if rv.Kind() != reflect.Slice {
+		return items
+	}
+	out := reflect.MakeSlice(rv.Type(), 0, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		el := rv.Index(i)
+		meta := objectMetaValue(el)
+		if !meta.IsValid() {
+			continue
+		}
+		ns := meta.FieldByName("Namespace")
+		if !ns.IsValid() || ns.Kind() != reflect.String || !keep(ns.String()) {
+			continue
+		}
+		out = reflect.Append(out, el)
+	}
+	return ensureSlice(out.Interface())
 }
 
 func sliceLen(v any) int {

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import EmptyState from '@/components/EmptyState'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { ErrorAlert } from '@/components/error-alert'
-import { NamespaceSelect } from '@/components/namespace-select'
+import { ALL_NAMESPACES, isAllNamespaces, NamespaceSelect, resolveNamespaceValue } from '@/components/namespace-select'
 import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
 import { Badge } from '@/components/ui/badge'
@@ -32,7 +32,7 @@ export default function Helm() {
   const user = useUser()
   const canUninstall = can(user, 'helm', 'uninstall')
   const [namespaces, setNamespaces] = useState<string[]>([])
-  const [namespace, setNamespace] = useState('')
+  const [namespace, setNamespace] = useState(ALL_NAMESPACES)
   const [releases, setReleases] = useState<HelmRelease[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -47,7 +47,7 @@ export default function Helm() {
     const data: string[] = await res.json()
     setNamespaces(data)
     if (data.length > 0) {
-      setNamespace((prev) => (prev && data.includes(prev) ? prev : data[0]))
+      setNamespace((prev) => resolveNamespaceValue(prev, data))
     }
   }
 
@@ -92,7 +92,7 @@ export default function Helm() {
     async function refresh() {
       setError('')
       try {
-        const data = await loadReleases(namespace)
+        const data = await loadReleases(isAllNamespaces(namespace) ? '' : namespace)
         if (!cancelled) {
           setReleases(data)
         }
@@ -186,7 +186,9 @@ export default function Helm() {
           </TableBody>
         </Table>
         {releases.length === 0 && namespace && !error ? (
-          <EmptyState>No releases in this namespace.</EmptyState>
+          <EmptyState>
+            {isAllNamespaces(namespace) ? 'No releases.' : 'No releases in this namespace.'}
+          </EmptyState>
         ) : null}
       </div>
       <ConfirmDialog

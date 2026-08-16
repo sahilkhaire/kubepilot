@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import EmptyState from '@/components/EmptyState'
 import { ErrorAlert } from '@/components/error-alert'
-import { NamespaceSelect } from '@/components/namespace-select'
+import { ALL_NAMESPACES, isAllNamespaces, NamespaceSelect, resolveNamespaceValue } from '@/components/namespace-select'
 import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
 import { Badge } from '@/components/ui/badge'
@@ -45,7 +45,7 @@ export default function CustomResources() {
   const canViewInstances = can(user, 'custom_resources', 'view')
   const [crds, setCrds] = useState<CRDItem[]>([])
   const [namespaces, setNamespaces] = useState<string[]>([])
-  const [namespace, setNamespace] = useState('')
+  const [namespace, setNamespace] = useState(ALL_NAMESPACES)
   const [selected, setSelected] = useState<CRDItem | null>(null)
   const [instances, setInstances] = useState<ResourceItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -74,7 +74,7 @@ export default function CustomResources() {
         setCrds(crdData)
         setNamespaces(nsData)
         if (nsData.length > 0) {
-          setNamespace((prev) => (prev && nsData.includes(prev) ? prev : nsData[0]))
+          setNamespace((prev) => resolveNamespaceValue(prev, nsData))
         }
       } catch (e) {
         if (!cancelled) {
@@ -111,7 +111,7 @@ export default function CustomResources() {
       setError('')
       try {
         const params = new URLSearchParams({ group, version, resource })
-        if (namespaced && namespace) {
+        if (namespaced && namespace && !isAllNamespaces(namespace)) {
           params.set('namespace', namespace)
         }
         const res = await fetch(`/api/k8s/custom-resources?${params}`, { credentials: 'same-origin' })

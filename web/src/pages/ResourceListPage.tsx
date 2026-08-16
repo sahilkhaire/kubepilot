@@ -7,7 +7,7 @@ import DeleteConfirm from '@/components/DeleteConfirm'
 import EmptyState from '@/components/EmptyState'
 import ResourceYAMLSheet from '@/components/resource-yaml-sheet'
 import { ErrorAlert } from '@/components/error-alert'
-import { NamespaceSelect } from '@/components/namespace-select'
+import { ALL_NAMESPACES, isAllNamespaces, NamespaceSelect, resolveNamespaceValue } from '@/components/namespace-select'
 import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
 import { MetricsCell } from '@/components/MetricsPanel'
@@ -129,7 +129,7 @@ export default function ResourceListPage({
   const kind = findKind(group, resource ?? '')
   const section = catalog.find((s) => s.id === group)
   const [namespaces, setNamespaces] = useState<string[]>([])
-  const [namespace, setNamespace] = useState('')
+  const [namespace, setNamespace] = useState(ALL_NAMESPACES)
   const [items, setItems] = useState<K8sObject[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -157,7 +157,7 @@ export default function ResourceListPage({
         if (cancelled) return
         setNamespaces(data)
         if (data.length > 0) {
-          setNamespace((prev) => (prev && data.includes(prev) ? prev : data[0]))
+          setNamespace((prev) => resolveNamespaceValue(prev, data))
         }
       } catch (e) {
         if (!cancelled) {
@@ -183,9 +183,10 @@ export default function ResourceListPage({
     }
     setError('')
     try {
+      const nsPath = isAllNamespaces(namespace) ? '_all' : namespace
       const path = clusterScoped
         ? `/api/k8s/${encodeURIComponent(module)}`
-        : `/api/k8s/namespaces/${encodeURIComponent(namespace)}/${encodeURIComponent(module)}`
+        : `/api/k8s/namespaces/${encodeURIComponent(nsPath)}/${encodeURIComponent(module)}`
       const res = await fetch(path, { credentials: 'same-origin' })
       if (res.status === 403 || res.status === 404) {
         setItems([])
@@ -306,7 +307,7 @@ export default function ResourceListPage({
             {visible.map((item) => {
               const name = objectName(item)
               if (!name) return null
-              const ns = objectNamespace(item) || namespace
+              const ns = objectNamespace(item) || (isAllNamespaces(namespace) ? '' : namespace)
               return (
                 <TableRow key={`${ns}/${name}`}>
                   <TableCell className="font-medium">{name}</TableCell>

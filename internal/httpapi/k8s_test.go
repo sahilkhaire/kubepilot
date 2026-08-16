@@ -157,6 +157,65 @@ func TestListPodsAuthz(t *testing.T) {
 	}
 }
 
+func TestListPodsAllNamespaces(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSet(t, st, "ps1")
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	h := newK8sHandler(t, st, seedWorkloadFakeClient())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/namespaces/_all/pods", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), http.StatusOK)
+	}
+
+	var pods []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &pods); err != nil {
+		t.Fatalf("decode: %v body=%s", err, rec.Body.String())
+	}
+	if len(pods) != 1 {
+		t.Fatalf("pods=%v want one pod in visible namespace", pods)
+	}
+}
+
+func TestListPodsAllNamespacesHidesInstallNS(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSet(t, st, "ps1")
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"*"})
+	h := newK8sHandler(t, st, seedWorkloadFakeClientWithInstallNS())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/namespaces/_all/pods", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), http.StatusOK)
+	}
+
+	var pods []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &pods); err != nil {
+		t.Fatalf("decode: %v body=%s", err, rec.Body.String())
+	}
+	if len(pods) != 2 {
+		t.Fatalf("pods=%d want 2 (dev+prod, excluding install NS)", len(pods))
+	}
+	for _, pod := range pods {
+		meta, _ := pod["metadata"].(map[string]any)
+		ns, _ := meta["namespace"].(string)
+		if ns == testInstallNS {
+			t.Fatalf("member must not see install namespace pods: %v", pods)
+		}
+	}
+}
+
 func TestGetPodAuthz(t *testing.T) {
 	t.Parallel()
 
@@ -238,23 +297,22 @@ func TestWorkloadsOverviewOmitsDeniedModules(t *testing.T) {
 	}
 }
 
-func TestWorkloadsOverviewRequiresNamespace(t *testing.T) {
+func TestWorkloadsOverviewAllNamespaces(t *testing.T) {
 	t.Parallel()
 
 	st := store.NewMemory()
-	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view"}})
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"workloads.overview": {"view"}, "pods": {"view"}})
 	createK8sMember(t, st, "member", "pass", "ps1", []string{"*"})
 	h := newK8sHandler(t, st, seedWorkloadFakeClientWithInstallNS())
 	session := login(t, h, "member", "pass")
 
 	tests := []struct {
-		name       string
-		path       string
-		wantStatus int
+		name string
+		path string
 	}{
-		{name: "missing namespace", path: "/api/k8s/workloads/overview", wantStatus: http.StatusBadRequest},
-		{name: "blank namespace", path: "/api/k8s/workloads/overview?namespace=", wantStatus: http.StatusBadRequest},
-		{name: "whitespace namespace", path: "/api/k8s/workloads/overview?namespace=%20", wantStatus: http.StatusBadRequest},
+		{name: "missing namespace", path: "/api/k8s/workloads/overview"},
+		{name: "blank namespace", path: "/api/k8s/workloads/overview?namespace="},
+		{name: "all sentinel", path: "/api/k8s/workloads/overview?namespace=_all"},
 	}
 
 	for _, tc := range tests {
@@ -263,10 +321,38 @@ func TestWorkloadsOverviewRequiresNamespace(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
 			req.AddCookie(session)
 			h.ServeHTTP(rec, req)
-			if rec.Code != tc.wantStatus {
-				t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), tc.wantStatus)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), http.StatusOK)
+			}
+			var counts map[string]int
+			if err := json.Unmarshal(rec.Body.Bytes(), &counts); err != nil {
+				t.Fatal(err)
+			}
+			if counts["pods"] != 2 {
+				t.Fatalf("pods=%d want 2 (dev+prod, excluding install NS)", counts["pods"])
+			}
+			if _, ok := counts["deployments"]; ok {
+				t.Fatalf("deployments should be omitted: %v", counts)
 			}
 		})
+	}
+}
+
+func TestWorkloadsOverviewAllNamespacesRequiresGrant(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"*"})
+	h := newK8sHandler(t, st, seedWorkloadFakeClientWithInstallNS())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/workloads/overview", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), http.StatusForbidden)
 	}
 }
 

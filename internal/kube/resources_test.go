@@ -99,3 +99,18 @@ func TestResourceKind(t *testing.T) {
 		t.Fatal("expected false")
 	}
 }
+
+func TestFilterObjectsByNamespace(t *testing.T) {
+	t.Parallel()
+	items := []corev1.Pod{
+		{ObjectMeta: metav1.ObjectMeta{Name: "a", Namespace: "dev"}},
+		{ObjectMeta: metav1.ObjectMeta{Name: "b", Namespace: "prod"}},
+	}
+	filtered, ok := kube.FilterObjects(items, func(ns string) bool { return ns == "dev" }).([]corev1.Pod)
+	if !ok {
+		t.Fatalf("type %T", kube.FilterObjects(items, func(string) bool { return true }))
+	}
+	if len(filtered) != 1 || filtered[0].Name != "a" {
+		t.Fatalf("filtered=%v", filtered)
+	}
+}

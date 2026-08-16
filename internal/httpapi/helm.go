@@ -65,6 +65,9 @@ func handleListHelmReleases(w http.ResponseWriter, r *http.Request, deps Deps) {
 	}
 
 	nsFilter := strings.TrimSpace(r.URL.Query().Get("namespace"))
+	if isAllNamespaces(nsFilter) {
+		nsFilter = ""
+	}
 	if nsFilter != "" {
 		if !namespaceAccessible(*u, deps.InstallNS, nsFilter) {
 			w.WriteHeader(http.StatusForbidden)

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ErrorAlert } from '@/components/error-alert'
-import { NamespaceSelect } from '@/components/namespace-select'
+import { ALL_NAMESPACES, isAllNamespaces, NamespaceSelect, resolveNamespaceValue } from '@/components/namespace-select'
 import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
 import {
@@ -29,7 +29,7 @@ export default function Workloads() {
   const user = useUser()
   const visibleRows = rows.filter((row) => can(user, row.module, 'view'))
   const [namespaces, setNamespaces] = useState<string[]>([])
-  const [namespace, setNamespace] = useState('')
+  const [namespace, setNamespace] = useState(ALL_NAMESPACES)
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -46,7 +46,7 @@ export default function Workloads() {
         if (cancelled) return
         setNamespaces(data)
         if (data.length > 0) {
-          setNamespace((prev) => (prev && data.includes(prev) ? prev : data[0]))
+          setNamespace((prev) => resolveNamespaceValue(prev, data))
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'load failed')
@@ -66,7 +66,8 @@ export default function Workloads() {
     async function load() {
       setError('')
       try {
-        const res = await fetch(`/api/k8s/workloads/overview?namespace=${encodeURIComponent(namespace)}`, {
+        const qs = isAllNamespaces(namespace) ? '' : `?namespace=${encodeURIComponent(namespace)}`
+        const res = await fetch(`/api/k8s/workloads/overview${qs}`, {
           credentials: 'same-origin',
         })
         if (!res.ok) throw new Error('failed to load workloads overview')
@@ -88,7 +89,10 @@ export default function Workloads() {
 
   return (
     <PageBody>
-      <PageHeader title="Workloads" description={`Health in ${namespace || '—'}`}>
+      <PageHeader
+        title="Workloads"
+        description={`Health in ${isAllNamespaces(namespace) ? 'all namespaces' : namespace || '—'}`}
+      >
         <NamespaceSelect namespaces={namespaces} value={namespace} onChange={setNamespace} />
       </PageHeader>
       <ErrorAlert message={error} />
