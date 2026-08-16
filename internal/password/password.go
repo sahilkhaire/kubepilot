@@ -48,20 +48,24 @@ func Verify(plain, encoded string) bool {
 	if _, err := fmt.Sscanf(parts[2], "m=%d,t=%d,p=%d", &m, &t, &p); err != nil {
 		return false
 	}
-	if m == 0 || t == 0 || p == 0 || p > 255 {
+	if m != memory || t != time || p != threads {
+		return false
+	}
+
+	if parts[3] == "" || parts[4] == "" {
 		return false
 	}
 
 	salt, err := base64.RawStdEncoding.DecodeString(parts[3])
-	if err != nil {
+	if err != nil || len(salt) == 0 {
 		return false
 	}
 
 	expectedHash, err := base64.RawStdEncoding.DecodeString(parts[4])
-	if err != nil {
+	if err != nil || len(expectedHash) != keyLen {
 		return false
 	}
 
-	computedHash := argon2.IDKey([]byte(plain), salt, t, m, uint8(p), uint32(len(expectedHash)))
+	computedHash := argon2.IDKey([]byte(plain), salt, time, memory, threads, keyLen)
 	return subtle.ConstantTimeCompare(computedHash, expectedHash) == 1
 }
