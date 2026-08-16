@@ -1,0 +1,54 @@
+package store
+
+import (
+	"context"
+	"time"
+)
+
+type Role string
+
+const (
+	RoleOwner  Role = "owner"
+	RoleMember Role = "member"
+)
+
+type User struct {
+	ID                 string
+	Username           string
+	DisplayName        string
+	Role               Role
+	PasswordHash       string
+	MustChangePassword bool
+	Enabled            bool
+	PermissionSetID    string
+	Namespaces         []string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	CreatedBy          string
+}
+
+type Session struct {
+	ID            string
+	UserID        string
+	Username      string
+	CreatedAt     time.Time
+	LastSeenAt    time.Time
+	ExpiresAt     time.Time
+	IdleExpiresAt time.Time
+	IP            string
+	UserAgent     string
+}
+
+type Store interface {
+	Owner(ctx context.Context) (*User, error) // nil, nil if none
+	CreateOwner(ctx context.Context, u User) error
+	UpdateOwnerPassword(ctx context.Context, userID, hash string) error
+	UserByUsername(ctx context.Context, username string) (*User, error)
+	UserByID(ctx context.Context, id string) (*User, error)
+	CreateSession(ctx context.Context, s Session) error
+	Session(ctx context.Context, id string) (*Session, error)
+	TouchSession(ctx context.Context, id string, lastSeen, idleExpires time.Time) error
+	DeleteSession(ctx context.Context, id string) error
+	DeleteSessionsForUser(ctx context.Context, userID string) error
+	Ping(ctx context.Context) error
+}
