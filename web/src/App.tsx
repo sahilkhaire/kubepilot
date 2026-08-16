@@ -3,31 +3,58 @@ import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom'
 import { logout, me, type User } from './api'
 import ChangePassword from './pages/ChangePassword'
 import Login from './pages/Login'
+import PodLogs from './pages/PodLogs'
 import SettingsAudit from './pages/SettingsAudit'
 import SettingsLayout from './pages/SettingsLayout'
 import SettingsMembers from './pages/SettingsMembers'
 import SettingsSets from './pages/SettingsSets'
+import Workloads from './pages/Workloads'
 
 function Home({ user }: { user: User }) {
   return (
-    <main style={{ maxWidth: '24rem', margin: '2rem auto', padding: '0 1rem' }}>
+    <div style={{ maxWidth: '24rem', margin: '2rem auto', padding: '0 1rem' }}>
       <h1>Cluster Console</h1>
       <p>
         <strong>{user.username}</strong> ({user.role})
       </p>
-    </main>
+    </div>
   )
 }
 
-function AppNav({ user, onLogout }: { user: User; onLogout: () => void }) {
+function AppShell({
+  user,
+  onLogout,
+  children,
+}: {
+  user: User
+  onLogout: () => void
+  children: React.ReactNode
+}) {
+  const linkStyle = { display: 'block', marginBottom: '0.75rem', textDecoration: 'none', color: '#0366d6' }
   return (
-    <nav style={{ padding: '1rem', borderBottom: '1px solid #ccc' }}>
-      <Link to="/" style={{ marginRight: '1rem' }}>Home</Link>
-      {user.role === 'owner' && (
-        <Link to="/settings/members" style={{ marginRight: '1rem' }}>Settings</Link>
-      )}
-      <button type="button" onClick={onLogout}>Log out</button>
-    </nav>
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      <aside
+        style={{
+          width: '11rem',
+          borderRight: '1px solid #ccc',
+          padding: '1rem',
+          background: '#f8f8f8',
+        }}
+      >
+        <div style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Cluster Console</div>
+        <nav>
+          <Link to="/" style={linkStyle}>Home</Link>
+          <Link to="/workloads" style={linkStyle}>Workloads</Link>
+          {user.role === 'owner' && (
+            <Link to="/settings/members" style={linkStyle}>Settings</Link>
+          )}
+        </nav>
+        <button type="button" onClick={onLogout} style={{ marginTop: '1rem' }}>
+          Log out
+        </button>
+      </aside>
+      <main style={{ flex: 1 }}>{children}</main>
+    </div>
   )
 }
 
@@ -79,17 +106,20 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <AppNav user={user} onLogout={onLogout} />
-      <Routes>
-        <Route path="/" element={<Home user={user} />} />
-        <Route path="/settings" element={<OwnerGuard user={user} />}>
-          <Route index element={<Navigate to="members" replace />} />
-          <Route path="members" element={<SettingsMembers />} />
-          <Route path="sets" element={<SettingsSets />} />
-          <Route path="audit" element={<SettingsAudit />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <AppShell user={user} onLogout={onLogout}>
+        <Routes>
+          <Route path="/" element={<Home user={user} />} />
+          <Route path="/workloads" element={<Workloads />} />
+          <Route path="/workloads/:ns/pods/:pod/logs" element={<PodLogs />} />
+          <Route path="/settings" element={<OwnerGuard user={user} />}>
+            <Route index element={<Navigate to="members" replace />} />
+            <Route path="members" element={<SettingsMembers />} />
+            <Route path="sets" element={<SettingsSets />} />
+            <Route path="audit" element={<SettingsAudit />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AppShell>
     </BrowserRouter>
   )
 }

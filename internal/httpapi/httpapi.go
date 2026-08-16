@@ -8,6 +8,7 @@ import (
 	"github.com/zixflow/k8s/internal/audit"
 	"github.com/zixflow/k8s/internal/auth"
 	"github.com/zixflow/k8s/internal/kube"
+	"github.com/zixflow/k8s/internal/streams"
 	"github.com/zixflow/k8s/internal/store"
 )
 
@@ -19,7 +20,8 @@ type Deps struct {
 	InstallNS  string
 	TrustProxy bool
 	WebDist    string // optional; falls back to WEB_DIST env
-	Kube       *kube.Client
+	Kube        *kube.Client
+	LogStreamer streams.LogStreamer
 }
 
 func New(deps Deps) http.Handler {
@@ -32,6 +34,7 @@ func New(deps Deps) http.Handler {
 		registerMemberRoutes(mux, deps.Auth, deps.Store, deps.InstallNS, deps.Audit, deps.TrustProxy)
 		registerAuditRoutes(mux, deps.Auth, deps.Store, deps.Audit, deps.TrustProxy)
 		registerK8sRoutes(mux, deps)
+		registerStreamRoutes(mux, deps)
 	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
