@@ -1,6 +1,10 @@
 package rbac
 
-import "github.com/zixflow/k8s/internal/store"
+import (
+	"strings"
+
+	"github.com/zixflow/k8s/internal/store"
+)
 
 type Request struct {
 	User            store.User
@@ -29,7 +33,10 @@ func Allow(req Request) bool {
 	if req.PermissionSet == nil {
 		return false
 	}
-	if !req.ClusterScoped && req.Namespace == req.InstallNS {
+	if strings.HasPrefix(req.Module, "settings.") {
+		return false
+	}
+	if req.InstallNS != "" && req.Namespace == req.InstallNS {
 		return false
 	}
 	if !req.ClusterScoped && !namespaceAllowed(req.User.Namespaces, req.Namespace) {

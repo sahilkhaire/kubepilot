@@ -105,6 +105,54 @@ func TestAllow(t *testing.T) {
 			}(),
 			want: false,
 		},
+		{
+			name: "member deny settings members with grant",
+			req: func() rbac.Request {
+				r := member([]string{"*"}, map[string][]string{"settings.members": {"view"}})
+				r.Module = "settings.members"
+				r.Action = "view"
+				r.Namespace = ""
+				r.ClusterScoped = true
+				return r
+			}(),
+			want: false,
+		},
+		{
+			name: "member deny namespaces delete on install NS",
+			req: func() rbac.Request {
+				r := member([]string{"*"}, map[string][]string{"namespaces": {"view", "delete"}})
+				r.Module = "namespaces"
+				r.Action = "delete"
+				r.Namespace = installNS
+				r.ClusterScoped = true
+				return r
+			}(),
+			want: false,
+		},
+		{
+			name: "member deny pods view on install NS",
+			req: func() rbac.Request {
+				r := member([]string{"*"}, map[string][]string{"pods": {"view"}})
+				r.Module = "pods"
+				r.Action = "view"
+				r.Namespace = installNS
+				r.ClusterScoped = false
+				return r
+			}(),
+			want: false,
+		},
+		{
+			name: "member allow nodes view cluster scoped",
+			req: func() rbac.Request {
+				r := member([]string{"dev"}, map[string][]string{"nodes": {"view"}})
+				r.Module = "nodes"
+				r.Action = "view"
+				r.Namespace = ""
+				r.ClusterScoped = true
+				return r
+			}(),
+			want: true,
+		},
 	}
 
 	for _, tt := range tests {
