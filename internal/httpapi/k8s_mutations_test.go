@@ -281,3 +281,35 @@ func TestDeletePodInstallNSForbidden(t *testing.T) {
 		t.Fatalf("code=%d want %d", rec.Code, http.StatusForbidden)
 	}
 }
+
+func TestDeletePodInstallNSForbiddenBeforeConfirmValidation(t *testing.T) {
+	t.Parallel()
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view", "delete"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"*"})
+
+	cs := fake.NewSimpleClientset(
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod-install", Namespace: testInstallNS}},
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testInstallNS}},
+	)
+	deleteCalled := false
+	cs.PrependReactor("delete", "pods", func(action ktesting.Action) (bool, runtime.Object, error) {
+		deleteCalled = true
+		return false, nil, nil
+	})
+	h := newK8sHandler(t, st, kube.ForTest(cs))
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	body := strings.NewReader(`{"confirm":"wrong-name"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/k8s/namespaces/"+testInstallNS+"/pods/pod-install/delete", body)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), http.StatusForbidden)
+	}
+	if deleteCalled {
+		t.Fatal("delete reactor should not run for install namespace")
+	}
+}

@@ -89,11 +89,11 @@ func handleWorkloadDelete(w http.ResponseWriter, r *http.Request, deps Deps, mod
 	if !ok {
 		return
 	}
-	if !confirmMatches(r, name) {
-		writeError(w, http.StatusBadRequest, "confirmation required")
+	if !kubeMutationAllowed(w, r, deps, u, module, "delete", ns) {
 		return
 	}
-	if !kubeMutationAllowed(w, r, deps, u, module, "delete", ns) {
+	if !confirmMatches(r, name) {
+		writeError(w, http.StatusBadRequest, "confirmation required")
 		return
 	}
 	if deps.Kube == nil {
@@ -134,11 +134,11 @@ func handleWorkloadScale(w http.ResponseWriter, r *http.Request, deps Deps, modu
 	if !ok {
 		return
 	}
-	replicas, ok := parseScaleRequest(w, r)
-	if !ok {
+	if !kubeMutationAllowed(w, r, deps, u, module, "scale", ns) {
 		return
 	}
-	if !kubeMutationAllowed(w, r, deps, u, module, "scale", ns) {
+	replicas, ok := parseScaleRequest(w, r)
+	if !ok {
 		return
 	}
 	if deps.Kube == nil {
@@ -221,11 +221,11 @@ func handleDeploymentRollback(w http.ResponseWriter, r *http.Request, deps Deps)
 	if !ok {
 		return
 	}
-	revision, ok := parseRollbackRequest(w, r)
-	if !ok {
+	if !kubeMutationAllowed(w, r, deps, u, module, "rollback", ns) {
 		return
 	}
-	if !kubeMutationAllowed(w, r, deps, u, module, "rollback", ns) {
+	revision, ok := parseRollbackRequest(w, r)
+	if !ok {
 		return
 	}
 	if deps.Kube == nil {

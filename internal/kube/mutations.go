@@ -174,7 +174,7 @@ func (c *Client) TriggerCronJob(ctx context.Context, ns, name string) (string, e
 	if err != nil {
 		return "", err
 	}
-	jobName := name + "-manual-" + strconv.FormatInt(time.Now().Unix(), 10)
+	jobName := name + "-manual-" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        jobName,
