@@ -1,0 +1,42 @@
+# Cluster Console
+
+In-cluster Kubernetes web dashboard for a single cluster. The published container image is **generic** — no cluster URLs, secrets, or hostnames are baked in. Install with Helm and provide configuration via values and Secrets.
+
+Product documentation lives in [docs/](docs/README.md).
+
+## Quick install
+
+```bash
+helm install cluster-console deploy/charts/cluster-console \
+  --namespace cluster-console --create-namespace \
+  --set image.repository=<your-registry>/cluster-console \
+  --set image.tag=<version> \
+  --set mongodbUri=mongodb://<host>:27017/cluster_console \
+  --set sessionSecret=<random-string> \
+  --set ownerPassword=<owner-password> \
+  --set ingress.host=console.example.com
+```
+
+Alternatively, create a Secret yourself and set `existingSecret` instead of `mongodbUri`, `sessionSecret`, and `ownerPassword`.
+
+## Required Helm values
+
+| Value | Description |
+| --- | --- |
+| `image.repository` | Container image (public or your mirror) |
+| `image.tag` | Image tag |
+| `mongodbUri` or `existingSecret` | MongoDB connection (URI for chart-generated Secret, or name of an existing Secret) |
+| `ownerPassword` | Owner account password (from env on every boot; not changeable in UI) |
+| `sessionSecret` | Cookie signing secret |
+
+The chart sets `POD_NAMESPACE` on the Deployment via the Downward API (`metadata.namespace`). Default `replicaCount` is 2 with `sessionAffinity: ClientIP` on the Service for stream stickiness. A PodDisruptionBudget (`minAvailable: 1`) is created when replicas ≥ 2 (disable with `podDisruptionBudget.enabled: false`).
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for ingress, TLS, Cloudflare Access, and full values reference.
+
+## Development
+
+```bash
+go test -race ./...
+cd web && npm run build
+make chart-check   # requires helm
+```

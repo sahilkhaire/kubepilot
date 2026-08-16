@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import EmptyState from '../components/EmptyState'
 
 type ResourceItem = {
   metadata?: { name?: string; namespace?: string }
@@ -128,7 +129,7 @@ export default function ResourceGroupPage({ title, basePath, modules }: Resource
               {spec.clusterScoped && <span style={{ color: '#666', fontWeight: 'normal' }}> (cluster)</span>}
             </h2>
             {items.length === 0 ? (
-              <p style={{ color: '#666' }}>No {spec.label.toLowerCase()}.</p>
+              <EmptyState>No {spec.label.toLowerCase()}.</EmptyState>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>

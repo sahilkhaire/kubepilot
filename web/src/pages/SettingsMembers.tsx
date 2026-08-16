@@ -9,6 +9,7 @@ import {
   type Member,
   type PermissionSet,
 } from '../api'
+import EmptyState from '../components/EmptyState'
 
 function parseNamespaces(input: string): string[] {
   return input
@@ -102,11 +103,11 @@ export default function SettingsMembers() {
     }
   }
 
-  async function onDelete(id: string) {
-    if (!confirm('Delete this member?')) return
+  async function onDelete(member: Member) {
+    if (!confirm(`Delete member "${member.username}"? This cannot be undone.`)) return
     setError('')
     try {
-      await deleteMember(id)
+      await deleteMember(member.id)
       await load()
     } catch {
       setError('Failed to delete member')
@@ -184,12 +185,13 @@ export default function SettingsMembers() {
                 <button type="button" onClick={() => onToggleEnabled(m)}>
                   {m.enabled ? 'Disable' : 'Enable'}
                 </button>
-                <button type="button" onClick={() => onDelete(m.id)}>Delete</button>
+                <button type="button" onClick={() => onDelete(m)}>Delete</button>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      {members.length === 0 && <EmptyState>No members yet.</EmptyState>}
     </div>
   )
 }

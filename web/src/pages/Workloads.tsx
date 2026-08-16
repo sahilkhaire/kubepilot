@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import EmptyState from '../components/EmptyState'
 import MetricsPanel, { MetricsCell } from '../components/MetricsPanel'
 
 type Pod = {
@@ -135,7 +136,9 @@ export default function Workloads() {
           })}
         </tbody>
       </table>
-      {pods.length === 0 && namespace && <p>No pods in this namespace.</p>}
+      {pods.length === 0 && namespace && !error && (
+        <EmptyState>No pods in this namespace.</EmptyState>
+      )}
     </div>
   )
 }

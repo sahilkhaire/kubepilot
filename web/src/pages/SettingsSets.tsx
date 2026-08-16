@@ -6,6 +6,7 @@ import {
   updatePermissionSet,
   type PermissionSet,
 } from '../api'
+import EmptyState from '../components/EmptyState'
 
 type CreateMode = 'template' | 'custom'
 
@@ -82,11 +83,11 @@ export default function SettingsSets() {
     }
   }
 
-  async function onDelete(id: string) {
-    if (!confirm('Delete this permission set?')) return
+  async function onDelete(ps: PermissionSet) {
+    if (!confirm(`Delete permission set "${ps.name}"? This cannot be undone.`)) return
     setError('')
     try {
-      await deletePermissionSet(id)
+      await deletePermissionSet(ps.id)
       await load()
     } catch {
       setError('Failed to delete permission set')
@@ -175,7 +176,7 @@ export default function SettingsSets() {
                 ) : (
                   <>
                     <button type="button" onClick={() => startEdit(ps)}>Edit</button>
-                    <button type="button" onClick={() => onDelete(ps.id)}>Delete</button>
+                    <button type="button" onClick={() => onDelete(ps)}>Delete</button>
                   </>
                 )}
               </td>
@@ -183,6 +184,7 @@ export default function SettingsSets() {
           ))}
         </tbody>
       </table>
+      {sets.length === 0 && <EmptyState>No permission sets yet.</EmptyState>}
     </div>
   )
 }

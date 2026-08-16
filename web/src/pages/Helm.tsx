@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import EmptyState from '../components/EmptyState'
 
 type HelmRelease = {
   name: string
@@ -88,7 +89,9 @@ export default function Helm() {
   }, [namespace])
 
   async function onUninstall(rel: HelmRelease) {
-    const ok = window.confirm(`Uninstall release "${rel.name}" in namespace "${rel.namespace}"?`)
+    const ok = window.confirm(
+      `Uninstall release "${rel.name}" in namespace "${rel.namespace}"? This cannot be undone.`,
+    )
     if (!ok) return
     setPending(rel.name)
     setError('')
@@ -162,7 +165,9 @@ export default function Helm() {
           ))}
         </tbody>
       </table>
-      {releases.length === 0 && namespace && <p>No releases in this namespace.</p>}
+      {releases.length === 0 && namespace && !error && (
+        <EmptyState>No releases in this namespace.</EmptyState>
+      )}
     </div>
   )
 }

@@ -1,0 +1,13 @@
+{{- if include "cluster-console.pdb.enabled" . }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "cluster-console.fullname" . }}
+  labels:
+    {{- include "cluster-console.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "cluster-console.selectorLabels" . | nindent 6 }}
+{{- end }}

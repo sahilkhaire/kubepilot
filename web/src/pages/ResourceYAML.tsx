@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { deleteK8sResource } from '../api'
+import DeleteConfirm from '../components/DeleteConfirm'
 
 const gvkForModule: Record<string, string> = {
   pods: 'v1/Pod',
@@ -57,6 +59,10 @@ export default function ResourceYAML({ backLink, backLabel }: ResourceYAMLProps)
   const [error, setError] = useState('')
   const [applying, setApplying] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const navigate = useNavigate()
 
   const module = resource ?? ''
   const clusterScoped = clusterScopedModules.has(module)
@@ -129,6 +135,24 @@ export default function ResourceYAML({ backLink, backLabel }: ResourceYAMLProps)
     }
   }
 
+  async function onDelete() {
+    if (!module || !name) return
+    setDeleting(true)
+    setError('')
+    try {
+      await deleteK8sResource(module, name, {
+        namespace: clusterScoped ? undefined : ns,
+        clusterScoped,
+      })
+      setDeleteOpen(false)
+      navigate(backLink)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'delete failed')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   if (loading) {
     return <p>Loading…</p>
   }
@@ -148,8 +172,16 @@ export default function ResourceYAML({ backLink, backLabel }: ResourceYAMLProps)
         style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.875rem' }}
       />
       <div style={{ marginTop: '1rem' }}>
-        <button type="button" onClick={() => setConfirmOpen(true)} disabled={applying}>
+        <button type="button" onClick={() => setConfirmOpen(true)} disabled={applying || deleting}>
           Apply
+        </button>
+        <button
+          type="button"
+          onClick={() => setDeleteOpen(true)}
+          disabled={applying || deleting}
+          style={{ marginLeft: '0.5rem' }}
+        >
+          Delete
         </button>
       </div>
       {confirmOpen && (
@@ -174,6 +206,15 @@ export default function ResourceYAML({ backLink, backLabel }: ResourceYAMLProps)
             Cancel
           </button>
         </div>
+      )}
+      {deleteOpen && name && (
+        <DeleteConfirm
+          resourceName={name}
+          resourceLabel={module}
+          pending={deleting}
+          onConfirm={onDelete}
+          onCancel={() => setDeleteOpen(false)}
+        />
       )}
     </div>
   )

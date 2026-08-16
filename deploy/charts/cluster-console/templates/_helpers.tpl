@@ -60,6 +60,17 @@ Service account name
 {{- end }}
 
 {{/*
+PodDisruptionBudget enabled: explicit value, else true when replicaCount >= 2.
+*/}}
+{{- define "cluster-console.pdb.enabled" -}}
+{{- if kindIs "bool" .Values.podDisruptionBudget.enabled -}}
+{{- .Values.podDisruptionBudget.enabled -}}
+{{- else -}}
+{{- ge (int .Values.replicaCount) 2 -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Secret name for envFrom
 */}}
 {{- define "cluster-console.secretName" -}}

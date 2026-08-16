@@ -31,6 +31,9 @@ ownerPassword: ""
 
 sessionAffinity: ClientIP
 
+podDisruptionBudget:
+  enabled:  # unset = true when replicaCount >= 2
+
 serviceAccount:
   create: true
   name: ""

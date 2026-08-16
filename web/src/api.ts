@@ -270,3 +270,23 @@ export async function deleteAuditFilter(filters: AuditFilters): Promise<void> {
     throw new Error('failed to delete audit entries')
   }
 }
+
+export async function deleteK8sResource(
+  module: string,
+  name: string,
+  options?: { namespace?: string; clusterScoped?: boolean },
+): Promise<void> {
+  const clusterScoped = options?.clusterScoped ?? false
+  const ns = options?.namespace
+  const path = clusterScoped
+    ? `/api/k8s/${encodeURIComponent(module)}/${encodeURIComponent(name)}/delete`
+    : `/api/k8s/namespaces/${encodeURIComponent(ns!)}/${encodeURIComponent(module)}/${encodeURIComponent(name)}/delete`
+  const res = await apiFetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: name }),
+  })
+  if (!res.ok) {
+    throw new Error('failed to delete resource')
+  }
+}
