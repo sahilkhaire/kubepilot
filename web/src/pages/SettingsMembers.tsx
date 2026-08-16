@@ -49,10 +49,22 @@ export default function SettingsMembers() {
     load()
   }, [])
 
+  function dismissPassword() {
+    setGeneratedPassword('')
+  }
+
+  async function copyPassword() {
+    if (!generatedPassword) return
+    try {
+      await navigator.clipboard.writeText(generatedPassword)
+    } catch {
+      setError('Failed to copy password')
+    }
+  }
+
   async function onInvite(e: React.FormEvent) {
     e.preventDefault()
     setError('')
-    setGeneratedPassword('')
     try {
       const result = await createMember({
         username: inviteUsername,
@@ -72,7 +84,6 @@ export default function SettingsMembers() {
 
   async function onResetPassword(id: string) {
     setError('')
-    setGeneratedPassword('')
     try {
       const result = await resetMemberPassword(id)
       setGeneratedPassword(result.password)
@@ -108,10 +119,16 @@ export default function SettingsMembers() {
     <div>
       {error && <p style={{ color: '#b00020' }}>{error}</p>}
       {generatedPassword && (
-        <p style={{ background: '#f0f0f0', padding: '0.75rem' }}>
-          Generated password (copy now — it will not be shown again):{' '}
-          <strong>{generatedPassword}</strong>
-        </p>
+        <div style={{ background: '#f0f0f0', padding: '0.75rem', marginBottom: '1rem' }}>
+          <p style={{ margin: '0 0 0.5rem' }}>
+            Generated password (copy now — dismiss to hide):{' '}
+            <strong>{generatedPassword}</strong>
+          </p>
+          <button type="button" onClick={copyPassword}>Copy</button>
+          <button type="button" onClick={dismissPassword} style={{ marginLeft: '0.5rem' }}>
+            Dismiss
+          </button>
+        </div>
       )}
 
       <h2>Invite member</h2>

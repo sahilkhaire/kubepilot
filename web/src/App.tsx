@@ -43,10 +43,16 @@ export default function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    me().then((u) => {
-      setUser(u)
-      setLoading(false)
-    })
+    me()
+      .then((u) => {
+        setUser(u)
+      })
+      .catch(() => {
+        setUser(null)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
   }, [])
 
   async function onLogout() {
