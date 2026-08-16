@@ -57,6 +57,13 @@ var moduleGVK = map[string]string{
 	"pvcs":              "v1/PersistentVolumeClaim",
 	"pvs":               "v1/PersistentVolume",
 	"storageclasses":    "storage.k8s.io/v1/StorageClass",
+	"nodes":             "v1/Node",
+	"namespaces":        "v1/Namespace",
+	"serviceaccounts":   "v1/ServiceAccount",
+	"roles":             "rbac.authorization.k8s.io/v1/Role",
+	"rolebindings":      "rbac.authorization.k8s.io/v1/RoleBinding",
+	"clusterroles":      "rbac.authorization.k8s.io/v1/ClusterRole",
+	"clusterrolebindings": "rbac.authorization.k8s.io/v1/ClusterRoleBinding",
 }
 
 // GVKForModule returns the slash GVK form for a catalog resource module.

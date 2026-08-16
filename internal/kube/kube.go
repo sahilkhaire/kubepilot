@@ -19,6 +19,7 @@ type Client struct {
 	Dynamic dynamic.Interface
 	Mapper  meta.RESTMapper
 	YAML    YAMLApplier // optional override for tests
+	Drainer NodeDrainer // optional override for tests
 }
 
 func InCluster() (*kubernetes.Clientset, error) {

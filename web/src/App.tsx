@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom'
 import { logout, me, type User } from './api'
+import AccessControl from './pages/AccessControl'
 import ChangePassword from './pages/ChangePassword'
 import Config from './pages/Config'
+import Events from './pages/Events'
 import Login from './pages/Login'
 import Network from './pages/Network'
+import Nodes from './pages/Nodes'
 import PodLogs from './pages/PodLogs'
 import ResourceYAML from './pages/ResourceYAML'
 import WorkloadYAML from './pages/WorkloadYAML'
@@ -50,6 +53,9 @@ function AppShell({
         <nav>
           <Link to="/" style={linkStyle}>Home</Link>
           <Link to="/workloads" style={linkStyle}>Workloads</Link>
+          <Link to="/nodes" style={linkStyle}>Nodes</Link>
+          <Link to="/events" style={linkStyle}>Events</Link>
+          <Link to="/access" style={linkStyle}>Access Control</Link>
           <Link to="/config" style={linkStyle}>Config</Link>
           <Link to="/network" style={linkStyle}>Network</Link>
           <Link to="/storage" style={linkStyle}>Storage</Link>
@@ -120,6 +126,12 @@ export default function App() {
           <Route path="/workloads" element={<Workloads />} />
           <Route path="/workloads/:ns/:resource/:name/yaml" element={<WorkloadYAML />} />
           <Route path="/workloads/:ns/pods/:pod/logs" element={<PodLogs />} />
+          <Route path="/nodes" element={<Nodes />} />
+          <Route path="/nodes/cluster/:resource/:name/yaml" element={<ResourceYAML backLink="/nodes" backLabel="Nodes" />} />
+          <Route path="/events" element={<Events />} />
+          <Route path="/access" element={<AccessControl />} />
+          <Route path="/access/:ns/:resource/:name/yaml" element={<ResourceYAML backLink="/access" backLabel="Access Control" />} />
+          <Route path="/access/cluster/:resource/:name/yaml" element={<ResourceYAML backLink="/access" backLabel="Access Control" />} />
           <Route path="/config" element={<Config />} />
           <Route path="/config/:ns/:resource/:name/yaml" element={<ResourceYAML backLink="/config" backLabel="Config" />} />
           <Route path="/config/cluster/:resource/:name/yaml" element={<ResourceYAML backLink="/config" backLabel="Config" />} />

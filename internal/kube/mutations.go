@@ -240,6 +240,20 @@ func (c *Client) DeleteResource(ctx context.Context, module, ns, name string) er
 		return c.Inner.CoreV1().PersistentVolumes().Delete(ctx, name, metav1.DeleteOptions{})
 	case "storageclasses":
 		return c.Inner.StorageV1().StorageClasses().Delete(ctx, name, metav1.DeleteOptions{})
+	case "nodes":
+		return c.Inner.CoreV1().Nodes().Delete(ctx, name, metav1.DeleteOptions{})
+	case "namespaces":
+		return c.Inner.CoreV1().Namespaces().Delete(ctx, name, metav1.DeleteOptions{})
+	case "serviceaccounts":
+		return c.Inner.CoreV1().ServiceAccounts(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	case "roles":
+		return c.Inner.RbacV1().Roles(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	case "rolebindings":
+		return c.Inner.RbacV1().RoleBindings(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	case "clusterroles":
+		return c.Inner.RbacV1().ClusterRoles().Delete(ctx, name, metav1.DeleteOptions{})
+	case "clusterrolebindings":
+		return c.Inner.RbacV1().ClusterRoleBindings().Delete(ctx, name, metav1.DeleteOptions{})
 	default:
 		return fmt.Errorf("unknown resource %q", module)
 	}
