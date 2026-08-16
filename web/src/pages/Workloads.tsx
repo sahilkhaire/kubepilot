@@ -101,7 +101,7 @@ export default function Workloads() {
         <thead>
           <tr>
             <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Name</th>
-            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Logs</th>
+            <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '0.5rem' }}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -113,7 +113,11 @@ export default function Workloads() {
                 <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>{name}</td>
                 <td style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
                   <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/logs`}>
-                    View logs
+                    Logs
+                  </Link>
+                  {' · '}
+                  <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/yaml`}>
+                    YAML
                   </Link>
                 </td>
               </tr>

@@ -29,7 +29,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	clientset, err := kube.InCluster()
+	kubeClient, err := kube.NewInCluster()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func main() {
 		Audit:      auditor,
 		InstallNS:  cfg.PodNamespace,
 		TrustProxy: cfg.TrustProxy,
-		Kube:       kube.ForTest(clientset),
+		Kube:       kubeClient,
 	})
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, handler))
 }

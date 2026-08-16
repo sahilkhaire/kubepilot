@@ -43,6 +43,7 @@ func registerK8sRoutes(mux *http.ServeMux, deps Deps) {
 		handleClusterOverview(w, r, deps)
 	})
 	registerK8sMutationRoutes(mux, deps)
+	registerK8sYAMLRoutes(mux, deps)
 }
 
 func handleListNamespaces(w http.ResponseWriter, r *http.Request, deps Deps) {

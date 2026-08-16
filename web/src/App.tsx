@@ -4,6 +4,7 @@ import { logout, me, type User } from './api'
 import ChangePassword from './pages/ChangePassword'
 import Login from './pages/Login'
 import PodLogs from './pages/PodLogs'
+import WorkloadYAML from './pages/WorkloadYAML'
 import SettingsAudit from './pages/SettingsAudit'
 import SettingsLayout from './pages/SettingsLayout'
 import SettingsMembers from './pages/SettingsMembers'
@@ -110,6 +111,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home user={user} />} />
           <Route path="/workloads" element={<Workloads />} />
+          <Route path="/workloads/:ns/:resource/:name/yaml" element={<WorkloadYAML />} />
           <Route path="/workloads/:ns/pods/:pod/logs" element={<PodLogs />} />
           <Route path="/settings" element={<OwnerGuard user={user} />}>
             <Route index element={<Navigate to="members" replace />} />
