@@ -21,8 +21,8 @@ export function AppShell({
         } as React.CSSProperties
       }
     >
-      <AppSidebar variant="inset" user={user} onLogout={onLogout} />
-      <SidebarInset className="min-h-0 overflow-hidden">
+      <AppSidebar variant="sidebar" user={user} onLogout={onLogout} />
+      <SidebarInset className="min-h-0 overflow-hidden rounded-none shadow-none md:m-0">
         <SiteHeader />
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
       </SidebarInset>

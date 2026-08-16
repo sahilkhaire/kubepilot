@@ -37,15 +37,17 @@ export default function ResourceYAML({ backLink, backLabel }: ResourceYAMLProps)
         </Button>
       </PageHeader>
       {name ? (
-        <ResourceYAMLEditor
-          module={module}
-          name={name}
-          namespace={ns}
-          clusterScoped={clusterScoped}
-          canEdit={can(user, grantModule, 'yaml_edit')}
-          canDelete={can(user, grantModule, 'delete')}
-          onDeleted={() => navigate(listHref)}
-        />
+        <div className="min-h-0 flex-1 p-3">
+          <ResourceYAMLEditor
+            module={module}
+            name={name}
+            namespace={ns}
+            clusterScoped={clusterScoped}
+            canEdit={can(user, grantModule, 'yaml_edit')}
+            canDelete={can(user, grantModule, 'delete')}
+            onDeleted={() => navigate(listHref)}
+          />
+        </div>
       ) : null}
     </PageBody>
   )

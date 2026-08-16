@@ -126,7 +126,7 @@ export default function PodExec() {
         </Button>
       </PageHeader>
       <ErrorAlert message={error} />
-      <div ref={termRef} className="min-h-0 flex-1 rounded-xl bg-zinc-950 p-2" />
+      <div ref={termRef} className="min-h-0 flex-1 rounded-none bg-zinc-950 p-2" />
     </PageBody>
   )
 }

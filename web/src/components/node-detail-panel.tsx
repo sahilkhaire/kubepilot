@@ -12,6 +12,7 @@ import type { User } from '@/api'
 import MetricsPanel from '@/components/MetricsPanel'
 import ResourceYAMLEditor from '@/components/resource-yaml-editor'
 import { SortableHead } from '@/components/sortable-head'
+import { IconActionButton } from '@/components/icon-action-button'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -196,38 +197,31 @@ export default function NodeDetailPanel({
   }
 
   return (
-    <aside className="flex min-h-0 w-full shrink-0 flex-col border-l bg-background sm:w-md lg:w-lg xl:w-xl">
+    <aside className="flex min-h-0 w-full shrink-0 flex-col overflow-hidden border-l bg-background sm:w-md lg:w-lg xl:w-xl">
       <header className="flex items-center gap-2 border-b px-3 py-2">
         <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">Node: {name}</h2>
         {canNode(user, 'cordon') ? (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label={unschedulable ? 'Uncordon' : 'Cordon'}
-            onClick={onCordon}
-          >
+          <IconActionButton tooltip={unschedulable ? 'Uncordon' : 'Cordon'} onClick={onCordon}>
             {unschedulable ? <PlayIcon /> : <PauseIcon />}
-          </Button>
+          </IconActionButton>
         ) : null}
-        <Button variant="ghost" size="icon-xs" aria-label="Refresh" onClick={() => void refresh()} disabled={refreshing}>
+        <IconActionButton tooltip="Refresh" onClick={() => void refresh()} disabled={refreshing}>
           <RefreshCwIcon className={refreshing ? 'animate-spin' : undefined} />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Edit YAML"
+        </IconActionButton>
+        <IconActionButton
+          tooltip={view === 'yaml' ? 'Details' : 'Edit'}
           onClick={() => onViewChange(view === 'yaml' ? 'details' : 'yaml')}
         >
           <PencilIcon />
-        </Button>
+        </IconActionButton>
         {canNode(user, 'delete') ? (
-          <Button variant="ghost" size="icon-xs" aria-label="Delete node" onClick={onDelete}>
+          <IconActionButton tooltip="Delete" onClick={onDelete}>
             <Trash2Icon />
-          </Button>
+          </IconActionButton>
         ) : null}
-        <Button variant="ghost" size="icon-xs" aria-label="Close" onClick={onClose}>
+        <IconActionButton tooltip="Close" onClick={onClose}>
           <XIcon />
-        </Button>
+        </IconActionButton>
       </header>
 
       {view === 'yaml' ? (
@@ -240,7 +234,7 @@ export default function NodeDetailPanel({
           />
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
+        <div className="min-h-0 flex-1 overflow-auto overscroll-contain px-3 py-3">
           <section className="space-y-2">
             <h3 className="text-xs font-medium text-muted-foreground">Metrics</h3>
             <MetricsPanel scope="node" name={name} compact />

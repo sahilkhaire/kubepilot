@@ -189,8 +189,8 @@ export default function CustomResources() {
         <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter…" className="h-7 w-48 text-xs" />
       </PageHeader>
       <ErrorAlert message={error} />
-      <div className="min-h-0 flex-1 space-y-3 overflow-auto">
-        <div className="rounded-md border">
+      <div className="min-h-0 flex-1 space-y-0 overflow-auto">
+        <div>
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>
@@ -245,7 +245,7 @@ export default function CustomResources() {
         </div>
 
         {selected ? (
-          <div className="rounded-md border">
+          <div className="border-t">
             <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
               <p className="text-sm font-medium">Instances — {selected.metadata?.name}</p>
               {namespaced ? (

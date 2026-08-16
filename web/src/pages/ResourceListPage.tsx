@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { EllipsisVerticalIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { deleteK8sResource, type User } from '@/api'
+import { deleteK8sResource, restartK8sResource, scaleK8sResource, type User } from '@/api'
 import DeleteConfirm from '@/components/DeleteConfirm'
 import EmptyState from '@/components/EmptyState'
+import DeploymentDetailPanel from '@/components/deployment-detail-panel'
 import ResourceYAMLSheet from '@/components/resource-yaml-sheet'
+import { ScaleDialog } from '@/components/scale-dialog'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { ErrorAlert } from '@/components/error-alert'
 import { ALL_NAMESPACES, isAllNamespaces, NamespaceSelect, resolveNamespaceValue } from '@/components/namespace-select'
 import { PageBody, PageHeader } from '@/components/page-header'
@@ -13,7 +16,15 @@ import { PageLoading } from '@/components/page-loading'
 import { MetricsCell, metricSortValue, useMetricSortTick } from '@/components/MetricsPanel'
 import { SortableHead } from '@/components/sortable-head'
 import { Badge } from '@/components/ui/badge'
+import { ActionTooltip } from '@/components/icon-action-button'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,11 +60,14 @@ import {
   pvcStatus,
   pvcStorage,
   replicaReady,
+  replicaDesired,
   daemonReady,
   secretType,
   serviceClusterIP,
   serviceType,
   k8sQuantityNumber,
+  podMatchesLabels,
+  selectorMatchLabels,
   type K8sObject,
 } from '@/lib/k8s-fields'
 import { ratioSortValue, sortBy, timestampSortValue, useTableSort } from '@/lib/table-sort'
@@ -118,6 +132,10 @@ function ResourceRowMenu({
   module,
   user,
   busy,
+  onDetails,
+  onScale,
+  onRestart,
+  onLogs,
   onYaml,
   onDelete,
 }: {
@@ -126,32 +144,57 @@ function ResourceRowMenu({
   module: string
   user: User
   busy: boolean
+  onDetails?: () => void
+  onScale?: () => void
+  onRestart?: () => void
+  onLogs?: () => void
   onYaml: () => void
   onDelete: () => void
 }) {
   const showLogs = module === 'pods' && can(user, 'pods', 'logs')
   const showShell = module === 'pods' && can(user, 'pods', 'exec')
   const showDelete = module !== 'endpoints' && can(user, module, 'delete')
+  const isDeployment = module === 'deployments'
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-xs" aria-label={`Actions for ${name}`} disabled={busy}>
-          <EllipsisVerticalIcon />
-        </Button>
-      </DropdownMenuTrigger>
+      <ActionTooltip label="Actions">
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-xs" aria-label={`Actions for ${name}`} disabled={busy}>
+            <EllipsisVerticalIcon />
+          </Button>
+        </DropdownMenuTrigger>
+      </ActionTooltip>
       <DropdownMenuContent align="end" className="min-w-40">
-        <DropdownMenuItem onClick={onYaml}>YAML</DropdownMenuItem>
-        {showLogs ? (
-          <DropdownMenuItem asChild>
-            <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/logs`}>Logs</Link>
-          </DropdownMenuItem>
-        ) : null}
-        {showShell ? (
-          <DropdownMenuItem asChild>
-            <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/exec`}>Shell</Link>
-          </DropdownMenuItem>
-        ) : null}
+        {isDeployment ? (
+          <>
+            <DropdownMenuItem onClick={onDetails}>Show details</DropdownMenuItem>
+            {can(user, 'deployments', 'scale') ? (
+              <DropdownMenuItem onClick={onScale}>Scale</DropdownMenuItem>
+            ) : null}
+            {can(user, 'deployments', 'restart') ? (
+              <DropdownMenuItem onClick={onRestart}>Restart</DropdownMenuItem>
+            ) : null}
+            {can(user, 'pods', 'logs') ? <DropdownMenuItem onClick={onLogs}>Logs</DropdownMenuItem> : null}
+            {can(user, 'deployments', 'yaml_edit') ? (
+              <DropdownMenuItem onClick={onYaml}>Edit</DropdownMenuItem>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <DropdownMenuItem onClick={onYaml}>YAML</DropdownMenuItem>
+            {showLogs ? (
+              <DropdownMenuItem asChild>
+                <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/logs`}>Logs</Link>
+              </DropdownMenuItem>
+            ) : null}
+            {showShell ? (
+              <DropdownMenuItem asChild>
+                <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/exec`}>Shell</Link>
+              </DropdownMenuItem>
+            ) : null}
+          </>
+        )}
         {showDelete ? (
           <>
             <DropdownMenuSeparator />
@@ -182,6 +225,13 @@ export default function ResourceListPage({
   const [yamlTarget, setYamlTarget] = useState<YAMLTarget | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ name: string; namespace?: string } | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const [panelView, setPanelView] = useState<'details' | 'yaml'>('details')
+  const [scaleTarget, setScaleTarget] = useState<{ name: string; namespace: string; replicas: number } | null>(null)
+  const [restartTarget, setRestartTarget] = useState<{ name: string; namespace: string } | null>(null)
+  const [logPods, setLogPods] = useState<{ name: string; namespace: string; phase: string }[] | null>(null)
+  const [pendingAction, setPendingAction] = useState(false)
+  const navigate = useNavigate()
 
   const clusterScoped = Boolean(kind?.clusterScoped)
   const module = kind?.module ?? ''
@@ -267,6 +317,15 @@ export default function ResourceListPage({
       ),
     [visible, sort, module, namespace, metricsTick],
   )
+  const selected = useMemo(() => {
+    if (module !== 'deployments' || !selectedKey) return null
+    return items.find((item) => `${objectNamespace(item)}/${objectName(item)}` === selectedKey) ?? null
+  }, [items, module, selectedKey])
+
+  useEffect(() => {
+    setSelectedKey(null)
+    setPanelView('details')
+  }, [module])
 
   if (!kind || !section) {
     return (
@@ -295,6 +354,7 @@ export default function ResourceListPage({
       toast.success(`Deleted ${deleteTarget.name}`)
       setDeleteTarget(null)
       if (yamlTarget?.name === deleteTarget.name) setYamlTarget(null)
+      if (selectedKey === `${deleteTarget.namespace}/${deleteTarget.name}`) setSelectedKey(null)
       await loadItems()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'delete failed')
@@ -303,8 +363,76 @@ export default function ResourceListPage({
     }
   }
 
+  function openDeployment(item: K8sObject, view: 'details' | 'yaml' = 'details') {
+    const ns = objectNamespace(item)
+    const name = objectName(item)
+    setSelectedKey(`${ns}/${name}`)
+    setPanelView(view)
+  }
+
+  async function openDeploymentLogs(item: K8sObject) {
+    const ns = objectNamespace(item)
+    const labels = selectorMatchLabels(item)
+    try {
+      const res = await fetch(`/api/k8s/namespaces/${encodeURIComponent(ns)}/pods`, { credentials: 'same-origin' })
+      if (!res.ok) throw new Error('failed to list pods')
+      const data: K8sObject[] = await res.json()
+      const matching = (Array.isArray(data) ? data : []).filter((pod) => podMatchesLabels(pod, labels))
+      if (matching.length === 0) {
+        toast.error('No pods to show logs from')
+        return
+      }
+      if (matching.length === 1) {
+        navigate(`/workloads/${encodeURIComponent(ns)}/pods/${encodeURIComponent(objectName(matching[0]))}/logs`)
+        return
+      }
+      setLogPods(
+        matching.map((pod) => ({
+          name: objectName(pod),
+          namespace: objectNamespace(pod) || ns,
+          phase: podPhase(pod),
+        })),
+      )
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'failed to load pods')
+    }
+  }
+
+  async function runScale(replicas: number) {
+    if (!scaleTarget) return
+    setPendingAction(true)
+    try {
+      await scaleK8sResource('deployments', scaleTarget.name, scaleTarget.namespace, replicas)
+      toast.success(`Scaled ${scaleTarget.name} to ${replicas}`)
+      setScaleTarget(null)
+      await loadItems(true)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'scale failed')
+    } finally {
+      setPendingAction(false)
+    }
+  }
+
+  async function runRestart() {
+    if (!restartTarget) return
+    setPendingAction(true)
+    try {
+      await restartK8sResource('deployments', restartTarget.name, restartTarget.namespace)
+      toast.success(`Restarted ${restartTarget.name}`)
+      setRestartTarget(null)
+      await loadItems(true)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'restart failed')
+    } finally {
+      setPendingAction(false)
+    }
+  }
+
+  const split = Boolean(selected)
+
   return (
-    <PageBody>
+    <PageBody className={split ? 'flex-row gap-0 overflow-hidden p-0' : undefined}>
+      <div className={split ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden' : 'contents'}>
       <PageHeader title={kind.label} description={`${visible.length} item${visible.length === 1 ? '' : 's'}`}>
         {!clusterScoped ? (
           <NamespaceSelect namespaces={namespaces} value={namespace} onChange={setNamespace} />
@@ -321,7 +449,7 @@ export default function ResourceListPage({
         />
       </PageHeader>
       <ErrorAlert message={error} />
-      <div className="min-h-0 flex-1 overflow-auto rounded-md border">
+      <div className="min-h-0 overflow-auto overscroll-contain">
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
@@ -377,8 +505,15 @@ export default function ResourceListPage({
               const name = objectName(item)
               if (!name) return null
               const ns = objectNamespace(item) || (isAllNamespaces(namespace) ? '' : namespace)
+              const rowKey = `${ns}/${name}`
+              const clickable = module === 'deployments'
               return (
-                <TableRow key={`${ns}/${name}`}>
+                <TableRow
+                  key={rowKey}
+                  data-state={selectedKey === rowKey ? 'selected' : undefined}
+                  className={clickable ? 'cursor-pointer' : undefined}
+                  onClick={clickable ? () => openDeployment(item) : undefined}
+                >
                   <TableCell className="font-medium">{name}</TableCell>
                   {!clusterScoped ? (
                     <TableCell className="text-muted-foreground">{ns}</TableCell>
@@ -420,19 +555,28 @@ export default function ResourceListPage({
                   {module === 'secrets' ? <TableCell>{secretType(item)}</TableCell> : null}
                   {module === 'hpas' ? <TableCell>{hpaReplicas(item)}</TableCell> : null}
                   <TableCell className="text-muted-foreground">{formatAge(item.metadata?.creationTimestamp)}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <ResourceRowMenu
                       name={name}
                       namespace={ns}
                       module={module}
                       user={user}
-                      busy={deleting && deleteTarget?.name === name}
+                      busy={
+                        (deleting && deleteTarget?.name === name) ||
+                        (pendingAction && (scaleTarget?.name === name || restartTarget?.name === name))
+                      }
+                      onDetails={() => openDeployment(item)}
+                      onScale={() => setScaleTarget({ name, namespace: ns, replicas: replicaDesired(item) })}
+                      onRestart={() => setRestartTarget({ name, namespace: ns })}
+                      onLogs={() => void openDeploymentLogs(item)}
                       onYaml={() =>
-                        setYamlTarget(
-                          clusterScoped
-                            ? { module, name, clusterScoped: true }
-                            : { module, name, namespace: ns, clusterScoped: false },
-                        )
+                        module === 'deployments'
+                          ? openDeployment(item, 'yaml')
+                          : setYamlTarget(
+                              clusterScoped
+                                ? { module, name, clusterScoped: true }
+                                : { module, name, namespace: ns, clusterScoped: false },
+                            )
                       }
                       onDelete={() => setDeleteTarget({ name, namespace: clusterScoped ? undefined : ns })}
                     />
@@ -446,6 +590,34 @@ export default function ResourceListPage({
           <EmptyState>No {kind.label.toLowerCase()}{query ? ' match this filter' : ''}.</EmptyState>
         ) : null}
       </div>
+      </div>
+      {selected ? (
+        <DeploymentDetailPanel
+          deployment={selected}
+          user={user}
+          view={panelView}
+          onViewChange={setPanelView}
+          onClose={() => setSelectedKey(null)}
+          onScale={() =>
+            setScaleTarget({
+              name: objectName(selected),
+              namespace: objectNamespace(selected),
+              replicas: replicaDesired(selected),
+            })
+          }
+          onRestart={() =>
+            setRestartTarget({ name: objectName(selected), namespace: objectNamespace(selected) })
+          }
+          onDelete={() =>
+            setDeleteTarget({ name: objectName(selected), namespace: objectNamespace(selected) })
+          }
+          onLogs={() => void openDeploymentLogs(selected)}
+          onRefreshed={(next) => {
+            const nextKey = `${objectNamespace(next)}/${objectName(next)}`
+            setItems((prev) => prev.map((item) => (`${objectNamespace(item)}/${objectName(item)}` === nextKey ? next : item)))
+          }}
+        />
+      ) : null}
       <ResourceYAMLSheet
         target={yamlTarget}
         canEdit={can(user, grantModule, 'yaml_edit')}
@@ -466,6 +638,46 @@ export default function ResourceListPage({
           onCancel={() => !deleting && setDeleteTarget(null)}
         />
       ) : null}
+      <ScaleDialog
+        open={scaleTarget != null}
+        name={scaleTarget?.name ?? ''}
+        current={scaleTarget?.replicas ?? 0}
+        pending={pendingAction}
+        onConfirm={runScale}
+        onCancel={() => !pendingAction && setScaleTarget(null)}
+      />
+      <ConfirmDialog
+        open={restartTarget != null}
+        title={`Restart ${restartTarget?.name ?? ''}?`}
+        description="This rolls out a new replica set by annotating the pod template. Running pods will be replaced."
+        confirmLabel="Restart"
+        pending={pendingAction}
+        onConfirm={runRestart}
+        onCancel={() => !pendingAction && setRestartTarget(null)}
+      />
+      <Dialog open={logPods != null} onOpenChange={(open) => !open && setLogPods(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Logs</DialogTitle>
+            <DialogDescription>Select a pod to stream logs.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-1">
+            {logPods?.map((pod) => (
+              <Button
+                key={`${pod.namespace}/${pod.name}`}
+                variant="ghost"
+                className="justify-between"
+                onClick={() =>
+                  navigate(`/workloads/${encodeURIComponent(pod.namespace)}/pods/${encodeURIComponent(pod.name)}/logs`)
+                }
+              >
+                <span className="font-medium">{pod.name}</span>
+                <span className="text-muted-foreground">{pod.phase}</span>
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </PageBody>
   )
 }

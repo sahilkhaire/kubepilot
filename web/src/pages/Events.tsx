@@ -113,7 +113,7 @@ export default function Events() {
         <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter…" className="h-7 w-48 text-xs" />
       </PageHeader>
       <ErrorAlert message={error} />
-      <div className="min-h-0 flex-1 overflow-auto rounded-md border">
+      <div className="min-h-0 overflow-auto overscroll-contain">
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>

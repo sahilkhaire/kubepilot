@@ -14,5 +14,5 @@ export function PageLoading({ compact = false }: { compact?: boolean }) {
   if (compact) {
     return <div className="space-y-4">{content}</div>
   }
-  return <PageBody>{content}</PageBody>
+  return <PageBody className="gap-3 p-3">{content}</PageBody>
 }

@@ -76,6 +76,60 @@ export function replicaReady(obj: K8sObject): string {
   return `${ready}/${desired}`
 }
 
+export function replicaDesired(obj: K8sObject): number {
+  return num(obj.spec?.replicas) ?? 0
+}
+
+export function replicaStatusCounts(obj: K8sObject): {
+  ready: number
+  updated: number
+  available: number
+  replicas: number
+} {
+  return {
+    ready: num(obj.status?.readyReplicas) ?? 0,
+    updated: num(obj.status?.updatedReplicas) ?? 0,
+    available: num(obj.status?.availableReplicas) ?? 0,
+    replicas: num(obj.status?.replicas) ?? 0,
+  }
+}
+
+export function selectorMatchLabels(obj: K8sObject): Record<string, string> {
+  const selector = obj.spec?.selector
+  if (!selector || typeof selector !== 'object') return {}
+  const labels = (selector as { matchLabels?: Record<string, string> }).matchLabels
+  return labels ?? {}
+}
+
+export function podMatchesLabels(pod: K8sObject, labels: Record<string, string>): boolean {
+  const entries = Object.entries(labels)
+  if (entries.length === 0) return false
+  const podLabels = pod.metadata?.labels ?? {}
+  return entries.every(([key, value]) => podLabels[key] === value)
+}
+
+export function workloadStrategy(obj: K8sObject): string {
+  const strategy = obj.spec?.strategy as
+    | { type?: string; rollingUpdate?: { maxUnavailable?: unknown; maxSurge?: unknown } }
+    | undefined
+  if (!strategy?.type) return '—'
+  if (strategy.type === 'RollingUpdate' && strategy.rollingUpdate) {
+    return `RollingUpdate (maxUnavailable ${String(strategy.rollingUpdate.maxUnavailable ?? '—')}, maxSurge ${String(strategy.rollingUpdate.maxSurge ?? '—')})`
+  }
+  return strategy.type
+}
+
+export function objectConditions(obj: K8sObject): { type: string; status: string; ok: boolean }[] {
+  const conditions = obj.status?.conditions
+  if (!Array.isArray(conditions)) return []
+  return conditions
+    .map((c) => {
+      const row = c as { type?: string; status?: string }
+      return { type: row.type ?? '', status: row.status ?? '', ok: row.status === 'True' }
+    })
+    .filter((c) => c.type)
+}
+
 export function jobCompletions(obj: K8sObject): string {
   const succeeded = num(obj.status?.succeeded) ?? 0
   const completions = num((obj.spec?.completions as number | undefined) ?? undefined) ?? 1
@@ -271,11 +325,24 @@ export function secretType(obj: K8sObject): string {
   return str((obj as { type?: string }).type) || 'Opaque'
 }
 
+function metadataMapMatches(map: Record<string, string>, needle: string): boolean {
+  for (const [key, value] of Object.entries(map)) {
+    const k = key.toLowerCase()
+    const v = value.toLowerCase()
+    if (k.includes(needle) || v.includes(needle) || `${k}=${v}`.includes(needle) || `${k}:${v}`.includes(needle)) {
+      return true
+    }
+  }
+  return false
+}
+
 export function matchesQuery(obj: K8sObject, q: string): boolean {
   if (!q) return true
-  const needle = q.toLowerCase()
+  const needle = q.trim().toLowerCase()
+  if (!needle) return true
   const name = objectName(obj).toLowerCase()
   const ns = objectNamespace(obj).toLowerCase()
   const ip = nodeInternalIP(obj).toLowerCase()
-  return name.includes(needle) || ns.includes(needle) || ip.includes(needle)
+  if (name.includes(needle) || ns.includes(needle) || ip.includes(needle)) return true
+  return metadataMapMatches(objectLabels(obj), needle) || metadataMapMatches(objectAnnotations(obj), needle)
 }

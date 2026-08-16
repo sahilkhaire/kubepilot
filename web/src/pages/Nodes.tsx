@@ -11,6 +11,7 @@ import { NodeCPUBar, NodeDiskBar, NodeMemoryBar, metricSortValue, useMetricSortT
 import { SortableHead } from '@/components/sortable-head'
 import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
+import { ActionTooltip } from '@/components/icon-action-button'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -173,18 +174,18 @@ export default function Nodes() {
   if (loading) return <PageLoading />
 
   return (
-    <PageBody className="flex-row gap-0 p-0">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3">
+    <PageBody className="flex-row gap-0 overflow-hidden p-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <PageHeader title="Nodes" description={`${visible.length} item${visible.length === 1 ? '' : 's'}`}>
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter…"
+            placeholder="Filter name, labels…"
             className="h-7 w-48 text-xs"
           />
         </PageHeader>
         <ErrorAlert message={error} />
-        <div className="min-h-0 flex-1 overflow-auto rounded-md border">
+        <div className="min-h-0 overflow-auto overscroll-contain">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
@@ -347,11 +348,13 @@ function NodeRow({
       </TableCell>
       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-xs" aria-label={`Actions for ${name}`} disabled={busy}>
-              <EllipsisVerticalIcon />
-            </Button>
-          </DropdownMenuTrigger>
+          <ActionTooltip label="Actions">
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-xs" aria-label={`Actions for ${name}`} disabled={busy}>
+                <EllipsisVerticalIcon />
+              </Button>
+            </DropdownMenuTrigger>
+          </ActionTooltip>
           <DropdownMenuContent align="end" className="min-w-40">
             <DropdownMenuItem onClick={onYaml}>YAML</DropdownMenuItem>
             {can(user, 'nodes', 'cordon') ? (

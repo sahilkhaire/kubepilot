@@ -72,7 +72,7 @@ export default function Namespaces() {
         />
       </PageHeader>
       <ErrorAlert message={error} />
-      <div className="min-h-0 flex-1 overflow-auto rounded-md border">
+      <div className="min-h-0 overflow-auto overscroll-contain">
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>

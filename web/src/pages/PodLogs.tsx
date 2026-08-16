@@ -138,7 +138,7 @@ export default function PodLogs() {
       <ErrorAlert message={error} />
       <pre
         ref={preRef}
-        className="min-h-0 flex-1 overflow-auto rounded-xl bg-zinc-950 p-4 font-mono text-[0.85rem] leading-relaxed text-zinc-100"
+        className="min-h-0 flex-1 overflow-auto rounded-none bg-zinc-950 p-4 font-mono text-[0.85rem] leading-relaxed text-zinc-100"
       >
         {text || (loading ? '' : '(empty)')}
       </pre>

@@ -67,9 +67,11 @@ export default function Home() {
       </PageHeader>
       <ErrorAlert message={error} />
       {loading ? (
-        <PageLoading compact />
+        <div className="p-3">
+          <PageLoading compact />
+        </div>
       ) : (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
+        <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
           {visibleCards.map(([key, meta]) => (
             <Link key={key} to={meta.href} className="min-w-0">
               <Card className="shadow-none ring-foreground/8 transition-colors hover:bg-muted/40">
@@ -82,7 +84,11 @@ export default function Home() {
           ))}
         </div>
       )}
-      {canMetrics ? <MetricsPanel scope="cluster" title="Cluster metrics" /> : null}
+      {canMetrics ? (
+        <div className="px-3 pb-3">
+          <MetricsPanel scope="cluster" title="Cluster metrics" />
+        </div>
+      ) : null}
     </PageBody>
   )
 }

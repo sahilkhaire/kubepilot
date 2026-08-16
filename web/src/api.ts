@@ -336,6 +336,35 @@ export async function drainNode(name: string): Promise<void> {
   }
 }
 
+export async function scaleK8sResource(
+  module: string,
+  name: string,
+  namespace: string,
+  replicas: number,
+): Promise<void> {
+  const res = await apiFetch(
+    `/api/k8s/namespaces/${encodeURIComponent(namespace)}/${encodeURIComponent(module)}/${encodeURIComponent(name)}/scale`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ replicas }),
+    },
+  )
+  if (!res.ok) {
+    throw new Error(await readAPIError(res, 'failed to scale resource'))
+  }
+}
+
+export async function restartK8sResource(module: string, name: string, namespace: string): Promise<void> {
+  const res = await apiFetch(
+    `/api/k8s/namespaces/${encodeURIComponent(namespace)}/${encodeURIComponent(module)}/${encodeURIComponent(name)}/restart`,
+    { method: 'POST' },
+  )
+  if (!res.ok) {
+    throw new Error(await readAPIError(res, 'failed to restart resource'))
+  }
+}
+
 export async function deleteK8sResource(
   module: string,
   name: string,
