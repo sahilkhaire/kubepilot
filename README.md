@@ -15,7 +15,7 @@ helm install kubepilot deploy/charts/kubepilot \
   --set ingress.host=console.example.com
 ```
 
-The chart defaults to the public image `ghcr.io/sahilkhaire/kubepilot:latest`. Override `image.repository` / `image.tag` to use a mirror.
+The chart defaults to the public image `ghcr.io/sahilkhaire/kubepilot:latest` (`linux/amd64` and `linux/arm64`). Override `image.repository` / `image.tag` to use a mirror.
 
 Alternatively, create a Secret yourself and set `existingSecret` instead of `mongodbUri`, `sessionSecret`, and `ownerPassword`.
 

@@ -54,7 +54,7 @@ Optional: PodDisruptionBudget, HPA — not required for v1. Default replicas: **
 ```yaml
 image:
   repository: ghcr.io/sahilkhaire/kubepilot
-  tag: latest
+  tag: latest  # multi-arch: linux/amd64, linux/arm64
   pullPolicy: IfNotPresent
   pullSecrets: []  # optional, for private mirrors
 
