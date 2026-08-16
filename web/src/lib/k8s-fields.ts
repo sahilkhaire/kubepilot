@@ -3,8 +3,10 @@ export type K8sObject = {
     name?: string
     namespace?: string
     creationTimestamp?: string
+    deletionTimestamp?: string
     labels?: Record<string, string>
     annotations?: Record<string, string>
+    ownerReferences?: { kind?: string; name?: string }[]
   }
   spec?: Record<string, unknown>
   status?: Record<string, unknown>
@@ -42,6 +44,173 @@ export function objectNamespace(obj: K8sObject): string {
 
 export function podPhase(obj: K8sObject): string {
   return str(obj.status?.phase) || 'Unknown'
+}
+
+export type PodContainerKind = 'init' | 'container' | 'ephemeral'
+export type PodContainerState = 'running' | 'waiting' | 'terminated' | 'unknown'
+
+export type PodContainerInfo = {
+  name: string
+  kind: PodContainerKind
+  state: PodContainerState
+  ready: boolean
+  reason: string
+  restartCount: number
+  exitCode?: number
+}
+
+type ContainerStateBlock = {
+  running?: { startedAt?: string }
+  waiting?: { reason?: string; message?: string }
+  terminated?: { reason?: string; exitCode?: number; message?: string; signal?: number }
+}
+
+function parseContainerStatus(raw: unknown, kind: PodContainerKind): PodContainerInfo {
+  const row = (raw ?? {}) as {
+    name?: string
+    ready?: boolean
+    restartCount?: number
+    state?: ContainerStateBlock
+  }
+  const name = row.name ?? ''
+  const ready = Boolean(row.ready)
+  const restartCount = row.restartCount ?? 0
+  if (row.state?.running) {
+    return { name, kind, state: 'running', ready, reason: 'Running', restartCount }
+  }
+  if (row.state?.waiting) {
+    return {
+      name,
+      kind,
+      state: 'waiting',
+      ready,
+      reason: row.state.waiting.reason || 'Waiting',
+      restartCount,
+    }
+  }
+  if (row.state?.terminated) {
+    const terminated = row.state.terminated
+    const exitCode = terminated.exitCode
+    const ok = exitCode === 0
+    return {
+      name,
+      kind,
+      state: 'terminated',
+      ready: false,
+      reason: terminated.reason || (ok ? 'Completed' : 'Error'),
+      restartCount,
+      exitCode,
+    }
+  }
+  return { name, kind, state: 'unknown', ready, reason: 'Pending', restartCount }
+}
+
+function specContainerNames(spec: unknown): string[] {
+  if (!Array.isArray(spec)) return []
+  return spec
+    .map((item) => str((item as { name?: string }).name))
+    .filter(Boolean)
+}
+
+function mergeContainerInfos(specs: unknown, statuses: unknown, kind: PodContainerKind): PodContainerInfo[] {
+  const parsed = (Array.isArray(statuses) ? statuses : []).map((item) => parseContainerStatus(item, kind))
+  const byName = new Map(parsed.map((item) => [item.name, item]))
+  const names = specContainerNames(specs)
+  for (const item of parsed) {
+    if (item.name && !names.includes(item.name)) names.push(item.name)
+  }
+  return names.map(
+    (name) =>
+      byName.get(name) ?? {
+        name,
+        kind,
+        state: 'waiting' as const,
+        ready: false,
+        reason: 'Pending',
+        restartCount: 0,
+      },
+  )
+}
+
+export function podContainerInfos(obj: K8sObject): PodContainerInfo[] {
+  const spec = obj.spec ?? {}
+  const status = obj.status ?? {}
+  return [
+    ...mergeContainerInfos(spec.initContainers, status.initContainerStatuses, 'init'),
+    ...mergeContainerInfos(spec.containers, status.containerStatuses, 'container'),
+    ...mergeContainerInfos(spec.ephemeralContainers, status.ephemeralContainerStatuses, 'ephemeral'),
+  ]
+}
+
+export function podContainerCounts(obj: K8sObject): { live: number; waiting: number; terminated: number; total: number } {
+  const containers = podContainerInfos(obj)
+  return {
+    live: containers.filter((c) => c.state === 'running').length,
+    waiting: containers.filter((c) => c.state === 'waiting' || c.state === 'unknown').length,
+    terminated: containers.filter((c) => c.state === 'terminated').length,
+    total: containers.length,
+  }
+}
+
+export function podStatus(obj: K8sObject): string {
+  const phase = podPhase(obj)
+  let reason = str(obj.status?.reason) || phase
+
+  const containers = podContainerInfos(obj)
+  const inits = containers.filter((c) => c.kind === 'init')
+  const apps = containers.filter((c) => c.kind !== 'init')
+
+  let initializing = false
+  for (let i = 0; i < inits.length; i++) {
+    const init = inits[i]
+    if (init.state === 'terminated' && init.exitCode === 0) continue
+    initializing = true
+    if (init.state === 'terminated') {
+      reason = `Init:${init.reason || 'Error'}`
+    } else if (init.state === 'waiting' && init.reason && init.reason !== 'PodInitializing') {
+      reason = `Init:${init.reason}`
+    } else {
+      reason = `Init:${i}/${inits.length}`
+    }
+    break
+  }
+
+  if (!initializing) {
+    let hasRunning = false
+    for (const container of [...apps].reverse()) {
+      if (container.state === 'waiting' && container.reason) {
+        reason = container.reason
+      } else if (container.state === 'terminated' && container.reason) {
+        reason = container.reason
+      } else if (container.state === 'running') {
+        hasRunning = true
+      }
+    }
+    if (reason === 'Completed' && hasRunning) {
+      reason = 'Running'
+    }
+  }
+
+  if (obj.metadata?.deletionTimestamp) {
+    return str(obj.status?.reason) === 'NodeLost' ? 'Unknown' : 'Terminating'
+  }
+
+  if (reason === 'Succeeded') return 'Completed'
+  return reason || phase
+}
+
+export function podControlledBy(obj: K8sObject): string {
+  const ref = obj.metadata?.ownerReferences?.[0]
+  if (!ref?.kind || !ref.name) return ''
+  return `${ref.kind}/${ref.name}`
+}
+
+export function podQOS(obj: K8sObject): string {
+  return str(obj.status?.qosClass) || '—'
+}
+
+export function podIP(obj: K8sObject): string {
+  return str(obj.status?.podIP)
 }
 
 export function podNode(obj: K8sObject): string {
@@ -344,5 +513,10 @@ export function matchesQuery(obj: K8sObject, q: string): boolean {
   const ns = objectNamespace(obj).toLowerCase()
   const ip = nodeInternalIP(obj).toLowerCase()
   if (name.includes(needle) || ns.includes(needle) || ip.includes(needle)) return true
+  if (Array.isArray(obj.spec?.containers)) {
+    if (podStatus(obj).toLowerCase().includes(needle)) return true
+    if (podNode(obj).toLowerCase().includes(needle)) return true
+    if (podControlledBy(obj).toLowerCase().includes(needle)) return true
+  }
   return metadataMapMatches(objectLabels(obj), needle) || metadataMapMatches(objectAnnotations(obj), needle)
 }

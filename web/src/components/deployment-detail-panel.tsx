@@ -13,6 +13,8 @@ import {
 import type { User } from '@/api'
 import ResourceYAMLEditor from '@/components/resource-yaml-editor'
 import { IconActionButton } from '@/components/icon-action-button'
+import { PodContainersCell } from '@/components/pod-containers'
+import { statusTextClass } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Separator } from '@/components/ui/separator'
@@ -20,6 +22,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableHead,
   TableHeader,
   TableRow,
   SerialHead,
@@ -36,8 +39,8 @@ import {
   objectName,
   objectNamespace,
   podMatchesLabels,
-  podPhase,
   podReady,
+  podStatus,
   replicaDesired,
   replicaStatusCounts,
   selectorMatchLabels,
@@ -175,7 +178,7 @@ export default function DeploymentDetailPanel({
           case 'ready':
             return ratioSortValue(podReady(pod))
           case 'status':
-            return podPhase(pod)
+            return podStatus(pod)
           default:
             return ''
         }
@@ -303,13 +306,14 @@ export default function DeploymentDetailPanel({
                       <SerialHead />
                       <SortableHead column="name" label="Name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                       <SortableHead column="ready" label="Ready" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                      <TableHead>Containers</TableHead>
                       <SortableHead column="status" label="Status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {sortedPods.map((pod, index) => {
                       const podName = objectName(pod)
-                      const phase = podPhase(pod)
+                      const status = podStatus(pod)
                       return (
                         <TableRow key={podName}>
                           <SerialCell index={index} />
@@ -326,7 +330,10 @@ export default function DeploymentDetailPanel({
                             )}
                           </TableCell>
                           <TableCell>{podReady(pod)}</TableCell>
-                          <TableCell className={phase === 'Running' ? 'text-emerald-500' : undefined}>{phase}</TableCell>
+                          <TableCell>
+                            <PodContainersCell obj={pod} />
+                          </TableCell>
+                          <TableCell className={statusTextClass(status)}>{status}</TableCell>
                         </TableRow>
                       )
                     })}

@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
-import { EllipsisVerticalIcon } from 'lucide-react'
+import { EllipsisVerticalIcon, PencilIcon, ScrollTextIcon, SquareTerminalIcon, Trash2Icon } from 'lucide-react'
 import { toast } from 'sonner'
 import { deleteK8sResource, restartK8sResource, scaleK8sResource, type User } from '@/api'
 import DeleteConfirm from '@/components/DeleteConfirm'
 import EmptyState from '@/components/EmptyState'
 import DeploymentDetailPanel from '@/components/deployment-detail-panel'
+import PodDetailPanel from '@/components/pod-detail-panel'
+import { PodContainersCell } from '@/components/pod-containers'
 import ResourceYAMLSheet from '@/components/resource-yaml-sheet'
+import { StatusBadge } from '@/components/status-badge'
 import { ScaleDialog } from '@/components/scale-dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { ErrorAlert } from '@/components/error-alert'
@@ -55,10 +58,12 @@ import {
   matchesQuery,
   objectName,
   objectNamespace,
+  podContainerCounts,
+  podControlledBy,
   podNode,
-  podPhase,
   podReady,
   podRestarts,
+  podStatus,
   pvcStatus,
   pvcStorage,
   replicaReady,
@@ -76,17 +81,6 @@ import { ratioSortValue, sortBy, timestampSortValue, useTableSort } from '@/lib/
 import { useLiveRefresh } from '@/hooks/use-live-refresh'
 import type { YAMLTarget } from '@/lib/k8s-yaml'
 
-function statusBadge(value: string) {
-  const v = value.toLowerCase()
-  const ok = v === 'running' || v === 'ready' || v === 'bound' || v === 'active' || v === 'available' || v === 'true'
-  const bad = v === 'failed' || v === 'error' || v === 'notready' || v === 'pending' || v === 'crashloopbackoff'
-  return (
-    <Badge variant={bad ? 'destructive' : ok ? 'outline' : 'secondary'} className="h-5 px-1.5 text-[10px] font-medium">
-      {value || '—'}
-    </Badge>
-  )
-}
-
 function resourceSortValue(item: K8sObject, key: string, module: string, fallbackNs: string): unknown {
   const name = objectName(item)
   const ns = objectNamespace(item) || fallbackNs
@@ -99,8 +93,14 @@ function resourceSortValue(item: K8sObject, key: string, module: string, fallbac
       if (module === 'pods') return ratioSortValue(podReady(item))
       if (module === 'daemonsets') return ratioSortValue(daemonReady(item))
       return ratioSortValue(replicaReady(item))
+    case 'containers': {
+      const counts = podContainerCounts(item)
+      return counts.live + counts.total / 100
+    }
+    case 'controlledBy':
+      return podControlledBy(item)
     case 'status':
-      return module === 'pvcs' ? pvcStatus(item) : podPhase(item)
+      return module === 'pvcs' ? pvcStatus(item) : podStatus(item)
     case 'restarts':
       return podRestarts(item)
     case 'node':
@@ -157,6 +157,7 @@ function ResourceRowMenu({
   const showShell = module === 'pods' && can(user, 'pods', 'exec')
   const showDelete = module !== 'endpoints' && can(user, module, 'delete')
   const isDeployment = module === 'deployments'
+  const isPod = module === 'pods'
 
   return (
     <DropdownMenu>
@@ -182,6 +183,32 @@ function ResourceRowMenu({
               <DropdownMenuItem onClick={onYaml}>Edit</DropdownMenuItem>
             ) : null}
           </>
+        ) : isPod ? (
+          <>
+            <DropdownMenuItem onClick={onDetails}>Show details</DropdownMenuItem>
+            {showShell ? (
+              <DropdownMenuItem asChild>
+                <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/exec`}>
+                  <SquareTerminalIcon />
+                  Shell
+                </Link>
+              </DropdownMenuItem>
+            ) : null}
+            {showLogs ? (
+              <DropdownMenuItem asChild>
+                <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/logs`}>
+                  <ScrollTextIcon />
+                  Logs
+                </Link>
+              </DropdownMenuItem>
+            ) : null}
+            {can(user, 'pods', 'yaml_edit') ? (
+              <DropdownMenuItem onClick={onYaml}>
+                <PencilIcon />
+                Edit
+              </DropdownMenuItem>
+            ) : null}
+          </>
         ) : (
           <>
             <DropdownMenuItem onClick={onYaml}>YAML</DropdownMenuItem>
@@ -201,6 +228,7 @@ function ResourceRowMenu({
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onClick={onDelete}>
+              {isPod ? <Trash2Icon /> : null}
               Delete
             </DropdownMenuItem>
           </>
@@ -320,7 +348,7 @@ export default function ResourceListPage({
     [visible, sort, module, namespace, metricsTick],
   )
   const selected = useMemo(() => {
-    if (module !== 'deployments' || !selectedKey) return null
+    if ((module !== 'deployments' && module !== 'pods') || !selectedKey) return null
     return items.find((item) => `${objectNamespace(item)}/${objectName(item)}` === selectedKey) ?? null
   }, [items, module, selectedKey])
 
@@ -392,7 +420,7 @@ export default function ResourceListPage({
         matching.map((pod) => ({
           name: objectName(pod),
           namespace: objectNamespace(pod) || ns,
-          phase: podPhase(pod),
+          phase: podStatus(pod),
         })),
       )
     } catch (e) {
@@ -462,9 +490,10 @@ export default function ResourceListPage({
               ) : null}
               {module === 'pods' ? (
                 <>
-                  <SortableHead column="ready" label="Ready" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                  <SortableHead column="containers" label="Containers" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                   <SortableHead column="status" label="Status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                   <SortableHead column="restarts" label="Restarts" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                  <SortableHead column="controlledBy" label="Controlled By" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                   <SortableHead column="node" label="Node" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                   <SortableHead column="metrics" label="CPU / Memory" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 </>
@@ -509,7 +538,7 @@ export default function ResourceListPage({
               if (!name) return null
               const ns = objectNamespace(item) || (isAllNamespaces(namespace) ? '' : namespace)
               const rowKey = `${ns}/${name}`
-              const clickable = module === 'deployments'
+              const clickable = module === 'deployments' || module === 'pods'
               return (
                 <TableRow
                   key={rowKey}
@@ -524,9 +553,14 @@ export default function ResourceListPage({
                   ) : null}
                   {module === 'pods' ? (
                     <>
-                      <TableCell>{podReady(item)}</TableCell>
-                      <TableCell>{statusBadge(podPhase(item))}</TableCell>
+                      <TableCell>
+                        <PodContainersCell obj={item} />
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge value={podStatus(item)} />
+                      </TableCell>
                       <TableCell>{podRestarts(item)}</TableCell>
+                      <TableCell className="text-muted-foreground">{podControlledBy(item) || '—'}</TableCell>
                       <TableCell className="text-muted-foreground">{podNode(item) || '—'}</TableCell>
                       <TableCell>
                         {can(user, 'metrics', 'view') ? (
@@ -552,7 +586,9 @@ export default function ResourceListPage({
                   {module === 'ingresses' ? <TableCell>{ingressClass(item)}</TableCell> : null}
                   {module === 'pvcs' ? (
                     <>
-                      <TableCell>{statusBadge(pvcStatus(item))}</TableCell>
+                      <TableCell>
+                        <StatusBadge value={pvcStatus(item)} />
+                      </TableCell>
                       <TableCell>{pvcStorage(item)}</TableCell>
                     </>
                   ) : null}
@@ -574,7 +610,7 @@ export default function ResourceListPage({
                       onRestart={() => setRestartTarget({ name, namespace: ns })}
                       onLogs={() => void openDeploymentLogs(item)}
                       onYaml={() =>
-                        module === 'deployments'
+                        module === 'deployments' || module === 'pods'
                           ? openDeployment(item, 'yaml')
                           : setYamlTarget(
                               clusterScoped
@@ -595,7 +631,7 @@ export default function ResourceListPage({
         ) : null}
       </div>
       </div>
-      {selected ? (
+      {selected && module === 'deployments' ? (
         <DeploymentDetailPanel
           deployment={selected}
           user={user}
@@ -616,6 +652,22 @@ export default function ResourceListPage({
             setDeleteTarget({ name: objectName(selected), namespace: objectNamespace(selected) })
           }
           onLogs={() => void openDeploymentLogs(selected)}
+          onRefreshed={(next) => {
+            const nextKey = `${objectNamespace(next)}/${objectName(next)}`
+            setItems((prev) => prev.map((item) => (`${objectNamespace(item)}/${objectName(item)}` === nextKey ? next : item)))
+          }}
+        />
+      ) : null}
+      {selected && module === 'pods' ? (
+        <PodDetailPanel
+          pod={selected}
+          user={user}
+          view={panelView}
+          onViewChange={setPanelView}
+          onClose={() => setSelectedKey(null)}
+          onDelete={() =>
+            setDeleteTarget({ name: objectName(selected), namespace: objectNamespace(selected) })
+          }
           onRefreshed={(next) => {
             const nextKey = `${objectNamespace(next)}/${objectName(next)}`
             setItems((prev) => prev.map((item) => (`${objectNamespace(item)}/${objectName(item)}` === nextKey ? next : item)))

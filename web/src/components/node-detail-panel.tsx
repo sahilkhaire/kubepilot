@@ -12,6 +12,8 @@ import type { User } from '@/api'
 import MetricsPanel from '@/components/MetricsPanel'
 import ResourceYAMLEditor from '@/components/resource-yaml-editor'
 import { SortableHead } from '@/components/sortable-head'
+import { PodContainersCell } from '@/components/pod-containers'
+import { statusTextClass } from '@/components/status-badge'
 import { IconActionButton } from '@/components/icon-action-button'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -41,8 +43,8 @@ import {
   objectLabels,
   objectName,
   objectNamespace,
-  podPhase,
   podReady,
+  podStatus,
   type K8sObject,
 } from '@/lib/k8s-fields'
 import { ratioSortValue, sortBy, useTableSort } from '@/lib/table-sort'
@@ -181,7 +183,7 @@ export default function NodeDetailPanel({
           case 'ready':
             return ratioSortValue(podReady(pod))
           case 'status':
-            return podPhase(pod)
+            return podStatus(pod)
           default:
             return ''
         }
@@ -309,21 +311,24 @@ export default function NodeDetailPanel({
                       <SortableHead column="name" label="Name" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                       <SortableHead column="namespace" label="Namespace" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                       <SortableHead column="ready" label="Ready" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                      <TableHead>Containers</TableHead>
                       <SortableHead column="status" label="Status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {sortedPods.map((pod, index) => {
                       const podName = objectName(pod)
-                      const phase = podPhase(pod)
-                      const running = phase === 'Running'
+                      const status = podStatus(pod)
                       return (
                         <TableRow key={`${objectNamespace(pod)}/${podName}`}>
                           <SerialCell index={index} />
                           <TableCell className="font-medium">{podName}</TableCell>
                           <TableCell className="text-muted-foreground">{objectNamespace(pod)}</TableCell>
                           <TableCell>{podReady(pod)}</TableCell>
-                          <TableCell className={running ? 'text-emerald-500' : undefined}>{phase}</TableCell>
+                          <TableCell>
+                            <PodContainersCell obj={pod} />
+                          </TableCell>
+                          <TableCell className={statusTextClass(status)}>{status}</TableCell>
                         </TableRow>
                       )
                     })}
