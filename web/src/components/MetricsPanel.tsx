@@ -101,17 +101,8 @@ export default function MetricsPanel({ scope, namespace, name, title, compact }:
     }
   }, [scope, namespace, name])
 
-  if (loading) {
-    return compact ? null : <p style={{ color: '#666' }}>Loading metrics…</p>
-  }
-  if (!data?.available) {
-    if (compact) return null
-    return (
-      <section style={{ marginBottom: '1.5rem', padding: '1rem', background: '#fafafa', border: '1px solid #eee', borderRadius: 6 }}>
-        {title && <h2 style={{ marginTop: 0, fontSize: '1.1rem' }}>{title}</h2>}
-        <p style={{ color: '#666', margin: 0 }}>Metrics unavailable.</p>
-      </section>
-    )
+  if (loading || !data?.available) {
+    return null
   }
 
   const content = (

@@ -93,6 +93,36 @@ func TestAutoMetricsProviderNoSource(t *testing.T) {
 	}
 }
 
+type countingDiscoverer struct {
+	calls int
+	src   streams.MetricSource
+}
+
+func (c *countingDiscoverer) Discover(context.Context) (streams.MetricSource, error) {
+	c.calls++
+	return c.src, nil
+}
+
+func TestAutoMetricsProviderRetriesDiscoveryAfterNoSource(t *testing.T) {
+	t.Parallel()
+
+	d := &countingDiscoverer{src: nil}
+	p := streams.NewAutoMetricsProvider(nil, "", d)
+
+	for i := 0; i < 2; i++ {
+		res, err := p.Query(context.Background(), streams.MetricsQuery{Scope: streams.ScopeCluster})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Available {
+			t.Fatalf("result=%+v want available=false", res)
+		}
+	}
+	if d.calls != 2 {
+		t.Fatalf("discover calls=%d want 2 (retry after no source)", d.calls)
+	}
+}
+
 func TestValidateQueryInvalidScope(t *testing.T) {
 	t.Parallel()
 

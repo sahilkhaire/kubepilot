@@ -115,9 +115,14 @@ func (p *autoMetricsProvider) sourceFor(ctx context.Context) (MetricSource, erro
 		return p.source, nil
 	}
 	src, err := p.discoverer.Discover(ctx)
-	p.source = src
-	p.discoveryDone = true
-	return src, err
+	if err != nil {
+		return nil, err
+	}
+	if src != nil {
+		p.source = src
+		p.discoveryDone = true
+	}
+	return src, nil
 }
 
 func validateQuery(q MetricsQuery) error {
