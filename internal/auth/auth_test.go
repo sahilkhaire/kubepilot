@@ -21,7 +21,7 @@ func newService(st store.Store) *auth.Service {
 func TestLoginSuccess(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
-	if err := bootstrap.SyncOwner(ctx, st, "owner", "secret"); err != nil {
+	if err := bootstrap.SyncOwner(ctx, st, "owner", "secret", nil); err != nil {
 		t.Fatal(err)
 	}
 	svc := newService(st)
@@ -56,7 +56,7 @@ func TestLoginSuccess(t *testing.T) {
 func TestLoginWrongPassword(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
-	if err := bootstrap.SyncOwner(ctx, st, "owner", "secret"); err != nil {
+	if err := bootstrap.SyncOwner(ctx, st, "owner", "secret", nil); err != nil {
 		t.Fatal(err)
 	}
 	svc := newService(st)
@@ -98,7 +98,7 @@ func TestLoginDisabledUser(t *testing.T) {
 func TestCookieRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
-	if err := bootstrap.SyncOwner(ctx, st, "owner", "secret"); err != nil {
+	if err := bootstrap.SyncOwner(ctx, st, "owner", "secret", nil); err != nil {
 		t.Fatal(err)
 	}
 	svc := newService(st)
@@ -121,7 +121,7 @@ func TestCookieRoundTrip(t *testing.T) {
 func TestAuthenticateRejectsExpiredSession(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
-	if err := bootstrap.SyncOwner(ctx, st, "owner", "secret"); err != nil {
+	if err := bootstrap.SyncOwner(ctx, st, "owner", "secret", nil); err != nil {
 		t.Fatal(err)
 	}
 	u, _ := st.Owner(ctx)
@@ -151,7 +151,7 @@ func TestAuthenticateRejectsExpiredSession(t *testing.T) {
 func TestParseCookieRejectsTamperedHMAC(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
-	if err := bootstrap.SyncOwner(ctx, st, "owner", "secret"); err != nil {
+	if err := bootstrap.SyncOwner(ctx, st, "owner", "secret", nil); err != nil {
 		t.Fatal(err)
 	}
 	svc := newService(st)

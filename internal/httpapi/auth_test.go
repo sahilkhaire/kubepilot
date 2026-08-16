@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/zixflow/k8s/internal/auth"
+	"github.com/zixflow/k8s/internal/audit"
 	"github.com/zixflow/k8s/internal/bootstrap"
 	"github.com/zixflow/k8s/internal/httpapi"
 	"github.com/zixflow/k8s/internal/password"
@@ -34,11 +35,14 @@ func newAuthHandlerWithStore(t *testing.T, st store.Store) http.Handler {
 func newAuthHandlerWithOptions(t *testing.T, st store.Store, opts httpapi.Deps) http.Handler {
 	t.Helper()
 	ctx := context.Background()
-	if err := bootstrap.SyncOwner(ctx, st, "owner", "secret"); err != nil {
+	if err := bootstrap.SyncOwner(ctx, st, "owner", "secret", nil); err != nil {
 		t.Fatal(err)
 	}
 	opts.Auth = auth.New(st, testSessionSecret)
 	opts.Store = st
+	if opts.Audit == nil {
+		opts.Audit = audit.New(st)
+	}
 	return httpapi.New(opts)
 }
 

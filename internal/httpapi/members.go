@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/zixflow/k8s/internal/audit"
 	"github.com/zixflow/k8s/internal/auth"
 	"github.com/zixflow/k8s/internal/password"
 	"github.com/zixflow/k8s/internal/store"
@@ -53,21 +54,21 @@ type resetPasswordResponse struct {
 	Password string `json:"password"`
 }
 
-func registerMemberRoutes(mux *http.ServeMux, authSvc *auth.Service, st store.Store, installNS string) {
+func registerMemberRoutes(mux *http.ServeMux, authSvc *auth.Service, st store.Store, installNS string, auditor *audit.Auditor, trustProxy bool) {
 	mux.HandleFunc("GET /api/settings/members", func(w http.ResponseWriter, r *http.Request) {
 		handleListMembers(w, r, authSvc, st)
 	})
 	mux.HandleFunc("POST /api/settings/members", func(w http.ResponseWriter, r *http.Request) {
-		handleCreateMember(w, r, authSvc, st, installNS)
+		handleCreateMember(w, r, authSvc, st, installNS, auditor, trustProxy)
 	})
 	mux.HandleFunc("PATCH /api/settings/members/{id}", func(w http.ResponseWriter, r *http.Request) {
-		handleUpdateMember(w, r, authSvc, st, installNS)
+		handleUpdateMember(w, r, authSvc, st, installNS, auditor, trustProxy)
 	})
 	mux.HandleFunc("DELETE /api/settings/members/{id}", func(w http.ResponseWriter, r *http.Request) {
-		handleDeleteMember(w, r, authSvc, st)
+		handleDeleteMember(w, r, authSvc, st, auditor, trustProxy)
 	})
 	mux.HandleFunc("POST /api/settings/members/{id}/reset-password", func(w http.ResponseWriter, r *http.Request) {
-		handleResetMemberPassword(w, r, authSvc, st)
+		handleResetMemberPassword(w, r, authSvc, st, auditor, trustProxy)
 	})
 }
 
@@ -87,7 +88,7 @@ func handleListMembers(w http.ResponseWriter, r *http.Request, authSvc *auth.Ser
 	writeJSON(w, http.StatusOK, out)
 }
 
-func handleCreateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, installNS string) {
+func handleCreateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, installNS string, auditor *audit.Auditor, trustProxy bool) {
 	owner, ok := requireOwner(w, r, authSvc)
 	if !ok {
 		return
@@ -164,14 +165,24 @@ func handleCreateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Se
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	if !writeSettingsAudit(w, r, auditor, authSvc, trustProxy, owner, audit.Event{
+		Module:     "settings.members",
+		Action:     "member_create",
+		HTTPStatus: http.StatusCreated,
+		Name:       u.Username,
+		Details:    map[string]any{"memberId": u.ID, "username": u.Username},
+	}) {
+		return
+	}
 	writeJSON(w, http.StatusCreated, createMemberResponse{
 		User:     memberPublic(&u),
 		Password: plain,
 	})
 }
 
-func handleUpdateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, installNS string) {
-	if _, ok := requireOwner(w, r, authSvc); !ok {
+func handleUpdateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, installNS string, auditor *audit.Auditor, trustProxy bool) {
+	owner, ok := requireOwner(w, r, authSvc)
+	if !ok {
 		return
 	}
 
@@ -229,12 +240,12 @@ func handleUpdateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Se
 		}
 		updated.Namespaces = append([]string(nil), (*req.Namespaces)...)
 	}
+	wasEnabled := existing.Enabled
 	if req.Enabled != nil {
 		if !*req.Enabled && existing.Role == store.RoleOwner {
 			writeError(w, http.StatusForbidden, "cannot disable owner")
 			return
 		}
-		wasEnabled := updated.Enabled
 		updated.Enabled = *req.Enabled
 		if wasEnabled && !updated.Enabled {
 			_ = st.DeleteSessionsForUser(r.Context(), id)
@@ -246,11 +257,29 @@ func handleUpdateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Se
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	action := "member_edit"
+	if req.Enabled != nil && wasEnabled != updated.Enabled {
+		if updated.Enabled {
+			action = "member_enable"
+		} else {
+			action = "member_disable"
+		}
+	}
+	if !writeSettingsAudit(w, r, auditor, authSvc, trustProxy, owner, audit.Event{
+		Module:     "settings.members",
+		Action:     action,
+		HTTPStatus: http.StatusOK,
+		Name:       updated.Username,
+		Details:    map[string]any{"memberId": updated.ID},
+	}) {
+		return
+	}
 	writeJSON(w, http.StatusOK, memberPublic(&updated))
 }
 
-func handleDeleteMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store) {
-	if _, ok := requireOwner(w, r, authSvc); !ok {
+func handleDeleteMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, auditor *audit.Auditor, trustProxy bool) {
+	owner, ok := requireOwner(w, r, authSvc)
+	if !ok {
 		return
 	}
 
@@ -273,11 +302,21 @@ func handleDeleteMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Se
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	if !writeSettingsAudit(w, r, auditor, authSvc, trustProxy, owner, audit.Event{
+		Module:     "settings.members",
+		Action:     "member_delete",
+		HTTPStatus: http.StatusNoContent,
+		Name:       existing.Username,
+		Details:    map[string]any{"memberId": id},
+	}) {
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func handleResetMemberPassword(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store) {
-	if _, ok := requireOwner(w, r, authSvc); !ok {
+func handleResetMemberPassword(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, auditor *audit.Auditor, trustProxy bool) {
+	owner, ok := requireOwner(w, r, authSvc)
+	if !ok {
 		return
 	}
 
@@ -308,6 +347,15 @@ func handleResetMemberPassword(w http.ResponseWriter, r *http.Request, authSvc *
 	}
 	if err := st.DeleteSessionsForUser(r.Context(), id); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if !writeSettingsAudit(w, r, auditor, authSvc, trustProxy, owner, audit.Event{
+		Module:     "settings.members",
+		Action:     "member_password_reset",
+		HTTPStatus: http.StatusOK,
+		Name:       existing.Username,
+		Details:    map[string]any{"memberId": id},
+	}) {
 		return
 	}
 	writeJSON(w, http.StatusOK, resetPasswordResponse{Password: plain})

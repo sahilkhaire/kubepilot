@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +16,8 @@ type memoryStore struct {
 	usersByUsername map[string]string
 	sessions        map[string]*Session
 	permissionSets  map[string]*PermissionSet
+	auditLogs       map[string]*AuditLog
+	nextAuditID     int
 }
 
 func NewMemory() Store {
@@ -23,6 +26,7 @@ func NewMemory() Store {
 		usersByUsername: make(map[string]string),
 		sessions:        make(map[string]*Session),
 		permissionSets:  make(map[string]*PermissionSet),
+		auditLogs:       make(map[string]*AuditLog),
 	}
 }
 
@@ -285,6 +289,114 @@ func (m *memoryStore) MembersByPermissionSetID(ctx context.Context, permissionSe
 		}
 	}
 	return out, nil
+}
+
+func (m *memoryStore) InsertAudit(ctx context.Context, log AuditLog) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.nextAuditID++
+	id := formatAuditID(m.nextAuditID)
+	clone := cloneAuditLog(&log)
+	clone.ID = id
+	m.auditLogs[id] = clone
+	return id, nil
+}
+
+func (m *memoryStore) QueryAudit(ctx context.Context, filter AuditFilter) ([]AuditLog, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var out []AuditLog
+	for _, log := range m.auditLogs {
+		if !auditMatchesFilter(log, filter) {
+			continue
+		}
+		out = append(out, *cloneAuditLog(log))
+	}
+	sortAuditLogs(out)
+	return out, nil
+}
+
+func (m *memoryStore) DeleteAuditIDs(ctx context.Context, ids []string) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var n int64
+	for _, id := range ids {
+		if _, ok := m.auditLogs[id]; ok {
+			delete(m.auditLogs, id)
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (m *memoryStore) DeleteAuditFilter(ctx context.Context, filter AuditFilter) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var n int64
+	for id, log := range m.auditLogs {
+		if !auditMatchesFilter(log, filter) {
+			continue
+		}
+		delete(m.auditLogs, id)
+		n++
+	}
+	return n, nil
+}
+
+func formatAuditID(n int) string {
+	return fmt.Sprintf("audit-%d", n)
+}
+
+func auditMatchesFilter(log *AuditLog, filter AuditFilter) bool {
+	if filter.From != nil && log.Timestamp.Before(*filter.From) {
+		return false
+	}
+	if filter.To != nil && log.Timestamp.After(*filter.To) {
+		return false
+	}
+	if filter.Username != "" && log.Username != filter.Username {
+		return false
+	}
+	if filter.Module != "" && log.Module != filter.Module {
+		return false
+	}
+	if filter.Action != "" && log.Action != filter.Action {
+		return false
+	}
+	if filter.Result != "" && log.Result != filter.Result {
+		return false
+	}
+	if filter.Namespace != "" && log.Namespace != filter.Namespace {
+		return false
+	}
+	if filter.Kind != "" && log.Kind != filter.Kind {
+		return false
+	}
+	return true
+}
+
+func sortAuditLogs(logs []AuditLog) {
+	for i := 0; i < len(logs); i++ {
+		for j := i + 1; j < len(logs); j++ {
+			if logs[j].Timestamp.After(logs[i].Timestamp) {
+				logs[i], logs[j] = logs[j], logs[i]
+			}
+		}
+	}
+}
+
+func cloneAuditLog(log *AuditLog) *AuditLog {
+	if log == nil {
+		return nil
+	}
+	clone := *log
+	if log.Details != nil {
+		clone.Details = make(map[string]any, len(log.Details))
+		for k, v := range log.Details {
+			clone.Details[k] = v
+		}
+	}
+	return &clone
 }
 
 func clonePermissionSet(ps *PermissionSet) *PermissionSet {

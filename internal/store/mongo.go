@@ -19,6 +19,7 @@ type mongoStore struct {
 	users  *mongo.Collection
 	sess   *mongo.Collection
 	psets  *mongo.Collection
+	audit  *mongo.Collection
 }
 
 type mongoUser struct {
@@ -58,6 +59,29 @@ type mongoPermissionSet struct {
 	UpdatedAt       time.Time     `bson:"updatedAt"`
 }
 
+type mongoAuditLog struct {
+	ID         bson.ObjectID `bson:"_id,omitempty"`
+	Timestamp  time.Time     `bson:"timestamp"`
+	UserID     string        `bson:"userId,omitempty"`
+	Username   string        `bson:"username,omitempty"`
+	Role       string        `bson:"role,omitempty"`
+	IP         string        `bson:"ip,omitempty"`
+	UserAgent  string        `bson:"userAgent,omitempty"`
+	SessionID  string        `bson:"sessionId,omitempty"`
+	Module     string        `bson:"module,omitempty"`
+	Action     string        `bson:"action,omitempty"`
+	Result     string        `bson:"result,omitempty"`
+	HTTPStatus int           `bson:"httpStatus,omitempty"`
+	APIVersion string        `bson:"apiVersion,omitempty"`
+	Kind       string        `bson:"kind,omitempty"`
+	Namespace  string        `bson:"namespace,omitempty"`
+	Name       string        `bson:"name,omitempty"`
+	Path       string        `bson:"path,omitempty"`
+	Method     string        `bson:"method,omitempty"`
+	Details    bson.M        `bson:"details,omitempty"`
+	Error      string        `bson:"error,omitempty"`
+}
+
 func OpenMongo(ctx context.Context, uri string) (Store, error) {
 	client, err := mongo.Connect(options.Client().ApplyURI(uri))
 	if err != nil {
@@ -79,6 +103,7 @@ func OpenMongo(ctx context.Context, uri string) (Store, error) {
 	users := db.Collection("users")
 	sess := db.Collection("sessions")
 	psets := db.Collection("permission_sets")
+	audit := db.Collection("audit_logs")
 
 	indexModel := options.Index().SetUnique(true)
 	if _, err := users.Indexes().CreateOne(ctx, mongo.IndexModel{
@@ -88,12 +113,25 @@ func OpenMongo(ctx context.Context, uri string) (Store, error) {
 		_ = client.Disconnect(ctx)
 		return nil, err
 	}
+	for _, idx := range []mongo.IndexModel{
+		{Keys: bson.D{{Key: "timestamp", Value: -1}}},
+		{Keys: bson.D{{Key: "username", Value: 1}}},
+		{Keys: bson.D{{Key: "action", Value: 1}}},
+		{Keys: bson.D{{Key: "result", Value: 1}}},
+		{Keys: bson.D{{Key: "username", Value: 1}, {Key: "timestamp", Value: -1}}},
+	} {
+		if _, err := audit.Indexes().CreateOne(ctx, idx); err != nil {
+			_ = client.Disconnect(ctx)
+			return nil, err
+		}
+	}
 
 	return &mongoStore{
 		client: client,
 		users:  users,
 		sess:   sess,
 		psets:  psets,
+		audit:  audit,
 	}, nil
 }
 
@@ -401,6 +439,161 @@ func (m *mongoStore) MembersByPermissionSetID(ctx context.Context, permissionSet
 		out = append(out, *mongoUserToUser(&doc))
 	}
 	return out, cur.Err()
+}
+
+func (m *mongoStore) InsertAudit(ctx context.Context, log AuditLog) (string, error) {
+	doc := auditLogToMongo(log)
+	res, err := m.audit.InsertOne(ctx, doc)
+	if err != nil {
+		return "", err
+	}
+	if oid, ok := res.InsertedID.(bson.ObjectID); ok {
+		return oid.Hex(), nil
+	}
+	return "", nil
+}
+
+func (m *mongoStore) QueryAudit(ctx context.Context, filter AuditFilter) ([]AuditLog, error) {
+	cur, err := m.audit.Find(ctx, auditFilterToBSON(filter), options.Find().SetSort(bson.D{{Key: "timestamp", Value: -1}}))
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var out []AuditLog
+	for cur.Next(ctx) {
+		var doc mongoAuditLog
+		if err := cur.Decode(&doc); err != nil {
+			return nil, err
+		}
+		out = append(out, *mongoAuditLogToAuditLog(&doc))
+	}
+	return out, cur.Err()
+}
+
+func (m *mongoStore) DeleteAuditIDs(ctx context.Context, ids []string) (int64, error) {
+	var oids []bson.ObjectID
+	for _, id := range ids {
+		oid, err := bson.ObjectIDFromHex(id)
+		if err != nil {
+			continue
+		}
+		oids = append(oids, oid)
+	}
+	if len(oids) == 0 {
+		return 0, nil
+	}
+	res, err := m.audit.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": oids}})
+	if err != nil {
+		return 0, err
+	}
+	return res.DeletedCount, nil
+}
+
+func (m *mongoStore) DeleteAuditFilter(ctx context.Context, filter AuditFilter) (int64, error) {
+	res, err := m.audit.DeleteMany(ctx, auditFilterToBSON(filter))
+	if err != nil {
+		return 0, err
+	}
+	return res.DeletedCount, nil
+}
+
+func auditFilterToBSON(filter AuditFilter) bson.M {
+	q := bson.M{}
+	if filter.From != nil || filter.To != nil {
+		ts := bson.M{}
+		if filter.From != nil {
+			ts["$gte"] = *filter.From
+		}
+		if filter.To != nil {
+			ts["$lte"] = *filter.To
+		}
+		q["timestamp"] = ts
+	}
+	if filter.Username != "" {
+		q["username"] = filter.Username
+	}
+	if filter.Module != "" {
+		q["module"] = filter.Module
+	}
+	if filter.Action != "" {
+		q["action"] = filter.Action
+	}
+	if filter.Result != "" {
+		q["result"] = filter.Result
+	}
+	if filter.Namespace != "" {
+		q["namespace"] = filter.Namespace
+	}
+	if filter.Kind != "" {
+		q["kind"] = filter.Kind
+	}
+	return q
+}
+
+func auditLogToMongo(log AuditLog) mongoAuditLog {
+	doc := mongoAuditLog{
+		Timestamp:  log.Timestamp,
+		UserID:     log.UserID,
+		Username:   log.Username,
+		Role:       log.Role,
+		IP:         log.IP,
+		UserAgent:  log.UserAgent,
+		SessionID:  log.SessionID,
+		Module:     log.Module,
+		Action:     log.Action,
+		Result:     log.Result,
+		HTTPStatus: log.HTTPStatus,
+		APIVersion: log.APIVersion,
+		Kind:       log.Kind,
+		Namespace:  log.Namespace,
+		Name:       log.Name,
+		Path:       log.Path,
+		Method:     log.Method,
+		Error:      log.Error,
+	}
+	if log.Details != nil {
+		doc.Details = bson.M(log.Details)
+	}
+	if log.ID != "" {
+		if oid, err := bson.ObjectIDFromHex(log.ID); err == nil {
+			doc.ID = oid
+			return doc
+		}
+	}
+	doc.ID = bson.NewObjectID()
+	return doc
+}
+
+func mongoAuditLogToAuditLog(doc *mongoAuditLog) *AuditLog {
+	if doc == nil {
+		return nil
+	}
+	log := &AuditLog{
+		ID:         doc.ID.Hex(),
+		Timestamp:  doc.Timestamp,
+		UserID:     doc.UserID,
+		Username:   doc.Username,
+		Role:       doc.Role,
+		IP:         doc.IP,
+		UserAgent:  doc.UserAgent,
+		SessionID:  doc.SessionID,
+		Module:     doc.Module,
+		Action:     doc.Action,
+		Result:     doc.Result,
+		HTTPStatus: doc.HTTPStatus,
+		APIVersion: doc.APIVersion,
+		Kind:       doc.Kind,
+		Namespace:  doc.Namespace,
+		Name:       doc.Name,
+		Path:       doc.Path,
+		Method:     doc.Method,
+		Error:      doc.Error,
+	}
+	if doc.Details != nil {
+		log.Details = map[string]any(doc.Details)
+	}
+	return log
 }
 
 func permissionSetToMongo(ps PermissionSet) (mongoPermissionSet, error) {

@@ -8,12 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/zixflow/k8s/internal/audit"
 	"github.com/zixflow/k8s/internal/auth"
 	"github.com/zixflow/k8s/internal/rbac"
 	"github.com/zixflow/k8s/internal/store"
 )
 
-func registerPermissionSetRoutes(mux *http.ServeMux, authSvc *auth.Service, st store.Store) {
+func registerPermissionSetRoutes(mux *http.ServeMux, authSvc *auth.Service, st store.Store, auditor *audit.Auditor, trustProxy bool) {
 	mux.HandleFunc("GET /api/settings/permission-sets", func(w http.ResponseWriter, r *http.Request) {
 		handleListPermissionSets(w, r, authSvc, st)
 	})
@@ -21,13 +22,13 @@ func registerPermissionSetRoutes(mux *http.ServeMux, authSvc *auth.Service, st s
 		handlePermissionSetTemplates(w, r, authSvc)
 	})
 	mux.HandleFunc("POST /api/settings/permission-sets", func(w http.ResponseWriter, r *http.Request) {
-		handleCreatePermissionSet(w, r, authSvc, st)
+		handleCreatePermissionSet(w, r, authSvc, st, auditor, trustProxy)
 	})
 	mux.HandleFunc("PATCH /api/settings/permission-sets/{id}", func(w http.ResponseWriter, r *http.Request) {
-		handleUpdatePermissionSet(w, r, authSvc, st)
+		handleUpdatePermissionSet(w, r, authSvc, st, auditor, trustProxy)
 	})
 	mux.HandleFunc("DELETE /api/settings/permission-sets/{id}", func(w http.ResponseWriter, r *http.Request) {
-		handleDeletePermissionSet(w, r, authSvc, st)
+		handleDeletePermissionSet(w, r, authSvc, st, auditor, trustProxy)
 	})
 }
 
@@ -59,8 +60,9 @@ func handlePermissionSetTemplates(w http.ResponseWriter, r *http.Request, authSv
 	writeJSON(w, http.StatusOK, out)
 }
 
-func handleCreatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store) {
-	if _, ok := requireOwner(w, r, authSvc); !ok {
+func handleCreatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, auditor *audit.Auditor, trustProxy bool) {
+	owner, ok := requireOwner(w, r, authSvc)
+	if !ok {
 		return
 	}
 
@@ -106,11 +108,21 @@ func handleCreatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	if !writeSettingsAudit(w, r, auditor, authSvc, trustProxy, owner, audit.Event{
+		Module:     "settings.permission_sets",
+		Action:     "permission_set_create",
+		HTTPStatus: http.StatusCreated,
+		Name:       ps.Name,
+		Details:    map[string]any{"permissionSetId": ps.ID},
+	}) {
+		return
+	}
 	writeJSON(w, http.StatusCreated, permissionSetPublic(&ps))
 }
 
-func handleUpdatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store) {
-	if _, ok := requireOwner(w, r, authSvc); !ok {
+func handleUpdatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, auditor *audit.Auditor, trustProxy bool) {
+	owner, ok := requireOwner(w, r, authSvc)
+	if !ok {
 		return
 	}
 
@@ -156,11 +168,21 @@ func handleUpdatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	if !writeSettingsAudit(w, r, auditor, authSvc, trustProxy, owner, audit.Event{
+		Module:     "settings.permission_sets",
+		Action:     "permission_set_edit",
+		HTTPStatus: http.StatusOK,
+		Name:       updated.Name,
+		Details:    map[string]any{"permissionSetId": updated.ID},
+	}) {
+		return
+	}
 	writeJSON(w, http.StatusOK, permissionSetPublic(&updated))
 }
 
-func handleDeletePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store) {
-	if _, ok := requireOwner(w, r, authSvc); !ok {
+func handleDeletePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, auditor *audit.Auditor, trustProxy bool) {
+	owner, ok := requireOwner(w, r, authSvc)
+	if !ok {
 		return
 	}
 
@@ -181,6 +203,15 @@ func handleDeletePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 			return
 		}
 		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if !writeSettingsAudit(w, r, auditor, authSvc, trustProxy, owner, audit.Event{
+		Module:     "settings.permission_sets",
+		Action:     "permission_set_delete",
+		HTTPStatus: http.StatusNoContent,
+		Name:       existing.Name,
+		Details:    map[string]any{"permissionSetId": id},
+	}) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

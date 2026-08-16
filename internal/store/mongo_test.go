@@ -27,7 +27,7 @@ func TestOpenMongoIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := bootstrap.SyncOwner(ctx, st, "owner", "integration-secret"); err != nil {
+	if err := bootstrap.SyncOwner(ctx, st, "owner", "integration-secret", nil); err != nil {
 		t.Fatal(err)
 	}
 

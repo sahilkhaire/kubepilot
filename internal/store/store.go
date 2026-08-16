@@ -52,6 +52,40 @@ type Session struct {
 	UserAgent     string
 }
 
+type AuditLog struct {
+	ID         string
+	Timestamp  time.Time
+	UserID     string
+	Username   string
+	Role       string
+	IP         string
+	UserAgent  string
+	SessionID  string
+	Module     string
+	Action     string
+	Result     string
+	HTTPStatus int
+	APIVersion string
+	Kind       string
+	Namespace  string
+	Name       string
+	Path       string
+	Method     string
+	Details    map[string]any
+	Error      string
+}
+
+type AuditFilter struct {
+	From      *time.Time
+	To        *time.Time
+	Username  string
+	Module    string
+	Action    string
+	Result    string
+	Namespace string
+	Kind      string
+}
+
 type Store interface {
 	Owner(ctx context.Context) (*User, error) // nil, nil if none
 	CreateOwner(ctx context.Context, u User) error
@@ -76,4 +110,8 @@ type Store interface {
 	PermissionSet(ctx context.Context, id string) (*PermissionSet, error)
 	ListPermissionSets(ctx context.Context) ([]PermissionSet, error)
 	MembersByPermissionSetID(ctx context.Context, permissionSetID string) ([]User, error)
+	InsertAudit(ctx context.Context, log AuditLog) (string, error)
+	QueryAudit(ctx context.Context, filter AuditFilter) ([]AuditLog, error)
+	DeleteAuditIDs(ctx context.Context, ids []string) (int64, error)
+	DeleteAuditFilter(ctx context.Context, filter AuditFilter) (int64, error)
 }

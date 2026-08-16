@@ -6,14 +6,16 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
+	"github.com/zixflow/k8s/internal/audit"
 	"github.com/zixflow/k8s/internal/password"
 	"github.com/zixflow/k8s/internal/store"
 )
 
-func SyncOwner(ctx context.Context, st store.Store, ownerUsername, ownerPassword string) error {
+func SyncOwner(ctx context.Context, st store.Store, ownerUsername, ownerPassword string, auditor *audit.Auditor) error {
 	if ownerPassword == "" {
 		return errors.New("owner password is required")
 	}
@@ -59,7 +61,21 @@ func SyncOwner(ctx context.Context, st store.Store, ownerUsername, ownerPassword
 	if err := st.UpdateOwnerPassword(ctx, owner.ID, hash); err != nil {
 		return err
 	}
-	return st.DeleteSessionsForUser(ctx, owner.ID)
+	if err := st.DeleteSessionsForUser(ctx, owner.ID); err != nil {
+		return err
+	}
+	if auditor != nil {
+		_ = auditor.Write(ctx, audit.Event{
+			UserID:     owner.ID,
+			Username:   owner.Username,
+			Role:       string(owner.Role),
+			Module:     "auth",
+			Action:     "owner_password_sync",
+			Result:     "success",
+			HTTPStatus: http.StatusOK,
+		})
+	}
+	return nil
 }
 
 func newUserID() (string, error) {

@@ -2,9 +2,9 @@ package httpapi
 
 import (
 	"encoding/json"
-	"net"
 	"net/http"
 
+	"github.com/zixflow/k8s/internal/audit"
 	"github.com/zixflow/k8s/internal/auth"
 	"github.com/zixflow/k8s/internal/store"
 )
@@ -39,12 +39,12 @@ type errorResponse struct {
 	Error string `json:"error"`
 }
 
-func registerAuthRoutes(mux *http.ServeMux, authSvc *auth.Service, trustProxy bool) {
+func registerAuthRoutes(mux *http.ServeMux, authSvc *auth.Service, auditor *audit.Auditor, trustProxy bool) {
 	mux.HandleFunc("POST /api/auth/login", func(w http.ResponseWriter, r *http.Request) {
-		handleLogin(w, r, authSvc, trustProxy)
+		handleLogin(w, r, authSvc, auditor, trustProxy)
 	})
 	mux.HandleFunc("POST /api/auth/logout", func(w http.ResponseWriter, r *http.Request) {
-		handleLogout(w, r, authSvc, trustProxy)
+		handleLogout(w, r, authSvc, auditor, trustProxy)
 	})
 	mux.HandleFunc("GET /api/auth/me", func(w http.ResponseWriter, r *http.Request) {
 		handleMe(w, r, authSvc)
@@ -54,20 +54,26 @@ func registerAuthRoutes(mux *http.ServeMux, authSvc *auth.Service, trustProxy bo
 	})
 }
 
-func handleLogin(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, trustProxy bool) {
+func handleLogin(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, auditor *audit.Auditor, trustProxy bool) {
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeLoginError(w)
 		return
 	}
 
-	ip := r.RemoteAddr
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		ip = host
-	}
+	ip := clientIP(r, trustProxy)
 
 	sessionID, u, err := authSvc.Login(r.Context(), req.Username, req.Password, ip, r.UserAgent())
 	if err != nil {
+		writeAuthAudit(r, auditor, trustProxy, audit.Event{
+			Username:   req.Username,
+			Role:       "anonymous",
+			Module:     "auth",
+			Action:     "login_failed",
+			Result:     "denied",
+			HTTPStatus: http.StatusUnauthorized,
+			Details:    map[string]any{"username": req.Username},
+		})
 		writeLoginError(w)
 		return
 	}
@@ -80,6 +86,16 @@ func handleLogin(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, 
 		Secure:   cookieSecure(r, trustProxy),
 		SameSite: http.SameSiteLaxMode,
 	})
+	writeAuthAudit(r, auditor, trustProxy, audit.Event{
+		UserID:     u.ID,
+		Username:   u.Username,
+		Role:       string(u.Role),
+		SessionID:  sessionID,
+		Module:     "auth",
+		Action:     "login",
+		Result:     "success",
+		HTTPStatus: http.StatusOK,
+	})
 	writeJSON(w, http.StatusOK, loginResponse{
 		Username:           u.Username,
 		Role:               string(u.Role),
@@ -87,9 +103,27 @@ func handleLogin(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, 
 	})
 }
 
-func handleLogout(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, trustProxy bool) {
-	if sessionID, ok := sessionFromRequest(r, authSvc); ok {
-		_ = authSvc.Logout(r.Context(), sessionID)
+func handleLogout(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, auditor *audit.Auditor, trustProxy bool) {
+	var actor *store.User
+	var sessionID string
+	if sid, ok := sessionFromRequest(r, authSvc); ok {
+		sessionID = sid
+		if u, _, err := authSvc.Authenticate(r.Context(), sid); err == nil {
+			actor = u
+		}
+		_ = authSvc.Logout(r.Context(), sid)
+	}
+	if actor != nil {
+		writeAuthAudit(r, auditor, trustProxy, audit.Event{
+			UserID:     actor.ID,
+			Username:   actor.Username,
+			Role:       string(actor.Role),
+			SessionID:  sessionID,
+			Module:     "auth",
+			Action:     "logout",
+			Result:     "success",
+			HTTPStatus: http.StatusNoContent,
+		})
 	}
 	clearSessionCookie(w, r, trustProxy)
 	w.WriteHeader(http.StatusNoContent)

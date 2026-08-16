@@ -12,7 +12,7 @@ import (
 func TestSyncOwnerCreatesThenUpdatesPassword(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
-	if err := bootstrap.SyncOwner(ctx, st, "Owner", "first"); err != nil {
+	if err := bootstrap.SyncOwner(ctx, st, "Owner", "first", nil); err != nil {
 		t.Fatal(err)
 	}
 	u, err := st.Owner(ctx)
@@ -24,7 +24,7 @@ func TestSyncOwnerCreatesThenUpdatesPassword(t *testing.T) {
 	}
 	sid := "s1"
 	_ = st.CreateSession(ctx, store.Session{ID: sid, UserID: u.ID})
-	if err := bootstrap.SyncOwner(ctx, st, "ignored", "second"); err != nil {
+	if err := bootstrap.SyncOwner(ctx, st, "ignored", "second", nil); err != nil {
 		t.Fatal(err)
 	}
 	u2, _ := st.Owner(ctx)
