@@ -4,6 +4,7 @@ import { logout, me, type User } from './api'
 import AccessControl from './pages/AccessControl'
 import ChangePassword from './pages/ChangePassword'
 import Config from './pages/Config'
+import CustomResources from './pages/CustomResources'
 import Events from './pages/Events'
 import Login from './pages/Login'
 import Network from './pages/Network'
@@ -62,6 +63,7 @@ function AppShell({
           <Link to="/config" style={linkStyle}>Config</Link>
           <Link to="/network" style={linkStyle}>Network</Link>
           <Link to="/storage" style={linkStyle}>Storage</Link>
+          <Link to="/custom-resources" style={linkStyle}>Custom Resources</Link>
           {user.role === 'owner' && (
             <Link to="/settings/members" style={linkStyle}>Settings</Link>
           )}
@@ -145,6 +147,7 @@ export default function App() {
           <Route path="/storage" element={<Storage />} />
           <Route path="/storage/:ns/:resource/:name/yaml" element={<ResourceYAML backLink="/storage" backLabel="Storage" />} />
           <Route path="/storage/cluster/:resource/:name/yaml" element={<ResourceYAML backLink="/storage" backLabel="Storage" />} />
+          <Route path="/custom-resources" element={<CustomResources />} />
           <Route path="/settings" element={<OwnerGuard user={user} />}>
             <Route index element={<Navigate to="members" replace />} />
             <Route path="members" element={<SettingsMembers />} />

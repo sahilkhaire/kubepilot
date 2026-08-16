@@ -57,6 +57,10 @@ func ForTest(c kubernetes.Interface) *Client {
 	return &Client{Inner: c}
 }
 
+func ForTestWithDynamic(c kubernetes.Interface, dyn dynamic.Interface) *Client {
+	return &Client{Inner: c, Dynamic: dyn}
+}
+
 func (c *Client) Pods(ctx context.Context, ns string) ([]corev1.Pod, error) {
 	list, err := c.Inner.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{})
 	if err != nil {

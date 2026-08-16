@@ -49,6 +49,7 @@ func registerK8sRoutes(mux *http.ServeMux, deps Deps) {
 		handleClusterOverview(w, r, deps)
 	})
 	registerK8sClusterRoutes(mux, deps)
+	registerK8sCustomResourceRoutes(mux, deps)
 	registerK8sMutationRoutes(mux, deps)
 	registerK8sYAMLRoutes(mux, deps)
 }
