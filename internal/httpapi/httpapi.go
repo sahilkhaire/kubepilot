@@ -9,19 +9,19 @@ import (
 	"github.com/sahilkhaire/kubepilot/internal/auth"
 	"github.com/sahilkhaire/kubepilot/internal/helmctrl"
 	"github.com/sahilkhaire/kubepilot/internal/kube"
-	"github.com/sahilkhaire/kubepilot/internal/streams"
 	"github.com/sahilkhaire/kubepilot/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/streams"
 )
 
 type Deps struct {
-	Ready      func(context.Context) error
-	Auth       *auth.Service
-	Store      store.Store
-	Audit      *audit.Auditor
-	InstallNS  string
-	TrustProxy bool
-	WebDist    string // optional; falls back to WEB_DIST env
-	Kube         *kube.Client
+	Ready           func(context.Context) error
+	Auth            *auth.Service
+	Store           store.Store
+	Audit           *audit.Auditor
+	InstallNS       string
+	TrustProxy      bool
+	WebDist         string // optional; falls back to WEB_DIST env
+	Kube            *kube.Client
 	LogStreamer     streams.LogStreamer
 	ExecUpgrader    streams.ExecUpgrader
 	MetricsProvider streams.MetricsProvider
@@ -35,7 +35,7 @@ func New(deps Deps) http.Handler {
 	}
 	mux := http.NewServeMux()
 	if deps.Auth != nil {
-		registerAuthRoutes(mux, deps.Auth, deps.Audit, deps.TrustProxy)
+		registerAuthRoutes(mux, deps.Auth, deps.Audit, deps.TrustProxy, deps.Store)
 	}
 	if deps.Auth != nil && deps.Store != nil {
 		registerPermissionSetRoutes(mux, deps.Auth, deps.Store, deps.Audit, deps.TrustProxy)

@@ -27,6 +27,7 @@ type permissionSetResponse struct {
 	Description     string              `json:"description"`
 	BuiltinTemplate string              `json:"builtinTemplate,omitempty"`
 	Grants          map[string][]string `json:"grants"`
+	MemberCount     int                 `json:"memberCount"`
 	CreatedAt       string              `json:"createdAt,omitempty"`
 	UpdatedAt       string              `json:"updatedAt,omitempty"`
 }
@@ -45,12 +46,17 @@ type updatePermissionSetRequest struct {
 }
 
 func permissionSetPublic(ps *store.PermissionSet) permissionSetResponse {
+	return permissionSetPublicWithCount(ps, 0)
+}
+
+func permissionSetPublicWithCount(ps *store.PermissionSet, memberCount int) permissionSetResponse {
 	resp := permissionSetResponse{
 		ID:              ps.ID,
 		Name:            ps.Name,
 		Description:     ps.Description,
 		BuiltinTemplate: ps.BuiltinTemplate,
 		Grants:          ps.Grants,
+		MemberCount:     memberCount,
 	}
 	if !ps.CreatedAt.IsZero() {
 		resp.CreatedAt = ps.CreatedAt.UTC().Format(time.RFC3339)

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -15,12 +16,23 @@ import (
 	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
+const (
+	permissionSetNameMax        = 80
+	permissionSetDescriptionMax = 240
+)
+
 func registerPermissionSetRoutes(mux *http.ServeMux, authSvc *auth.Service, st store.Store, auditor *audit.Auditor, trustProxy bool) {
 	mux.HandleFunc("GET /api/settings/permission-sets", func(w http.ResponseWriter, r *http.Request) {
 		handleListPermissionSets(w, r, authSvc, st)
 	})
+	mux.HandleFunc("GET /api/settings/permission-sets/catalog", func(w http.ResponseWriter, r *http.Request) {
+		handlePermissionSetCatalog(w, r, authSvc)
+	})
 	mux.HandleFunc("GET /api/settings/permission-sets/templates", func(w http.ResponseWriter, r *http.Request) {
 		handlePermissionSetTemplates(w, r, authSvc)
+	})
+	mux.HandleFunc("GET /api/settings/permission-sets/{id}", func(w http.ResponseWriter, r *http.Request) {
+		handleGetPermissionSet(w, r, authSvc, st)
 	})
 	mux.HandleFunc("POST /api/settings/permission-sets", func(w http.ResponseWriter, r *http.Request) {
 		handleCreatePermissionSet(w, r, authSvc, st, auditor, trustProxy)
@@ -42,11 +54,23 @@ func handleListPermissionSets(w http.ResponseWriter, r *http.Request, authSvc *a
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	counts, err := permissionSetMemberCounts(r, st)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	out := make([]permissionSetResponse, 0, len(list))
 	for _, ps := range list {
-		out = append(out, permissionSetPublic(&ps))
+		out = append(out, permissionSetPublicWithCount(&ps, counts[ps.ID]))
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func handlePermissionSetCatalog(w http.ResponseWriter, r *http.Request, authSvc *auth.Service) {
+	if _, ok := requireOwner(w, r, authSvc); !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, rbac.Catalog())
 }
 
 func handlePermissionSetTemplates(w http.ResponseWriter, r *http.Request, authSvc *auth.Service) {
@@ -61,6 +85,29 @@ func handlePermissionSetTemplates(w http.ResponseWriter, r *http.Request, authSv
 	writeJSON(w, http.StatusOK, out)
 }
 
+func handleGetPermissionSet(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store) {
+	if _, ok := requireOwner(w, r, authSvc); !ok {
+		return
+	}
+	existing, err := st.PermissionSet(r.Context(), r.PathValue("id"))
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if existing == nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	count := 0
+	members, err := st.MembersByPermissionSetID(r.Context(), existing.ID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	count = len(members)
+	writeJSON(w, http.StatusOK, permissionSetPublicWithCount(existing, count))
+}
+
 func handleCreatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, auditor *audit.Auditor, trustProxy bool) {
 	owner, ok := requireOwner(w, r, authSvc)
 	if !ok {
@@ -72,8 +119,14 @@ func handleCreatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 		writeError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
-	if strings.TrimSpace(req.Name) == "" {
-		writeError(w, http.StatusBadRequest, "name required")
+	name, err := validatePermissionSetName(req.Name)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	description, err := validatePermissionSetDescription(req.Description)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -86,11 +139,8 @@ func handleCreatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 		}
 		grants = tmpl.Grants
 	}
-	if grants == nil {
-		writeError(w, http.StatusBadRequest, "grants required")
-		return
-	}
-	if err := rbac.ValidateGrants(grants); err != nil {
+	grants, err = prepareGrants(grants)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -103,10 +153,10 @@ func handleCreatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 	}
 	ps := store.PermissionSet{
 		ID:              psID,
-		Name:            strings.TrimSpace(req.Name),
-		Description:     strings.TrimSpace(req.Description),
+		Name:            name,
+		Description:     description,
 		BuiltinTemplate: "",
-		Grants:          cloneGrantsHTTP(grants),
+		Grants:          grants,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
@@ -149,22 +199,28 @@ func handleUpdatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 
 	updated := *existing
 	if req.Name != nil {
-		name := strings.TrimSpace(*req.Name)
-		if name == "" {
-			writeError(w, http.StatusBadRequest, "name required")
+		name, err := validatePermissionSetName(*req.Name)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		updated.Name = name
 	}
 	if req.Description != nil {
-		updated.Description = strings.TrimSpace(*req.Description)
-	}
-	if req.Grants != nil {
-		if err := rbac.ValidateGrants(req.Grants); err != nil {
+		description, err := validatePermissionSetDescription(*req.Description)
+		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		updated.Grants = cloneGrantsHTTP(req.Grants)
+		updated.Description = description
+	}
+	if req.Grants != nil {
+		grants, err := prepareGrants(req.Grants)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		updated.Grants = grants
 	}
 	updated.UpdatedAt = time.Now().UTC()
 
@@ -200,7 +256,7 @@ func handleDeletePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 	}
 
 	if err := st.DeletePermissionSet(r.Context(), id); err != nil {
-		if err == store.ErrInUse {
+		if errors.Is(err, store.ErrInUse) {
 			writeError(w, http.StatusConflict, "permission set in use")
 			return
 		}
@@ -225,10 +281,44 @@ func newPermissionSetID() (string, error) {
 	return hex.EncodeToString(b[:]), nil
 }
 
-func cloneGrantsHTTP(grants map[string][]string) map[string][]string {
-	out := make(map[string][]string, len(grants))
-	for k, v := range grants {
-		out[k] = append([]string(nil), v...)
+func prepareGrants(grants map[string][]string) (map[string][]string, error) {
+	normalized := rbac.NormalizeGrants(grants)
+	if err := rbac.ValidateGrants(normalized); err != nil {
+		return nil, err
 	}
-	return out
+	return normalized, nil
+}
+
+func validatePermissionSetName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", errors.New("name required")
+	}
+	if len(name) > permissionSetNameMax {
+		return "", errors.New("name too long")
+	}
+	return name, nil
+}
+
+func validatePermissionSetDescription(description string) (string, error) {
+	description = strings.TrimSpace(description)
+	if len(description) > permissionSetDescriptionMax {
+		return "", errors.New("description too long")
+	}
+	return description, nil
+}
+
+func permissionSetMemberCounts(r *http.Request, st store.Store) (map[string]int, error) {
+	members, err := st.ListMembers(r.Context())
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[string]int)
+	for _, m := range members {
+		if m.PermissionSetID == "" {
+			continue
+		}
+		counts[m.PermissionSetID]++
+	}
+	return counts, nil
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { login, type User } from '@/api'
+import { login, me, type User } from '@/api'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -22,7 +22,11 @@ export default function Login({ onLogin }: Props) {
     setError('')
     setPending(true)
     try {
-      const u = await login(username, password)
+      await login(username, password)
+      const u = await me()
+      if (!u) {
+        throw new Error('invalid credentials')
+      }
       onLogin(u)
       setPassword('')
     } catch {

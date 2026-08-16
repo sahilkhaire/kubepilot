@@ -6,6 +6,7 @@ export type User = {
   enabled?: boolean
   permissionSetId?: string
   namespaces?: string[]
+  grants?: Record<string, string[]>
 }
 
 export type Member = {
@@ -28,8 +29,23 @@ export type PermissionSet = {
   description: string
   builtinTemplate?: string
   grants: Record<string, string[]>
+  memberCount?: number
   createdAt?: string
   updatedAt?: string
+}
+
+export type CatalogModule = {
+  id: string
+  label: string
+  scope: 'ns' | 'cluster' | 'mixed'
+  actions: string[]
+  notes?: string
+}
+
+export type CatalogGroup = {
+  id: string
+  title: string
+  modules: CatalogModule[]
 }
 
 export type AuditLog = {
@@ -64,6 +80,18 @@ export type AuditFilters = {
   result?: string
   namespace?: string
   kind?: string
+}
+
+async function readAPIError(res: Response, fallback: string): Promise<string> {
+  try {
+    const body = (await res.json()) as { error?: string }
+    if (typeof body.error === 'string' && body.error) {
+      return body.error
+    }
+  } catch {
+    // ignore non-JSON error bodies
+  }
+  return fallback
 }
 
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
@@ -173,7 +201,7 @@ export async function resetMemberPassword(id: string): Promise<{ password: strin
 export async function listPermissionSets(): Promise<PermissionSet[]> {
   const res = await apiFetch('/api/settings/permission-sets')
   if (!res.ok) {
-    throw new Error('failed to list permission sets')
+    throw new Error(await readAPIError(res, 'failed to list permission sets'))
   }
   return res.json()
 }
@@ -181,7 +209,23 @@ export async function listPermissionSets(): Promise<PermissionSet[]> {
 export async function listPermissionSetTemplates(): Promise<PermissionSet[]> {
   const res = await apiFetch('/api/settings/permission-sets/templates')
   if (!res.ok) {
-    throw new Error('failed to list templates')
+    throw new Error(await readAPIError(res, 'failed to list templates'))
+  }
+  return res.json()
+}
+
+export async function listPermissionSetCatalog(): Promise<CatalogGroup[]> {
+  const res = await apiFetch('/api/settings/permission-sets/catalog')
+  if (!res.ok) {
+    throw new Error(await readAPIError(res, 'failed to load catalog'))
+  }
+  return res.json()
+}
+
+export async function getPermissionSet(id: string): Promise<PermissionSet> {
+  const res = await apiFetch(`/api/settings/permission-sets/${id}`)
+  if (!res.ok) {
+    throw new Error(await readAPIError(res, 'failed to load permission set'))
   }
   return res.json()
 }
@@ -198,7 +242,7 @@ export async function createPermissionSet(data: {
     body: JSON.stringify(data),
   })
   if (!res.ok) {
-    throw new Error('failed to create permission set')
+    throw new Error(await readAPIError(res, 'failed to create permission set'))
   }
   return res.json()
 }
@@ -217,7 +261,7 @@ export async function updatePermissionSet(
     body: JSON.stringify(data),
   })
   if (!res.ok) {
-    throw new Error('failed to update permission set')
+    throw new Error(await readAPIError(res, 'failed to update permission set'))
   }
   return res.json()
 }
@@ -225,7 +269,7 @@ export async function updatePermissionSet(
 export async function deletePermissionSet(id: string): Promise<void> {
   const res = await apiFetch(`/api/settings/permission-sets/${id}`, { method: 'DELETE' })
   if (!res.ok) {
-    throw new Error('failed to delete permission set')
+    throw new Error(await readAPIError(res, 'failed to delete permission set'))
   }
 }
 

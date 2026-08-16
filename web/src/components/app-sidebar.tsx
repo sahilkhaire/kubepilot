@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { Link } from 'react-router-dom'
+import type { User } from '@/api'
 import { NavMain } from '@/components/nav-main'
 import { NavUser } from '@/components/nav-user'
 import {
@@ -18,7 +19,7 @@ export function AppSidebar({
   onLogout,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
-  user: { username: string; role: string }
+  user: User
   onLogout: () => void
 }) {
   return (
@@ -36,7 +37,7 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent className="gap-0">
-        <NavMain includeSettings={user.role === 'owner'} />
+        <NavMain user={user} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={{ name: user.username, role: user.role }} onLogout={onLogout} />

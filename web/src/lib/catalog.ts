@@ -22,6 +22,7 @@ export type CatalogKind = {
   module: string
   label: string
   clusterScoped?: boolean
+  grantModule?: string
 }
 
 export type CatalogSection = {
@@ -30,19 +31,20 @@ export type CatalogSection = {
   icon: LucideIcon
   url?: string
   basePath?: string
+  grantModule?: string
   kinds?: CatalogKind[]
 }
 
 export const catalog: CatalogSection[] = [
-  { id: 'overview', title: 'Overview', icon: LayoutDashboardIcon, url: '/' },
-  { id: 'nodes', title: 'Nodes', icon: ServerIcon, url: '/nodes' },
+  { id: 'overview', title: 'Overview', icon: LayoutDashboardIcon, url: '/', grantModule: 'cluster.overview' },
+  { id: 'nodes', title: 'Nodes', icon: ServerIcon, url: '/nodes', grantModule: 'nodes' },
   {
     id: 'workloads',
     title: 'Workloads',
     icon: BoxesIcon,
     basePath: '/workloads',
     kinds: [
-      { module: 'overview', label: 'Overview' },
+      { module: 'overview', label: 'Overview', grantModule: 'workloads.overview' },
       { module: 'pods', label: 'Pods' },
       { module: 'deployments', label: 'Deployments' },
       { module: 'daemonsets', label: 'Daemon Sets' },
@@ -93,14 +95,14 @@ export const catalog: CatalogSection[] = [
       { module: 'storageclasses', label: 'Storage Classes', clusterScoped: true },
     ],
   },
-  { id: 'namespaces', title: 'Namespaces', icon: LayersIcon, url: '/namespaces' },
-  { id: 'events', title: 'Events', icon: ScrollTextIcon, url: '/events' },
+  { id: 'namespaces', title: 'Namespaces', icon: LayersIcon, url: '/namespaces', grantModule: 'namespaces' },
+  { id: 'events', title: 'Events', icon: ScrollTextIcon, url: '/events', grantModule: 'events' },
   {
     id: 'helm',
     title: 'Helm',
     icon: ShipIcon,
     basePath: '/helm',
-    kinds: [{ module: 'releases', label: 'Releases' }],
+    kinds: [{ module: 'releases', label: 'Releases', grantModule: 'helm' }],
   },
   {
     id: 'access',
@@ -120,7 +122,7 @@ export const catalog: CatalogSection[] = [
     title: 'Custom Resources',
     icon: PuzzleIcon,
     basePath: '/custom-resources',
-    kinds: [{ module: 'definitions', label: 'Definitions' }],
+    kinds: [{ module: 'definitions', label: 'Definitions', grantModule: 'crds' }],
   },
 ]
 
@@ -149,6 +151,13 @@ export function kindUrl(section: CatalogSection, kind: CatalogKind): string {
     return `${section.basePath}/${kind.module}`
   }
   return kind.module
+}
+
+export function grantModuleId(section: CatalogSection, kind?: CatalogKind): string | undefined {
+  if (kind) {
+    return kind.grantModule ?? kind.module
+  }
+  return section.grantModule
 }
 
 export function findKind(sectionId: string, module: string): CatalogKind | undefined {

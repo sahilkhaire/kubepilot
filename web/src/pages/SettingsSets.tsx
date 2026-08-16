@@ -1,19 +1,33 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   createPermissionSet,
   deletePermissionSet,
+  listPermissionSetCatalog,
+  listPermissionSetTemplates,
   listPermissionSets,
   updatePermissionSet,
+  type CatalogGroup,
   type PermissionSet,
 } from '@/api'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import EmptyState from '@/components/EmptyState'
 import { ErrorAlert } from '@/components/error-alert'
+import { PermissionGrantEditor } from '@/components/permission-grant-editor'
 import { PageLoading } from '@/components/page-loading'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
   SelectContent,
@@ -29,32 +43,41 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Textarea } from '@/components/ui/textarea'
+import { grantSummary } from '@/lib/grants'
 
-type CreateMode = 'template' | 'custom'
+type EditorState = {
+  id?: string
+  name: string
+  description: string
+  grants: Record<string, string[]>
+}
+
+const emptyEditor: EditorState = { name: '', description: '', grants: {} }
 
 export default function SettingsSets() {
   const [sets, setSets] = useState<PermissionSet[]>([])
+  const [templates, setTemplates] = useState<PermissionSet[]>([])
+  const [catalog, setCatalog] = useState<CatalogGroup[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
-
-  const [createName, setCreateName] = useState('')
-  const [createDescription, setCreateDescription] = useState('')
-  const [createMode, setCreateMode] = useState<CreateMode>('template')
-  const [createTemplate, setCreateTemplate] = useState('viewer')
-  const [createGrantsJson, setCreateGrantsJson] = useState('{"pods":["view"]}')
-
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editName, setEditName] = useState('')
-  const [editDescription, setEditDescription] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [editor, setEditor] = useState<EditorState | null>(null)
+  const [startFrom, setStartFrom] = useState('')
   const [setToDelete, setSetToDelete] = useState<PermissionSet | null>(null)
 
   async function load() {
     setError('')
     try {
-      setSets(await listPermissionSets())
-    } catch {
-      setError('Failed to load permission sets')
+      const [nextSets, nextTemplates, nextCatalog] = await Promise.all([
+        listPermissionSets(),
+        listPermissionSetTemplates(),
+        listPermissionSetCatalog(),
+      ])
+      setSets(nextSets)
+      setTemplates(nextTemplates)
+      setCatalog(nextCatalog)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load permission sets')
     } finally {
       setLoading(false)
     }
@@ -64,46 +87,81 @@ export default function SettingsSets() {
     load()
   }, [])
 
-  async function onCreate(e: React.FormEvent) {
+  const templateById = useMemo(() => {
+    const map = new Map<string, PermissionSet>()
+    for (const tmpl of templates) {
+      const id = tmpl.builtinTemplate || tmpl.id
+      map.set(id, tmpl)
+    }
+    return map
+  }, [templates])
+
+  function openCreate() {
+    setStartFrom('')
+    setEditor({ ...emptyEditor })
+  }
+
+  function openEdit(ps: PermissionSet) {
+    setStartFrom('')
+    setEditor({
+      id: ps.id,
+      name: ps.name,
+      description: ps.description,
+      grants: { ...ps.grants },
+    })
+  }
+
+  function openClone(ps: PermissionSet) {
+    setStartFrom('')
+    setEditor({
+      name: `${ps.name} copy`,
+      description: ps.description,
+      grants: { ...ps.grants },
+    })
+  }
+
+  function applyTemplate(id: string) {
+    setStartFrom(id)
+    if (!editor) return
+    if (!id) {
+      setEditor({ ...editor, grants: {} })
+      return
+    }
+    const tmpl = templateById.get(id)
+    if (!tmpl) return
+    setEditor({
+      ...editor,
+      name: editor.name || tmpl.name,
+      description: editor.description || tmpl.description,
+      grants: { ...tmpl.grants },
+    })
+  }
+
+  async function onSave(e: React.FormEvent) {
     e.preventDefault()
+    if (!editor) return
     setError('')
+    setSaving(true)
     try {
-      if (createMode === 'template') {
-        await createPermissionSet({
-          name: createName,
-          description: createDescription,
-          cloneFromTemplate: createTemplate,
+      if (editor.id) {
+        await updatePermissionSet(editor.id, {
+          name: editor.name,
+          description: editor.description,
+          grants: editor.grants,
         })
       } else {
-        const grants = JSON.parse(createGrantsJson) as Record<string, string[]>
         await createPermissionSet({
-          name: createName,
-          description: createDescription,
-          grants,
+          name: editor.name,
+          description: editor.description,
+          grants: editor.grants,
         })
       }
-      setCreateName('')
-      setCreateDescription('')
+      setEditor(null)
       await load()
-    } catch {
-      setError('Failed to create permission set')
-    }
-  }
-
-  function startEdit(ps: PermissionSet) {
-    setEditingId(ps.id)
-    setEditName(ps.name)
-    setEditDescription(ps.description)
-  }
-
-  async function onSaveEdit(id: string) {
-    setError('')
-    try {
-      await updatePermissionSet(id, { name: editName, description: editDescription })
-      setEditingId(null)
-      await load()
-    } catch {
-      setError('Failed to update permission set')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save permission set')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -114,8 +172,15 @@ export default function SettingsSets() {
       await deletePermissionSet(setToDelete.id)
       setSetToDelete(null)
       await load()
-    } catch {
-      setError('Failed to delete permission set')
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message === 'permission set in use'
+            ? `Cannot delete "${setToDelete.name}" while members still use it.`
+            : err.message
+          : 'Failed to delete permission set',
+      )
+      setSetToDelete(null)
     }
   }
 
@@ -125,65 +190,11 @@ export default function SettingsSets() {
     <div className="space-y-6">
       <ErrorAlert message={error} />
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Create permission set</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onCreate} className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="set-name">Name</Label>
-              <Input id="set-name" value={createName} onChange={(e) => setCreateName(e.target.value)} required />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="set-desc">Description</Label>
-              <Input id="set-desc" value={createDescription} onChange={(e) => setCreateDescription(e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-              <Label>Source</Label>
-              <Select value={createMode} onValueChange={(v) => setCreateMode(v as CreateMode)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="template">Clone from template</SelectItem>
-                  <SelectItem value="custom">Custom grants (JSON)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {createMode === 'template' ? (
-              <div className="grid gap-2">
-                <Label>Template</Label>
-                <Select value={createTemplate} onValueChange={setCreateTemplate}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="viewer">Viewer</SelectItem>
-                    <SelectItem value="operator">Operator</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : (
-              <div className="grid gap-2 sm:col-span-2">
-                <Label htmlFor="grants-json">Grants JSON</Label>
-                <Textarea
-                  id="grants-json"
-                  value={createGrantsJson}
-                  onChange={(e) => setCreateGrantsJson(e.target.value)}
-                  rows={4}
-                  className="font-mono text-sm"
-                  required
-                />
-              </div>
-            )}
-            <div>
-              <Button type="submit">Create</Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+      <div className="flex justify-end">
+        <Button type="button" onClick={openCreate}>
+          New permission set
+        </Button>
+      </div>
 
       <Card className="shadow-sm">
         <CardHeader>
@@ -195,59 +206,134 @@ export default function SettingsSets() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Description</TableHead>
+                <TableHead>Grants</TableHead>
+                <TableHead>Members</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sets.map((ps) => (
-                <TableRow key={ps.id}>
-                  <TableCell className="font-medium">
-                    {editingId === ps.id ? (
-                      <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
-                    ) : (
-                      ps.name
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {editingId === ps.id ? (
-                      <Input value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
-                    ) : (
-                      ps.description
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {editingId === ps.id ? (
+              {sets.map((ps) => {
+                const summary = grantSummary(ps.grants)
+                return (
+                  <TableRow key={ps.id}>
+                    <TableCell className="font-medium">{ps.name}</TableCell>
+                    <TableCell className="max-w-xs truncate text-muted-foreground">
+                      {ps.description || '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {summary.modules} module{summary.modules === 1 ? '' : 's'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{ps.memberCount ?? 0}</TableCell>
+                    <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button type="button" size="sm" onClick={() => onSaveEdit(ps.id)}>
-                          Save
-                        </Button>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setEditingId(null)}>
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex justify-end gap-1">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => startEdit(ps)}>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => openEdit(ps)}>
                           Edit
                         </Button>
-                        <Button type="button" variant="destructive" size="sm" onClick={() => setSetToDelete(ps)}>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => openClone(ps)}>
+                          Duplicate
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          disabled={(ps.memberCount ?? 0) > 0}
+                          onClick={() => setSetToDelete(ps)}
+                        >
                           Delete
                         </Button>
                       </div>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
-          {sets.length === 0 ? <EmptyState>No permission sets yet.</EmptyState> : null}
+          {sets.length === 0 ? <EmptyState>No permission sets yet. Clone Viewer, Operator, or Admin to start.</EmptyState> : null}
         </CardContent>
       </Card>
+
+      <Dialog open={editor != null} onOpenChange={(open) => !open && setEditor(null)}>
+        <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>{editor?.id ? 'Edit permission set' : 'New permission set'}</DialogTitle>
+            <DialogDescription>
+              Grants apply on the next API call. Owner-only settings cannot be granted to members.
+            </DialogDescription>
+          </DialogHeader>
+          {editor ? (
+            <form onSubmit={onSave} className="flex min-h-0 flex-1 flex-col gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="ps-name">Name</Label>
+                  <Input
+                    id="ps-name"
+                    value={editor.name}
+                    onChange={(e) => setEditor({ ...editor, name: e.target.value })}
+                    maxLength={80}
+                    required
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="ps-desc">Description</Label>
+                  <Input
+                    id="ps-desc"
+                    value={editor.description}
+                    onChange={(e) => setEditor({ ...editor, description: e.target.value })}
+                    maxLength={240}
+                  />
+                </div>
+                {!editor.id ? (
+                  <div className="grid gap-2 sm:col-span-2">
+                    <Label>Start from template</Label>
+                    <Select value={startFrom || '__none'} onValueChange={(v) => applyTemplate(v === '__none' ? '' : v)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Blank (all modules off)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">Blank (all modules off)</SelectItem>
+                        {templates.map((tmpl) => (
+                          <SelectItem key={tmpl.builtinTemplate || tmpl.id} value={tmpl.builtinTemplate || tmpl.id}>
+                            {tmpl.name}
+                            {tmpl.description ? ` — ${tmpl.description}` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+              </div>
+              <ScrollArea className="min-h-0 flex-1 pr-3">
+                <PermissionGrantEditor
+                  catalog={catalog}
+                  grants={editor.grants}
+                  onChange={(grants) => setEditor({ ...editor, grants })}
+                />
+              </ScrollArea>
+              <DialogFooter className="mx-0 mb-0 rounded-none border-0 bg-transparent p-0">
+                <Button type="button" variant="outline" onClick={() => setEditor(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={saving || !editor.name.trim()}>
+                  {saving ? 'Saving…' : editor.id ? 'Save' : 'Create'}
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={setToDelete != null}
         title="Delete permission set"
-        description={setToDelete ? `Delete permission set "${setToDelete.name}"? This cannot be undone.` : ''}
+        description={
+          setToDelete
+            ? setToDelete.memberCount
+              ? `Delete permission set "${setToDelete.name}"? ${setToDelete.memberCount} member${setToDelete.memberCount === 1 ? '' : 's'} still use it — reassign them first.`
+              : `Delete permission set "${setToDelete.name}"? This cannot be undone.`
+            : ''
+        }
         confirmLabel="Delete"
         destructive
         onConfirm={onDelete}

@@ -231,6 +231,7 @@ export default function SettingsMembers() {
               <TableRow>
                 <TableHead>Username</TableHead>
                 <TableHead>Display name</TableHead>
+                <TableHead>Permission set</TableHead>
                 <TableHead>Namespaces</TableHead>
                 <TableHead>Enabled</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -241,6 +242,7 @@ export default function SettingsMembers() {
                 <TableRow key={m.id}>
                   <TableCell className="font-medium">{m.username}</TableCell>
                   <TableCell>{m.displayName}</TableCell>
+                  <TableCell>{sets.find((s) => s.id === m.permissionSetId)?.name ?? m.permissionSetId}</TableCell>
                   <TableCell>{m.namespaces.join(', ')}</TableCell>
                   <TableCell>
                     <Badge variant={m.enabled ? 'outline' : 'secondary'}>{m.enabled ? 'yes' : 'no'}</Badge>

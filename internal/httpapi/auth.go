@@ -26,20 +26,21 @@ type loginResponse struct {
 }
 
 type publicUser struct {
-	Username           string   `json:"username"`
-	DisplayName        string   `json:"displayName"`
-	Role               string   `json:"role"`
-	MustChangePassword bool     `json:"mustChangePassword"`
-	Enabled            bool     `json:"enabled"`
-	PermissionSetID    string   `json:"permissionSetId,omitempty"`
-	Namespaces         []string `json:"namespaces,omitempty"`
+	Username           string              `json:"username"`
+	DisplayName        string              `json:"displayName"`
+	Role               string              `json:"role"`
+	MustChangePassword bool                `json:"mustChangePassword"`
+	Enabled            bool                `json:"enabled"`
+	PermissionSetID    string              `json:"permissionSetId,omitempty"`
+	Namespaces         []string            `json:"namespaces,omitempty"`
+	Grants             map[string][]string `json:"grants,omitempty"`
 }
 
 type errorResponse struct {
 	Error string `json:"error"`
 }
 
-func registerAuthRoutes(mux *http.ServeMux, authSvc *auth.Service, auditor *audit.Auditor, trustProxy bool) {
+func registerAuthRoutes(mux *http.ServeMux, authSvc *auth.Service, auditor *audit.Auditor, trustProxy bool, st store.Store) {
 	mux.HandleFunc("POST /api/auth/login", func(w http.ResponseWriter, r *http.Request) {
 		handleLogin(w, r, authSvc, auditor, trustProxy)
 	})
@@ -47,7 +48,7 @@ func registerAuthRoutes(mux *http.ServeMux, authSvc *auth.Service, auditor *audi
 		handleLogout(w, r, authSvc, auditor, trustProxy)
 	})
 	mux.HandleFunc("GET /api/auth/me", func(w http.ResponseWriter, r *http.Request) {
-		handleMe(w, r, authSvc)
+		handleMe(w, r, authSvc, st)
 	})
 	mux.HandleFunc("POST /api/auth/password", func(w http.ResponseWriter, r *http.Request) {
 		handlePassword(w, r, authSvc)
@@ -129,13 +130,24 @@ func handleLogout(w http.ResponseWriter, r *http.Request, authSvc *auth.Service,
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func handleMe(w http.ResponseWriter, r *http.Request, authSvc *auth.Service) {
+func handleMe(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store) {
 	u, err := authenticateRequest(r, authSvc)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	writeJSON(w, http.StatusOK, userPublic(u))
+	resp := userPublic(u)
+	if u.Role == store.RoleMember && u.PermissionSetID != "" && st != nil {
+		ps, err := st.PermissionSet(r.Context(), u.PermissionSetID)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if ps != nil {
+			resp.Grants = ps.Grants
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func handlePassword(w http.ResponseWriter, r *http.Request, authSvc *auth.Service) {
