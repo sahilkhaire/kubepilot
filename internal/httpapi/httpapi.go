@@ -3,20 +3,22 @@ package httpapi
 import (
 	"context"
 	"net/http"
+	"os"
 
 	"github.com/zixflow/k8s/internal/auth"
 )
 
 type Deps struct {
-	Ready func(context.Context) error
-	Auth  *auth.Service
+	Ready      func(context.Context) error
+	Auth       *auth.Service
+	TrustProxy bool
+	WebDist    string // optional; falls back to WEB_DIST env
 }
 
 func New(deps Deps) http.Handler {
 	mux := http.NewServeMux()
-	registerSPARoutes(mux)
 	if deps.Auth != nil {
-		registerAuthRoutes(mux, deps.Auth)
+		registerAuthRoutes(mux, deps.Auth, deps.TrustProxy)
 	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -34,5 +36,9 @@ func New(deps Deps) http.Handler {
 		}
 		w.WriteHeader(http.StatusOK)
 	})
-	return mux
+	webDist := deps.WebDist
+	if webDist == "" {
+		webDist = os.Getenv("WEB_DIST")
+	}
+	return registerSPARoutes(mux, webDist)
 }

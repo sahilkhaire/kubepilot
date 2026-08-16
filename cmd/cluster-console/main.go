@@ -26,8 +26,9 @@ func main() {
 
 	authSvc := auth.New(st, cfg.SessionSecret)
 	handler := httpapi.New(httpapi.Deps{
-		Ready: st.Ping,
-		Auth:  authSvc,
+		Ready:      st.Ping,
+		Auth:       authSvc,
+		TrustProxy: cfg.TrustProxy,
 	})
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, handler))
 }

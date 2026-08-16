@@ -39,12 +39,12 @@ type errorResponse struct {
 	Error string `json:"error"`
 }
 
-func registerAuthRoutes(mux *http.ServeMux, authSvc *auth.Service) {
+func registerAuthRoutes(mux *http.ServeMux, authSvc *auth.Service, trustProxy bool) {
 	mux.HandleFunc("POST /api/auth/login", func(w http.ResponseWriter, r *http.Request) {
-		handleLogin(w, r, authSvc)
+		handleLogin(w, r, authSvc, trustProxy)
 	})
 	mux.HandleFunc("POST /api/auth/logout", func(w http.ResponseWriter, r *http.Request) {
-		handleLogout(w, r, authSvc)
+		handleLogout(w, r, authSvc, trustProxy)
 	})
 	mux.HandleFunc("GET /api/auth/me", func(w http.ResponseWriter, r *http.Request) {
 		handleMe(w, r, authSvc)
@@ -54,7 +54,7 @@ func registerAuthRoutes(mux *http.ServeMux, authSvc *auth.Service) {
 	})
 }
 
-func handleLogin(w http.ResponseWriter, r *http.Request, authSvc *auth.Service) {
+func handleLogin(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, trustProxy bool) {
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeLoginError(w)
@@ -77,7 +77,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request, authSvc *auth.Service) 
 		Value:    authSvc.SignCookie(sessionID),
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   cookieSecure(r, trustProxy),
 		SameSite: http.SameSiteLaxMode,
 	})
 	writeJSON(w, http.StatusOK, loginResponse{
@@ -87,11 +87,11 @@ func handleLogin(w http.ResponseWriter, r *http.Request, authSvc *auth.Service) 
 	})
 }
 
-func handleLogout(w http.ResponseWriter, r *http.Request, authSvc *auth.Service) {
+func handleLogout(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, trustProxy bool) {
 	if sessionID, ok := sessionFromRequest(r, authSvc); ok {
 		_ = authSvc.Logout(r.Context(), sessionID)
 	}
-	clearSessionCookie(w)
+	clearSessionCookie(w, r, trustProxy)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -151,14 +151,14 @@ func sessionFromRequest(r *http.Request, authSvc *auth.Service) (string, bool) {
 	return authSvc.ParseCookie(c.Value)
 }
 
-func clearSessionCookie(w http.ResponseWriter) {
+func clearSessionCookie(w http.ResponseWriter, r *http.Request, trustProxy bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     auth.CookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   cookieSecure(r, trustProxy),
 		SameSite: http.SameSiteLaxMode,
 	})
 }

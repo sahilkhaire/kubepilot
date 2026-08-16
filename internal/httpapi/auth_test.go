@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -27,13 +28,17 @@ func newAuthHandler(t *testing.T) http.Handler {
 
 func newAuthHandlerWithStore(t *testing.T, st store.Store) http.Handler {
 	t.Helper()
+	return newAuthHandlerWithOptions(t, st, httpapi.Deps{})
+}
+
+func newAuthHandlerWithOptions(t *testing.T, st store.Store, opts httpapi.Deps) http.Handler {
+	t.Helper()
 	ctx := context.Background()
 	if err := bootstrap.SyncOwner(ctx, st, "owner", "secret"); err != nil {
 		t.Fatal(err)
 	}
-	return httpapi.New(httpapi.Deps{
-		Auth: auth.New(st, testSessionSecret),
-	})
+	opts.Auth = auth.New(st, testSessionSecret)
+	return httpapi.New(opts)
 }
 
 func createMember(t *testing.T, st store.Store, username, plainPassword string) {
@@ -109,7 +114,7 @@ func TestLoginOwner(t *testing.T) {
 	if session == nil {
 		t.Fatal("session cookie missing")
 	}
-	if !session.HttpOnly || !session.Secure || session.Path != "/" || session.SameSite != http.SameSiteLaxMode {
+	if !session.HttpOnly || session.Secure || session.Path != "/" || session.SameSite != http.SameSiteLaxMode {
 		t.Fatalf("cookie flags: %+v", session)
 	}
 	if session.Value == "" {
@@ -190,6 +195,76 @@ func TestLoginBadPassword(t *testing.T) {
 	}
 	if len(rec.Result().Cookies()) != 0 {
 		t.Fatal("should not set cookie on failed login")
+	}
+}
+
+func TestCookieSecure(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		trustProxy bool
+		setup      func(*http.Request)
+		wantSecure bool
+	}{
+		{
+			name:       "plain_http",
+			wantSecure: false,
+		},
+		{
+			name: "tls",
+			setup: func(r *http.Request) {
+				r.TLS = &tls.ConnectionState{}
+			},
+			wantSecure: true,
+		},
+		{
+			name:       "forwarded_https_with_trust_proxy",
+			trustProxy: true,
+			setup: func(r *http.Request) {
+				r.Header.Set("X-Forwarded-Proto", "https")
+			},
+			wantSecure: true,
+		},
+		{
+			name: "forwarded_https_without_trust_proxy",
+			setup: func(r *http.Request) {
+				r.Header.Set("X-Forwarded-Proto", "https")
+			},
+			wantSecure: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			h := newAuthHandlerWithOptions(t, store.NewMemory(), httpapi.Deps{TrustProxy: tc.trustProxy})
+
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"username":"owner","password":"secret"}`))
+			if tc.setup != nil {
+				tc.setup(req)
+			}
+			h.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("login code=%d body=%s", rec.Code, rec.Body.String())
+			}
+
+			var session *http.Cookie
+			for _, c := range rec.Result().Cookies() {
+				if c.Name == auth.CookieName {
+					session = c
+					break
+				}
+			}
+			if session == nil {
+				t.Fatal("session cookie missing")
+			}
+			if session.Secure != tc.wantSecure {
+				t.Fatalf("Secure=%v want %v", session.Secure, tc.wantSecure)
+			}
+		})
 	}
 }
 

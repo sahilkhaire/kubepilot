@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -103,36 +102,96 @@ loadMe();
 </body>
 </html>`
 
-func registerSPARoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /", serveSPA)
+type spaFilesystem struct {
+	root string
 }
 
-func serveSPA(w http.ResponseWriter, r *http.Request) {
+func registerSPARoutes(mux *http.ServeMux, webDist string) http.Handler {
+	webDist = strings.TrimSpace(webDist)
+	if webDist == "" {
+		return builtinWrap(mux)
+	}
+
+	indexPath := filepath.Join(webDist, "index.html")
+	if _, err := os.Stat(indexPath); err != nil {
+		return builtinWrap(mux)
+	}
+
+	return spaWrap(mux, &spaFilesystem{root: webDist})
+}
+
+func builtinWrap(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" {
+			serveBuiltinLogin(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func spaWrap(next http.Handler, spa *spaFilesystem) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isSPARequest(r) {
+			spa.serve(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isSPARequest(r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	path := r.URL.Path
+	return path != "/healthz" && path != "/readyz" && !strings.HasPrefix(path, "/api/")
+}
+
+func serveBuiltinLogin(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
 	}
-
-	if root := strings.TrimSpace(os.Getenv("WEB_DIST")); root != "" {
-		if serveWebDist(w, r, root) {
-			return
-		}
-	}
-
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(builtinLoginHTML))
 }
 
-func serveWebDist(w http.ResponseWriter, r *http.Request, root string) bool {
-	indexPath := filepath.Join(root, "index.html")
-	if _, err := os.Stat(indexPath); err != nil {
-		return false
+func (s *spaFilesystem) serve(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.NotFound(w, r)
+		return
 	}
-	http.FileServer(http.Dir(root)).ServeHTTP(w, r)
-	return true
+
+	path := r.URL.Path
+	if strings.HasPrefix(path, "/api/") || path == "/healthz" || path == "/readyz" {
+		http.NotFound(w, r)
+		return
+	}
+
+	rel := strings.TrimPrefix(filepath.Clean(path), "/")
+	if rel == "." || rel == "" {
+		s.serveIndex(w, r)
+		return
+	}
+
+	full := filepath.Join(s.root, rel)
+	rootClean := filepath.Clean(s.root)
+	if full != rootClean && !strings.HasPrefix(full, rootClean+string(filepath.Separator)) {
+		http.NotFound(w, r)
+		return
+	}
+
+	info, err := os.Stat(full)
+	if err == nil && !info.IsDir() {
+		http.ServeFile(w, r, full)
+		return
+	}
+
+	s.serveIndex(w, r)
 }
 
-func spaFS(root fs.FS) http.Handler {
-	return http.FileServer(http.FS(root))
+func (s *spaFilesystem) serveIndex(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, filepath.Join(s.root, "index.html"))
 }
