@@ -48,6 +48,9 @@ func Verify(plain, encoded string) bool {
 	if _, err := fmt.Sscanf(parts[2], "m=%d,t=%d,p=%d", &m, &t, &p); err != nil {
 		return false
 	}
+	if m == 0 || t == 0 || p == 0 || p > 255 {
+		return false
+	}
 
 	salt, err := base64.RawStdEncoding.DecodeString(parts[3])
 	if err != nil {
