@@ -42,8 +42,22 @@ func TestModuleForKind(t *testing.T) {
 func TestGetResourceYAML(t *testing.T) {
 	t.Parallel()
 	replicas := int32(2)
+	now := metav1.Now()
 	dep := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "dev"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "web",
+			Namespace:         "dev",
+			UID:               "abc-123",
+			ResourceVersion:   "42",
+			Generation:        3,
+			CreationTimestamp: now,
+			Labels:            map[string]string{"app": "web"},
+			Annotations:       map[string]string{"note": "keep"},
+			ManagedFields: []metav1.ManagedFieldsEntry{
+				{Manager: "kubectl", Operation: metav1.ManagedFieldsOperationUpdate, APIVersion: "apps/v1", FieldsType: "FieldsV1"},
+			},
+		},
+		Status: appsv1.DeploymentStatus{Replicas: 2, ReadyReplicas: 2},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "web"}},
@@ -63,8 +77,19 @@ func TestGetResourceYAML(t *testing.T) {
 	if !strings.Contains(text, "kind: Deployment") || !strings.Contains(text, "name: web") {
 		t.Fatalf("yaml=%s", text)
 	}
-	if strings.Contains(text, "managedFields") {
-		t.Fatalf("expected managedFields stripped: %s", text)
+	if !strings.Contains(text, "labels:") || !strings.Contains(text, "app: web") {
+		t.Fatalf("expected labels preserved: %s", text)
+	}
+	if !strings.Contains(text, "annotations:") || !strings.Contains(text, "note: keep") {
+		t.Fatalf("expected annotations preserved: %s", text)
+	}
+	for _, forbidden := range []string{
+		"managedFields", "resourceVersion", "uid:", "generation:", "creationTimestamp",
+		"status:", "readyReplicas", "selfLink",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("expected %q stripped from export: %s", forbidden, text)
+		}
 	}
 }
 

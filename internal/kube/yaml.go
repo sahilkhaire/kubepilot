@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,13 +30,11 @@ func (c *Client) GetResourceYAML(ctx context.Context, module, ns, name string) (
 	if err != nil {
 		return nil, err
 	}
-	if acc, err := meta.Accessor(obj); err == nil {
-		acc.SetManagedFields(nil)
-	}
 	u, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 	if err != nil {
 		return nil, err
 	}
+	stripServerFieldsForExport(u)
 	unst := &unstructured.Unstructured{Object: u}
 	gvkStr, err := GVKForModule(module)
 	if err != nil {
@@ -93,6 +90,21 @@ func (c *Client) ApplyYAML(ctx context.Context, doc []byte, namespaceOverride st
 }
 
 const metaRESTScopeNamespace = "namespace"
+
+// stripServerFieldsForExport removes server-owned fields so exported YAML is suitable for SSA round-trip.
+func stripServerFieldsForExport(obj map[string]interface{}) {
+	delete(obj, "status")
+	meta, ok := obj["metadata"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	for _, key := range []string{
+		"uid", "resourceVersion", "generation", "creationTimestamp",
+		"deletionTimestamp", "selfLink", "managedFields",
+	} {
+		delete(meta, key)
+	}
+}
 
 func parseYAMLDocument(doc []byte) (*unstructured.Unstructured, error) {
 	decoder := apiyaml.NewYAMLOrJSONDecoder(bytes.NewReader(doc), len(doc))
