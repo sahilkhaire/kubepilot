@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -11,12 +12,24 @@ import (
 )
 
 const (
-	time    = 1
-	memory  = 64 * 1024
-	threads = 4
-	keyLen  = 32
-	saltLen = 16
+	time      = 1
+	memory    = 64 * 1024
+	threads   = 4
+	keyLen    = 32
+	saltLen   = 16
+	MinLength = 8
+	MaxLength = 128
 )
+
+var ErrInvalid = errors.New("password must be 8–128 characters")
+
+func Validate(plain string) error {
+	n := len(plain)
+	if n < MinLength || n > MaxLength {
+		return ErrInvalid
+	}
+	return nil
+}
 
 func Hash(plain string) (string, error) {
 	salt := make([]byte, saltLen)

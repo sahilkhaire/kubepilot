@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -35,6 +36,7 @@ type createMemberRequest struct {
 	Username        string `json:"username"`
 	DisplayName     string `json:"displayName"`
 	PermissionSetID string `json:"permissionSetId"`
+	Password        string `json:"password"`
 }
 
 type createMemberResponse struct {
@@ -46,6 +48,10 @@ type updateMemberRequest struct {
 	DisplayName     *string `json:"displayName"`
 	PermissionSetID *string `json:"permissionSetId"`
 	Enabled         *bool   `json:"enabled"`
+}
+
+type resetPasswordRequest struct {
+	Password string `json:"password"`
 }
 
 type resetPasswordResponse struct {
@@ -133,7 +139,11 @@ func handleCreateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Se
 		return
 	}
 
-	plain := password.Generate(24)
+	plain, mustChange, err := resolveMemberPassword(req.Password)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	hash, err := password.Hash(plain)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -152,7 +162,7 @@ func handleCreateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Se
 		DisplayName:        displayName,
 		Role:               store.RoleMember,
 		PasswordHash:       hash,
-		MustChangePassword: true,
+		MustChangePassword: mustChange,
 		Enabled:            true,
 		PermissionSetID:    req.PermissionSetID,
 		CreatedAt:          now,
@@ -320,13 +330,23 @@ func handleResetMemberPassword(w http.ResponseWriter, r *http.Request, authSvc *
 		return
 	}
 
-	plain := password.Generate(24)
+	var req resetPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+		writeError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+
+	plain, mustChange, err := resolveMemberPassword(req.Password)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	hash, err := password.Hash(plain)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if err := st.ResetMemberPassword(r.Context(), id, hash); err != nil {
+	if err := st.ResetMemberPassword(r.Context(), id, hash, mustChange); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -370,4 +390,14 @@ func newMemberID() (string, error) {
 		return "", fmt.Errorf("generate member id: %w", err)
 	}
 	return hex.EncodeToString(b[:]), nil
+}
+
+func resolveMemberPassword(provided string) (string, bool, error) {
+	if provided == "" {
+		return password.Generate(24), true, nil
+	}
+	if err := password.Validate(provided); err != nil {
+		return "", false, err
+	}
+	return provided, false, nil
 }

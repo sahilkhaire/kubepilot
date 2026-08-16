@@ -2,10 +2,12 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/sahilkhaire/kubepilot/internal/audit"
 	"github.com/sahilkhaire/kubepilot/internal/auth"
+	"github.com/sahilkhaire/kubepilot/internal/password"
 	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
@@ -166,6 +168,10 @@ func handlePassword(w http.ResponseWriter, r *http.Request, authSvc *auth.Servic
 		return
 	}
 	if err := authSvc.ChangePassword(r.Context(), u.ID, req.CurrentPassword, req.NewPassword); err != nil {
+		if errors.Is(err, password.ErrInvalid) {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		if err == auth.ErrInvalidCredentials {
 			writeLoginError(w)
 			return

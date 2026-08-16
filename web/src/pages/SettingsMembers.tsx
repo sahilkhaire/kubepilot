@@ -14,7 +14,8 @@ import { SortableHead } from '@/components/sortable-head'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import EmptyState from '@/components/EmptyState'
 import { ErrorAlert } from '@/components/error-alert'
-import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { PageLoading } from '@/components/page-loading'
+import { SetPasswordDialog } from '@/components/set-password-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -39,13 +40,12 @@ import {
 } from '@/components/ui/table'
 import { sortBy, useTableSort } from '@/lib/table-sort'
 import { namespaceGrantLabel } from '@/lib/grants'
-import { PageLoading } from '@/components/page-loading'
+import { generatePassword, passwordError } from '@/lib/password'
 
 export default function SettingsMembers() {
   const [members, setMembers] = useState<Member[]>([])
   const [sets, setSets] = useState<PermissionSet[]>([])
   const [error, setError] = useState('')
-  const [generatedPassword, setGeneratedPassword] = useState('')
   const [loading, setLoading] = useState(true)
   const [memberToDelete, setMemberToDelete] = useState<Member | null>(null)
   const [accessTarget, setAccessTarget] = useState<Member | null>(null)
@@ -54,6 +54,11 @@ export default function SettingsMembers() {
   const [inviteUsername, setInviteUsername] = useState('')
   const [inviteDisplayName, setInviteDisplayName] = useState('')
   const [inviteSetId, setInviteSetId] = useState('')
+  const [invitePassword, setInvitePassword] = useState('')
+  const [inviteConfirm, setInviteConfirm] = useState('')
+  const [resetTarget, setResetTarget] = useState<Member | null>(null)
+  const [resetPending, setResetPending] = useState(false)
+  const [resetError, setResetError] = useState('')
 
   async function load() {
     setError('')
@@ -97,45 +102,44 @@ export default function SettingsMembers() {
     [members, sort, sets],
   )
 
-  function dismissPassword() {
-    setGeneratedPassword('')
-  }
-
-  async function copyPassword() {
-    if (!generatedPassword) return
-    try {
-      await navigator.clipboard.writeText(generatedPassword)
-      toast.success('Password copied')
-    } catch {
-      setError('Failed to copy password')
-    }
-  }
-
   async function onInvite(e: React.FormEvent) {
     e.preventDefault()
+    const pwError = passwordError(invitePassword, inviteConfirm)
+    if (pwError) {
+      setError(pwError)
+      return
+    }
     setError('')
     try {
-      const result = await createMember({
+      await createMember({
         username: inviteUsername,
         displayName: inviteDisplayName,
         permissionSetId: inviteSetId,
+        password: invitePassword,
       })
-      setGeneratedPassword(result.password)
+      toast.success(`Invited ${inviteUsername}. They can sign in with the password you set.`)
       setInviteUsername('')
       setInviteDisplayName('')
+      setInvitePassword('')
+      setInviteConfirm('')
       await load()
     } catch {
       setError('Failed to invite member')
     }
   }
 
-  async function onResetPassword(id: string) {
-    setError('')
+  async function onResetPassword(password: string) {
+    if (!resetTarget) return
+    setResetPending(true)
+    setResetError('')
     try {
-      const result = await resetMemberPassword(id)
-      setGeneratedPassword(result.password)
+      await resetMemberPassword(resetTarget.id, password)
+      toast.success(`Password updated for ${resetTarget.username}`)
+      setResetTarget(null)
     } catch {
-      setError('Failed to reset password')
+      setResetError('Failed to reset password')
+    } finally {
+      setResetPending(false)
     }
   }
 
@@ -173,23 +177,6 @@ export default function SettingsMembers() {
   return (
     <div className="space-y-6">
       <ErrorAlert message={error} />
-      {generatedPassword ? (
-        <Alert>
-          <AlertTitle>Generated password</AlertTitle>
-          <AlertDescription>
-            Copy now — dismiss to hide:{' '}
-            <span className="font-mono font-medium">{generatedPassword}</span>
-          </AlertDescription>
-          <AlertAction className="flex gap-1">
-            <Button type="button" size="sm" variant="outline" onClick={copyPassword}>
-              Copy
-            </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={dismissPassword}>
-              Dismiss
-            </Button>
-          </AlertAction>
-        </Alert>
-      ) : null}
 
       <Card className="shadow-sm">
         <CardHeader>
@@ -230,7 +217,45 @@ export default function SettingsMembers() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="grid gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="invite-password">Password</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const next = generatePassword()
+                    setInvitePassword(next)
+                    setInviteConfirm(next)
+                  }}
+                >
+                  Generate
+                </Button>
+              </div>
+              <Input
+                id="invite-password"
+                type="text"
+                autoComplete="new-password"
+                value={invitePassword}
+                onChange={(e) => setInvitePassword(e.target.value)}
+                required
+                minLength={8}
+                maxLength={128}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="invite-confirm">Confirm password</Label>
+              <Input
+                id="invite-confirm"
+                type="password"
+                autoComplete="new-password"
+                value={inviteConfirm}
+                onChange={(e) => setInviteConfirm(e.target.value)}
+                required
+              />
+            </div>
+            <div className="sm:col-span-2">
               <Button type="submit">Invite</Button>
             </div>
           </form>
@@ -269,7 +294,15 @@ export default function SettingsMembers() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button type="button" variant="ghost" size="sm" onClick={() => onResetPassword(m.id)}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setResetError('')
+                          setResetTarget(m)
+                        }}
+                      >
                         Reset password
                       </Button>
                       <Button
@@ -294,6 +327,16 @@ export default function SettingsMembers() {
         </CardContent>
       </Card>
 
+      <SetPasswordDialog
+        open={resetTarget != null}
+        title={`Set password for ${resetTarget?.username ?? ''}`}
+        description="They will be signed out and can sign in with this password immediately."
+        confirmLabel="Set password"
+        pending={resetPending}
+        error={resetError}
+        onConfirm={onResetPassword}
+        onCancel={() => !resetPending && setResetTarget(null)}
+      />
       <ConfirmDialog
         open={accessTarget != null}
         title={accessTarget?.enabled ? `Suspend ${accessTarget.username}?` : `Resume ${accessTarget?.username ?? ''}?`}

@@ -86,6 +86,9 @@ func (s *Service) ChangePassword(ctx context.Context, userID, currentPassword, n
 	if u == nil || !password.Verify(currentPassword, u.PasswordHash) {
 		return ErrInvalidCredentials
 	}
+	if err := password.Validate(newPassword); err != nil {
+		return err
+	}
 
 	hash, err := password.Hash(newPassword)
 	if err != nil {

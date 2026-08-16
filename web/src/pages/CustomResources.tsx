@@ -21,7 +21,7 @@ import {
   SerialCell,
 } from '@/components/ui/table'
 import { sortBy, useTableSort } from '@/lib/table-sort'
-import { useLiveRefresh } from '@/hooks/use-live-refresh'
+import { useLiveRefresh, useSingleFlight } from '@/hooks/use-live-refresh'
 
 type CRDItem = {
   metadata?: { name?: string }
@@ -57,7 +57,8 @@ export default function CustomResources() {
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
 
-  const loadCatalog = useCallback(async (initial = false) => {
+  const loadCatalog = useSingleFlight(
+    useCallback(async (initial = false) => {
     if (initial) {
       setLoading(true)
       setError('')
@@ -88,14 +89,16 @@ export default function CustomResources() {
     } finally {
       if (initial) setLoading(false)
     }
-  }, [])
+  }, []),
+  )
 
   useEffect(() => {
     void loadCatalog(true)
   }, [loadCatalog])
   useLiveRefresh(() => loadCatalog(false))
 
-  const loadInstances = useCallback(async (quiet = false) => {
+  const loadInstances = useSingleFlight(
+    useCallback(async (quiet = false) => {
     if (!selected) {
       setInstances([])
       return
@@ -129,7 +132,8 @@ export default function CustomResources() {
         setError(e instanceof Error ? e.message : 'load failed')
       }
     }
-  }, [selected, namespace])
+  }, [selected, namespace]),
+  )
 
   useEffect(() => {
     void loadInstances(false)

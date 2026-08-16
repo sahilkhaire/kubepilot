@@ -253,7 +253,7 @@ func (m *mongoStore) DeleteMember(ctx context.Context, id string) error {
 	return err
 }
 
-func (m *mongoStore) ResetMemberPassword(ctx context.Context, userID, hash string) error {
+func (m *mongoStore) ResetMemberPassword(ctx context.Context, userID, hash string, mustChange bool) error {
 	oid, err := bson.ObjectIDFromHex(userID)
 	if err != nil {
 		return nil
@@ -262,7 +262,7 @@ func (m *mongoStore) ResetMemberPassword(ctx context.Context, userID, hash strin
 		bson.M{"_id": oid, "role": RoleMember},
 		bson.M{"$set": bson.M{
 			"passwordHash":       hash,
-			"mustChangePassword": true,
+			"mustChangePassword": mustChange,
 			"updatedAt":          time.Now().UTC(),
 		}},
 	)

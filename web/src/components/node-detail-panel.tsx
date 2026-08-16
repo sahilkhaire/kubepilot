@@ -48,7 +48,7 @@ import {
   type K8sObject,
 } from '@/lib/k8s-fields'
 import { ratioSortValue, sortBy, useTableSort } from '@/lib/table-sort'
-import { useLiveRefresh } from '@/hooks/use-live-refresh'
+import { useLiveRefresh, useSingleFlight } from '@/hooks/use-live-refresh'
 
 type EventItem = {
   metadata?: { name?: string; namespace?: string; creationTimestamp?: string }
@@ -137,7 +137,8 @@ export default function NodeDetailPanel({
   const onRefreshedRef = useRef(onRefreshed)
   onRefreshedRef.current = onRefreshed
 
-  const loadLive = useCallback(async () => {
+  const loadLive = useSingleFlight(
+    useCallback(async () => {
     try {
       const res = await fetch(`/api/k8s/nodes/${encodeURIComponent(name)}`, { credentials: 'same-origin' })
       if (res.ok) {
@@ -164,7 +165,8 @@ export default function NodeDetailPanel({
     } catch {
       // keep last values on background refresh
     }
-  }, [name, user])
+  }, [name, user]),
+  )
 
   useEffect(() => {
     void loadLive()

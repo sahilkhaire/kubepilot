@@ -59,3 +59,13 @@ func TestHashVerify(t *testing.T) {
 		t.Fatal("should reject")
 	}
 }
+
+func TestValidate(t *testing.T) {
+	t.Parallel()
+	if err := password.Validate("short"); err == nil {
+		t.Fatal("expected error for short password")
+	}
+	if err := password.Validate("longenough"); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -46,7 +46,7 @@ import {
   type K8sObject,
 } from '@/lib/k8s-fields'
 import { sortBy, timestampSortValue, useTableSort } from '@/lib/table-sort'
-import { useLiveRefresh } from '@/hooks/use-live-refresh'
+import { useLiveRefresh, useSingleFlight } from '@/hooks/use-live-refresh'
 
 type PendingAction = 'cordon' | 'uncordon' | 'drain'
 
@@ -63,7 +63,8 @@ export default function Nodes() {
   const [selectedName, setSelectedName] = useState<string | null>(null)
   const [panelView, setPanelView] = useState<'details' | 'yaml'>('details')
 
-  const load = useCallback(async (quiet = false) => {
+  const load = useSingleFlight(
+    useCallback(async (quiet = false) => {
     try {
       const res = await fetch('/api/k8s/nodes', { credentials: 'same-origin' })
       if (res.status === 403) {
@@ -79,7 +80,8 @@ export default function Nodes() {
         setError(e instanceof Error ? e.message : 'load failed')
       }
     }
-  }, [])
+  }, []),
+  )
 
   useEffect(() => {
     let cancelled = false

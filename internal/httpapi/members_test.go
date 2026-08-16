@@ -404,5 +404,114 @@ func TestResetPasswordSetsMustChangePassword(t *testing.T) {
 	}
 }
 
+func TestCreateMemberWithPassword(t *testing.T) {
+	t.Parallel()
+	st := store.NewMemory()
+	createPermissionSet(t, st, "ps1")
+	h := newMembersHandler(t, st)
+	session := login(t, h, "owner", "secret")
+
+	body := bytes.NewBufferString(`{"username":"ivy","displayName":"Ivy","permissionSetId":"ps1","password":"invitepass"}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/settings/members", body)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["password"] != "invitepass" {
+		t.Fatalf("password=%v", resp["password"])
+	}
+	user := resp["user"].(map[string]any)
+	if user["mustChangePassword"] != false {
+		t.Fatalf("mustChangePassword=%v want false", user["mustChangePassword"])
+	}
+
+	loginRec := httptest.NewRecorder()
+	loginBody := strings.NewReader(`{"username":"ivy","password":"invitepass"}`)
+	h.ServeHTTP(loginRec, httptest.NewRequest(http.MethodPost, "/api/auth/login", loginBody))
+	if loginRec.Code != http.StatusOK {
+		t.Fatalf("login code=%d body=%s", loginRec.Code, loginRec.Body.String())
+	}
+}
+
+func TestCreateMemberRejectsShortPassword(t *testing.T) {
+	t.Parallel()
+	st := store.NewMemory()
+	createPermissionSet(t, st, "ps1")
+	h := newMembersHandler(t, st)
+	session := login(t, h, "owner", "secret")
+
+	body := bytes.NewBufferString(`{"username":"jack","displayName":"Jack","permissionSetId":"ps1","password":"short"}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/settings/members", body)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestResetPasswordWithProvidedPassword(t *testing.T) {
+	t.Parallel()
+	st := store.NewMemory()
+	createPermissionSet(t, st, "ps1")
+	h := newMembersHandler(t, st)
+	ownerSession := login(t, h, "owner", "secret")
+
+	createBody := bytes.NewBufferString(`{"username":"kate","displayName":"Kate","permissionSetId":"ps1","password":"firstpass"}`)
+	createRec := httptest.NewRecorder()
+	createReq := httptest.NewRequest(http.MethodPost, "/api/settings/members", createBody)
+	createReq.AddCookie(ownerSession)
+	h.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create code=%d body=%s", createRec.Code, createRec.Body.String())
+	}
+	var createResp map[string]any
+	if err := json.Unmarshal(createRec.Body.Bytes(), &createResp); err != nil {
+		t.Fatal(err)
+	}
+	memberID := createResp["user"].(map[string]any)["id"].(string)
+
+	resetBody := strings.NewReader(`{"password":"resetpass"}`)
+	resetRec := httptest.NewRecorder()
+	resetReq := httptest.NewRequest(http.MethodPost, "/api/settings/members/"+memberID+"/reset-password", resetBody)
+	resetReq.AddCookie(ownerSession)
+	h.ServeHTTP(resetRec, resetReq)
+	if resetRec.Code != http.StatusOK {
+		t.Fatalf("reset code=%d body=%s", resetRec.Code, resetRec.Body.String())
+	}
+	var resetResp map[string]any
+	if err := json.Unmarshal(resetRec.Body.Bytes(), &resetResp); err != nil {
+		t.Fatal(err)
+	}
+	if resetResp["password"] != "resetpass" {
+		t.Fatalf("password=%v", resetResp["password"])
+	}
+
+	u, err := st.UserByID(context.Background(), memberID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.MustChangePassword {
+		t.Fatal("mustChangePassword should be false when owner sets password")
+	}
+
+	oldLogin := httptest.NewRecorder()
+	h.ServeHTTP(oldLogin, httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"username":"kate","password":"firstpass"}`)))
+	if oldLogin.Code != http.StatusUnauthorized {
+		t.Fatalf("old password login code=%d want 401", oldLogin.Code)
+	}
+	newLogin := httptest.NewRecorder()
+	h.ServeHTTP(newLogin, httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"username":"kate","password":"resetpass"}`)))
+	if newLogin.Code != http.StatusOK {
+		t.Fatalf("new password login code=%d body=%s", newLogin.Code, newLogin.Body.String())
+	}
+}
+
 // Ensure auth cookie name is referenced for session tests.
 var _ = auth.CookieName

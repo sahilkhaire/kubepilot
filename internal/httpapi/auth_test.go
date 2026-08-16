@@ -297,13 +297,22 @@ func TestPasswordChangeMember(t *testing.T) {
 	session := login(t, h, "member", "oldpass")
 
 	rec := httptest.NewRecorder()
-	body := strings.NewReader(`{"currentPassword":"oldpass","newPassword":"newpass"}`)
+	body := strings.NewReader(`{"currentPassword":"oldpass","newPassword":"newpass1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/password", body)
 	req.AddCookie(session)
 	h.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("password change code=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	shortRec := httptest.NewRecorder()
+	shortBody := strings.NewReader(`{"currentPassword":"newpass1","newPassword":"short"}`)
+	shortReq := httptest.NewRequest(http.MethodPost, "/api/auth/password", shortBody)
+	shortReq.AddCookie(session)
+	h.ServeHTTP(shortRec, shortReq)
+	if shortRec.Code != http.StatusBadRequest {
+		t.Fatalf("short password code=%d want 400", shortRec.Code)
 	}
 
 	meRec := httptest.NewRecorder()
@@ -322,7 +331,7 @@ func TestPasswordChangeMember(t *testing.T) {
 	}
 
 	loginRec := httptest.NewRecorder()
-	loginBody := strings.NewReader(`{"username":"member","password":"newpass"}`)
+	loginBody := strings.NewReader(`{"username":"member","password":"newpass1"}`)
 	h.ServeHTTP(loginRec, httptest.NewRequest(http.MethodPost, "/api/auth/login", loginBody))
 	if loginRec.Code != http.StatusOK {
 		t.Fatalf("login with new password code=%d body=%s", loginRec.Code, loginRec.Body.String())

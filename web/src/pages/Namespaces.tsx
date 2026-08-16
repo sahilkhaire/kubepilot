@@ -20,7 +20,7 @@ import {
 import { useUser } from '@/lib/auth-context'
 import { can } from '@/lib/grants'
 import { sortBy, useTableSort } from '@/lib/table-sort'
-import { useLiveRefresh } from '@/hooks/use-live-refresh'
+import { useLiveRefresh, useSingleFlight } from '@/hooks/use-live-refresh'
 import type { YAMLTarget } from '@/lib/k8s-yaml'
 
 export default function Namespaces() {
@@ -31,7 +31,8 @@ export default function Namespaces() {
   const [query, setQuery] = useState('')
   const [yamlTarget, setYamlTarget] = useState<YAMLTarget | null>(null)
 
-  const load = useCallback(async (initial = false) => {
+  const load = useSingleFlight(
+    useCallback(async (initial = false) => {
     if (initial) {
       setLoading(true)
       setError('')
@@ -47,7 +48,8 @@ export default function Namespaces() {
     } finally {
       if (initial) setLoading(false)
     }
-  }, [])
+  }, []),
+  )
 
   useEffect(() => {
     void load(true)

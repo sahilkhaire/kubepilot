@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/table'
 import { SortableHead } from '@/components/sortable-head'
 import { can } from '@/lib/grants'
-import { useLiveRefresh } from '@/hooks/use-live-refresh'
+import { useLiveRefresh, useSingleFlight } from '@/hooks/use-live-refresh'
 import {
   formatAge,
   objectAnnotations,
@@ -130,7 +130,8 @@ export default function DeploymentDetailPanel({
   const deploymentRef = useRef(deployment)
   deploymentRef.current = deployment
 
-  const loadLive = useCallback(async () => {
+  const loadLive = useSingleFlight(
+    useCallback(async () => {
     if (!ns || !name) return
     try {
       let current = deploymentRef.current
@@ -161,7 +162,8 @@ export default function DeploymentDetailPanel({
     } catch {
       // keep last values
     }
-  }, [name, ns, user])
+  }, [name, ns, user]),
+  )
 
   useEffect(() => {
     void loadLive()

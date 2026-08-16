@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   Avatar,
   AvatarFallback,
@@ -21,8 +22,9 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { EllipsisVerticalIcon, LogOutIcon, MonitorIcon, MoonIcon, SunIcon } from 'lucide-react'
+import { EllipsisVerticalIcon, KeyRoundIcon, LogOutIcon, MonitorIcon, MoonIcon, SunIcon } from 'lucide-react'
 import { type Theme, useTheme } from '@/lib/theme'
+import { ChangePasswordDialog } from '@/components/change-password-dialog'
 
 export function NavUser({
   user,
@@ -37,6 +39,7 @@ export function NavUser({
   const { isMobile } = useSidebar()
   const { theme, setTheme } = useTheme()
   const initials = user.name.slice(0, 2).toUpperCase()
+  const [passwordOpen, setPasswordOpen] = useState(false)
 
   return (
     <SidebarMenu>
@@ -98,12 +101,21 @@ export function NavUser({
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
+            {user.role === 'member' ? (
+              <DropdownMenuItem onClick={() => setPasswordOpen(true)}>
+                <KeyRoundIcon />
+                Change password
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem onClick={onLogout}>
               <LogOutIcon />
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        {user.role === 'member' ? (
+          <ChangePasswordDialog open={passwordOpen} onOpenChange={setPasswordOpen} />
+        ) : null}
       </SidebarMenuItem>
     </SidebarMenu>
   )

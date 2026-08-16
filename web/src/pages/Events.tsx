@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/table'
 import { formatAge } from '@/lib/k8s-fields'
 import { sortBy, timestampSortValue, useTableSort } from '@/lib/table-sort'
-import { useLiveRefresh } from '@/hooks/use-live-refresh'
+import { useLiveRefresh, useSingleFlight } from '@/hooks/use-live-refresh'
 
 type EventItem = {
   metadata?: { name?: string; namespace?: string; creationTimestamp?: string }
@@ -35,7 +35,8 @@ export default function Events() {
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
 
-  const load = useCallback(async (initial = false) => {
+  const load = useSingleFlight(
+    useCallback(async (initial = false) => {
     if (initial) {
       setLoading(true)
       setError('')
@@ -55,7 +56,8 @@ export default function Events() {
     } finally {
       if (initial) setLoading(false)
     }
-  }, [])
+  }, []),
+  )
 
   useEffect(() => {
     void load(true)

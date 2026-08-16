@@ -78,7 +78,7 @@ import {
   type K8sObject,
 } from '@/lib/k8s-fields'
 import { ratioSortValue, sortBy, timestampSortValue, useTableSort } from '@/lib/table-sort'
-import { useLiveRefresh } from '@/hooks/use-live-refresh'
+import { useLiveRefresh, useSingleFlight } from '@/hooks/use-live-refresh'
 import type { YAMLTarget } from '@/lib/k8s-yaml'
 
 function resourceSortValue(item: K8sObject, key: string, module: string, fallbackNs: string): unknown {
@@ -300,7 +300,8 @@ export default function ResourceListPage({
     }
   }, [module])
 
-  const loadItems = useCallback(async (quiet = false) => {
+  const loadItems = useSingleFlight(
+    useCallback(async (quiet = false) => {
     if (!module || module === 'overview') return
     if (!clusterScoped && !namespace) {
       setItems([])
@@ -327,7 +328,8 @@ export default function ResourceListPage({
         setError(e instanceof Error ? e.message : 'load failed')
       }
     }
-  }, [module, namespace, clusterScoped])
+  }, [module, namespace, clusterScoped]),
+  )
 
   useEffect(() => {
     void loadItems(false)

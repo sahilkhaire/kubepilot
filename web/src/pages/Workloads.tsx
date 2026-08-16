@@ -17,7 +17,7 @@ import {
 import { useUser } from '@/lib/auth-context'
 import { can } from '@/lib/grants'
 import { sortBy, useTableSort } from '@/lib/table-sort'
-import { useLiveRefresh } from '@/hooks/use-live-refresh'
+import { useLiveRefresh, useSingleFlight } from '@/hooks/use-live-refresh'
 
 const rows = [
   { module: 'pods', label: 'Pods', href: '/workloads/pods' },
@@ -64,7 +64,8 @@ export default function Workloads() {
     }
   }, [])
 
-  const loadCounts = useCallback(async (quiet = false) => {
+  const loadCounts = useSingleFlight(
+    useCallback(async (quiet = false) => {
     if (!namespace) return
     try {
       const qs = isAllNamespaces(namespace) ? '' : `?namespace=${encodeURIComponent(namespace)}`
@@ -78,7 +79,8 @@ export default function Workloads() {
     } catch (e) {
       if (!quiet) setError(e instanceof Error ? e.message : 'load failed')
     }
-  }, [namespace])
+  }, [namespace]),
+  )
 
   useEffect(() => {
     void loadCounts(false)

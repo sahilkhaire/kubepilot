@@ -112,7 +112,7 @@ func (m *memoryStore) DeleteMember(ctx context.Context, id string) error {
 	return nil
 }
 
-func (m *memoryStore) ResetMemberPassword(ctx context.Context, userID, hash string) error {
+func (m *memoryStore) ResetMemberPassword(ctx context.Context, userID, hash string, mustChange bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -121,7 +121,7 @@ func (m *memoryStore) ResetMemberPassword(ctx context.Context, userID, hash stri
 		return nil
 	}
 	u.PasswordHash = hash
-	u.MustChangePassword = true
+	u.MustChangePassword = mustChange
 	u.UpdatedAt = time.Now().UTC()
 	return nil
 }

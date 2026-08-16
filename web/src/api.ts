@@ -151,6 +151,7 @@ export async function createMember(data: {
   username: string
   displayName: string
   permissionSetId: string
+  password: string
 }): Promise<{ user: Member; password: string }> {
   const res = await apiFetch('/api/settings/members', {
     method: 'POST',
@@ -189,9 +190,11 @@ export async function deleteMember(id: string): Promise<void> {
   }
 }
 
-export async function resetMemberPassword(id: string): Promise<{ password: string }> {
+export async function resetMemberPassword(id: string, password: string): Promise<{ password: string }> {
   const res = await apiFetch(`/api/settings/members/${id}/reset-password`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
   })
   if (!res.ok) {
     throw new Error('failed to reset password')

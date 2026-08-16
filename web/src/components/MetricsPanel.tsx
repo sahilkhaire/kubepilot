@@ -3,7 +3,7 @@ import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/comp
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useLiveRefresh } from '@/hooks/use-live-refresh'
+import { useLiveRefresh, useSingleFlight } from '@/hooks/use-live-refresh'
 import { useUser } from '@/lib/auth-context'
 import { can } from '@/lib/grants'
 
@@ -122,7 +122,8 @@ export default function MetricsPanel({ scope, namespace, name, title, compact }:
   const [data, setData] = useState<MetricsResponse | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const load = useCallback(
+  const load = useSingleFlight(
+    useCallback(
     async (initial = false) => {
       if (!allowed) {
         setLoading(false)
@@ -148,6 +149,7 @@ export default function MetricsPanel({ scope, namespace, name, title, compact }:
       }
     },
     [scope, namespace, name, allowed],
+    ),
   )
 
   useEffect(() => {
@@ -213,7 +215,8 @@ export function MetricsCell({ scope, namespace, name }: Pick<MetricsPanelProps, 
   const allowed = can(user, 'metrics', 'view')
   const [text, setText] = useState('—')
 
-  const load = useCallback(async () => {
+  const load = useSingleFlight(
+    useCallback(async () => {
     if (!allowed) {
       setText('—')
       return
@@ -231,7 +234,8 @@ export function MetricsCell({ scope, namespace, name }: Pick<MetricsPanelProps, 
     } catch {
       // keep last value on background refresh
     }
-  }, [scope, namespace, name, allowed])
+  }, [scope, namespace, name, allowed]),
+  )
 
   useEffect(() => {
     void load()
@@ -288,7 +292,8 @@ function UsageBar({
 export function useNodeMetrics(name: string, enabled: boolean) {
   const [data, setData] = useState<MetricsResponse | null>(null)
 
-  const load = useCallback(async () => {
+  const load = useSingleFlight(
+    useCallback(async () => {
     if (!enabled || !name) {
       setData(null)
       return
@@ -307,7 +312,8 @@ export function useNodeMetrics(name: string, enabled: boolean) {
     } catch {
       // keep last value on background refresh
     }
-  }, [name, enabled])
+  }, [name, enabled]),
+  )
 
   useEffect(() => {
     if (!enabled || !name) {

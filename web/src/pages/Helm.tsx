@@ -21,7 +21,7 @@ import {
   SerialCell,
 } from '@/components/ui/table'
 import { sortBy, useTableSort } from '@/lib/table-sort'
-import { useLiveRefresh } from '@/hooks/use-live-refresh'
+import { useLiveRefresh, useSingleFlight } from '@/hooks/use-live-refresh'
 
 type HelmRelease = {
   name: string
@@ -65,7 +65,8 @@ export default function Helm() {
     }
   }
 
-  const loadReleasesForNamespace = useCallback(async (quiet = false) => {
+  const loadReleasesForNamespace = useSingleFlight(
+    useCallback(async (quiet = false) => {
     if (!namespace) {
       setReleases([])
       return
@@ -79,7 +80,8 @@ export default function Helm() {
         setError(e instanceof Error ? e.message : 'load failed')
       }
     }
-  }, [namespace])
+  }, [namespace]),
+  )
 
   useEffect(() => {
     let cancelled = false

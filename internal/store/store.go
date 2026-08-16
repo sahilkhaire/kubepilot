@@ -105,7 +105,7 @@ type Store interface {
 	ListMembers(ctx context.Context) ([]User, error)
 	UpdateMember(ctx context.Context, u User) error
 	DeleteMember(ctx context.Context, id string) error
-	ResetMemberPassword(ctx context.Context, userID, hash string) error
+	ResetMemberPassword(ctx context.Context, userID, hash string, mustChange bool) error
 	UpdateOwnerPassword(ctx context.Context, userID, hash string) error
 	UpdatePassword(ctx context.Context, userID, hash string) error
 	UserByUsername(ctx context.Context, username string) (*User, error)

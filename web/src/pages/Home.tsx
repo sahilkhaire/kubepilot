@@ -6,7 +6,7 @@ import { PageLoading } from '@/components/page-loading'
 import { ErrorAlert } from '@/components/error-alert'
 import MetricsPanel from '@/components/MetricsPanel'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useLiveRefresh } from '@/hooks/use-live-refresh'
+import { useLiveRefresh, useSingleFlight } from '@/hooks/use-live-refresh'
 import { useUser } from '@/lib/auth-context'
 import { can } from '@/lib/grants'
 
@@ -29,7 +29,8 @@ export default function Home() {
   const canMetrics = can(user, 'metrics', 'view')
   const visibleCards = Object.entries(labels).filter(([key]) => can(user, key, 'view'))
 
-  const load = useCallback(async (initial = false) => {
+  const load = useSingleFlight(
+    useCallback(async (initial = false) => {
     if (!canOverview) {
       setLoading(false)
       setCounts({})
@@ -51,7 +52,8 @@ export default function Home() {
     } finally {
       if (initial) setLoading(false)
     }
-  }, [canOverview])
+  }, [canOverview]),
+  )
 
   useEffect(() => {
     void load(true)
