@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -62,8 +63,17 @@ func TestGetResourceYAML(t *testing.T) {
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "web"}},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "web"}},
-				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "nginx"}}},
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:            map[string]string{"app": "web"},
+					UID:               "template-uid",
+					ResourceVersion:   "7",
+					Generation:        1,
+					CreationTimestamp: now,
+					ManagedFields: []metav1.ManagedFieldsEntry{
+						{Manager: "kube-controller-manager", Operation: metav1.ManagedFieldsOperationUpdate, APIVersion: "v1", FieldsType: "FieldsV1"},
+					},
+				},
+				Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "nginx"}}},
 			},
 		},
 	}
@@ -85,11 +95,49 @@ func TestGetResourceYAML(t *testing.T) {
 	}
 	for _, forbidden := range []string{
 		"managedFields", "resourceVersion", "uid:", "generation:", "creationTimestamp",
-		"status:", "readyReplicas", "selfLink",
+		"status:", "readyReplicas", "selfLink", "template-uid",
 	} {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("expected %q stripped from export: %s", forbidden, text)
 		}
+	}
+}
+
+func TestGetResourceYAMLStripsNestedTemplateMetadata(t *testing.T) {
+	t.Parallel()
+	replicas := int32(1)
+	dep := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "web",
+			Namespace: "dev",
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "web"}},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:              map[string]string{"app": "web"},
+					CreationTimestamp:   metav1.Now(),
+					ResourceVersion:     "99",
+					UID:                 "pod-template-uid",
+					DeletionTimestamp:   &metav1.Time{Time: metav1.Now().Add(time.Hour)},
+				},
+				Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "nginx"}}},
+			},
+		},
+	}
+	client := kube.ForTest(fake.NewSimpleClientset(dep))
+
+	out, err := client.GetResourceYAML(context.Background(), "deployments", "dev", "web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(out)
+	if strings.Contains(text, "creationTimestamp") {
+		t.Fatalf("expected nested template metadata.creationTimestamp stripped: %s", text)
+	}
+	if !strings.Contains(text, "template:") || !strings.Contains(text, "labels:") {
+		t.Fatalf("expected pod template spec preserved: %s", text)
 	}
 }
 

@@ -91,18 +91,32 @@ func (c *Client) ApplyYAML(ctx context.Context, doc []byte, namespaceOverride st
 
 const metaRESTScopeNamespace = "namespace"
 
+var metadataServerFields = []string{
+	"uid", "resourceVersion", "generation", "creationTimestamp",
+	"deletionTimestamp", "selfLink", "managedFields",
+}
+
 // stripServerFieldsForExport removes server-owned fields so exported YAML is suitable for SSA round-trip.
 func stripServerFieldsForExport(obj map[string]interface{}) {
 	delete(obj, "status")
-	meta, ok := obj["metadata"].(map[string]interface{})
-	if !ok {
-		return
-	}
-	for _, key := range []string{
-		"uid", "resourceVersion", "generation", "creationTimestamp",
-		"deletionTimestamp", "selfLink", "managedFields",
-	} {
-		delete(meta, key)
+	stripServerMetadataFieldsRecursive(obj)
+}
+
+func stripServerMetadataFieldsRecursive(v interface{}) {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		if meta, ok := val["metadata"].(map[string]interface{}); ok {
+			for _, key := range metadataServerFields {
+				delete(meta, key)
+			}
+		}
+		for _, child := range val {
+			stripServerMetadataFieldsRecursive(child)
+		}
+	case []interface{}:
+		for _, item := range val {
+			stripServerMetadataFieldsRecursive(item)
+		}
 	}
 }
 
