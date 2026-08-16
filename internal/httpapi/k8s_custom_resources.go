@@ -7,8 +7,8 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
-	"github.com/sahilkhaire/k8s-apis/internal/rbac"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/rbac"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 func registerK8sCustomResourceRoutes(mux *http.ServeMux, deps Deps) {

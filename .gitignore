@@ -5,7 +5,7 @@
 *.out
 bin/
 dist/
-/cluster-console
+/kubepilot
 web/node_modules/
 web/dist/
 web/*.tsbuildinfo

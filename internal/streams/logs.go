@@ -6,7 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/sahilkhaire/k8s-apis/internal/kube"
+	"github.com/sahilkhaire/kubepilot/internal/kube"
 )
 
 type LogOpts struct {

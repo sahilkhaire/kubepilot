@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sahilkhaire/k8s-apis/internal/audit"
-	"github.com/sahilkhaire/k8s-apis/internal/httpapi"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/audit"
+	"github.com/sahilkhaire/kubepilot/internal/httpapi"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 type auditInsertFailStore struct {

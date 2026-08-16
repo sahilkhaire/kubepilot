@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/sahilkhaire/k8s-apis/internal/auth"
-	"github.com/sahilkhaire/k8s-apis/internal/rbac"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/auth"
+	"github.com/sahilkhaire/kubepilot/internal/rbac"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 func mustChangePasswordMiddleware(authSvc *auth.Service, next http.Handler) http.Handler {

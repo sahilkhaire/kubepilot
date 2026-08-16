@@ -14,10 +14,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"github.com/sahilkhaire/k8s-apis/internal/helmctrl"
-	"github.com/sahilkhaire/k8s-apis/internal/httpapi"
-	"github.com/sahilkhaire/k8s-apis/internal/kube"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/helmctrl"
+	"github.com/sahilkhaire/kubepilot/internal/httpapi"
+	"github.com/sahilkhaire/kubepilot/internal/kube"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 type mockHelmClient struct {

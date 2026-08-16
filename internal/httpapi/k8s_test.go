@@ -12,10 +12,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"github.com/sahilkhaire/k8s-apis/internal/httpapi"
-	"github.com/sahilkhaire/k8s-apis/internal/kube"
-	"github.com/sahilkhaire/k8s-apis/internal/password"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/httpapi"
+	"github.com/sahilkhaire/kubepilot/internal/kube"
+	"github.com/sahilkhaire/kubepilot/internal/password"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 func newK8sHandler(t *testing.T, st store.Store, kubeClient *kube.Client) http.Handler {

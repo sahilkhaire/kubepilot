@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 func TestMustChangePasswordGate(t *testing.T) {

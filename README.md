@@ -1,4 +1,4 @@
-# Cluster Console
+# KubePilot
 
 In-cluster Kubernetes web dashboard for a single cluster. The published container image is **generic** — no cluster URLs, secrets, or hostnames are baked in. Install with Helm and provide configuration via values and Secrets.
 
@@ -7,15 +7,15 @@ Product documentation lives in [docs/](docs/README.md).
 ## Quick install
 
 ```bash
-helm install cluster-console deploy/charts/cluster-console \
+helm install kubepilot deploy/charts/kubepilot \
   --namespace YOUR_NAMESPACE --create-namespace \
-  --set mongodbUri=mongodb://<host>:27017/cluster_console \
+  --set mongodbUri=mongodb://<host>:27017/kubepilot \
   --set sessionSecret=<random-string> \
   --set ownerPassword=<owner-password> \
   --set ingress.host=console.example.com
-
-The chart defaults to the public image `ghcr.io/sahilkhaire/k8s-apis:latest`. Override `image.repository` / `image.tag` to use a mirror.
 ```
+
+The chart defaults to the public image `ghcr.io/sahilkhaire/kubepilot:latest`. Override `image.repository` / `image.tag` to use a mirror.
 
 Alternatively, create a Secret yourself and set `existingSecret` instead of `mongodbUri`, `sessionSecret`, and `ownerPassword`.
 

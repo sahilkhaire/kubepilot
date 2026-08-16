@@ -2,7 +2,7 @@ name: Publish image
 
 on:
   push:
-    branches: [feat/cluster-console, main, master]
+    branches: [feat/cluster-console, feat/kubepilot, main, master]
     tags: ["v*"]
   workflow_dispatch:
 
@@ -11,7 +11,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE: ghcr.io/sahilkhaire/k8s-apis
+  IMAGE: ghcr.io/sahilkhaire/kubepilot
 
 jobs:
   publish:

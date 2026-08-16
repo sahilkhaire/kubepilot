@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sahilkhaire/k8s-apis/internal/audit"
-	"github.com/sahilkhaire/k8s-apis/internal/auth"
-	"github.com/sahilkhaire/k8s-apis/internal/password"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/audit"
+	"github.com/sahilkhaire/kubepilot/internal/auth"
+	"github.com/sahilkhaire/kubepilot/internal/password"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 var usernameRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{1,31}$`)

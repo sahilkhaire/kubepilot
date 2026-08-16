@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sahilkhaire/k8s-apis/internal/password"
+	"github.com/sahilkhaire/kubepilot/internal/password"
 )
 
 func TestGenerateLength(t *testing.T) {

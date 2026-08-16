@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sahilkhaire/k8s-apis/internal/auth"
-	"github.com/sahilkhaire/k8s-apis/internal/bootstrap"
-	"github.com/sahilkhaire/k8s-apis/internal/password"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/auth"
+	"github.com/sahilkhaire/kubepilot/internal/bootstrap"
+	"github.com/sahilkhaire/kubepilot/internal/password"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 const sessionSecret = "test-session-secret"

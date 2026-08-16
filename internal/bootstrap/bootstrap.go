@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sahilkhaire/k8s-apis/internal/audit"
-	"github.com/sahilkhaire/k8s-apis/internal/password"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/audit"
+	"github.com/sahilkhaire/kubepilot/internal/password"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 func SyncOwner(ctx context.Context, st store.Store, ownerUsername, ownerPassword string, auditor *audit.Auditor) error {

@@ -3,11 +3,11 @@ package rbac_test
 import (
 	"testing"
 
-	"github.com/sahilkhaire/k8s-apis/internal/rbac"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/rbac"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
-const installNS = "cluster-console"
+const installNS = "kubepilot"
 
 func TestAllow(t *testing.T) {
 	owner := store.User{Role: store.RoleOwner, Enabled: true}

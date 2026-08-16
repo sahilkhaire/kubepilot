@@ -1,6 +1,6 @@
-# Cluster Console — product
+# KubePilot — product
 
-Working name: **Cluster Console**. Helm chart / image / repo name: `cluster-console`. The display name can change later without changing architecture or APIs.
+Product name: **KubePilot**. Helm chart, image, Go module, and repo name: `kubepilot`.
 
 ## Vision
 
@@ -37,12 +37,12 @@ Members cannot:
 - See or manage other members
 - See audit logs
 - Receive a kubeconfig
-- See or mutate the namespace where Cluster Console is installed (even with all-namespaces `*`)
+- See or mutate the namespace where KubePilot is installed (even with all-namespaces `*`)
 
 ## How people reach it
 
 1. Cloudflare Access (Zero Trust) in front of the Ingress hostname.
-2. Cluster Console login (username + password) so the app knows **which member** is acting.
+2. KubePilot login (username + password) so the app knows **which member** is acting.
 
 Cloudflare proves the visitor is allowed onto the hostname. The app proves which identity to audit and which permission set to apply. Both layers stay.
 
@@ -131,7 +131,7 @@ Details of who can do what: [AUTH-AND-PERMISSIONS.md](AUTH-AND-PERMISSIONS.md).
 - Roles, RoleBindings: namespaced; CRUD + YAML.
 - ClusterRoles, ClusterRoleBindings: cluster-scoped; CRUD + YAML.
 
-This is Kubernetes RBAC **inside the cluster**, not Cluster Console’s own permission sets. Granting a member `view` on ClusterRoles does **not** grant them Cluster Console owner powers.
+This is Kubernetes RBAC **inside the cluster**, not KubePilot's own permission sets. Granting a member `view` on ClusterRoles does **not** grant them KubePilot owner powers.
 
 ### Custom resources
 

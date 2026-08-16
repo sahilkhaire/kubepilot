@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sahilkhaire/k8s-apis/internal/password"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/password"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
-const CookieName = "cluster_console_session"
+const CookieName = "kubepilot_session"
 
 const (
 	idleDuration = 8 * time.Hour

@@ -9,8 +9,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
-	"github.com/sahilkhaire/k8s-apis/internal/rbac"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/rbac"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 type namespaceCreateRequest struct {

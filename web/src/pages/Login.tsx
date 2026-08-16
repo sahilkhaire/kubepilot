@@ -24,7 +24,7 @@ export default function Login({ onLogin }: Props) {
 
   return (
     <main style={{ maxWidth: '24rem', margin: '2rem auto', padding: '0 1rem' }}>
-      <h1>Cluster Console</h1>
+      <h1>KubePilot</h1>
       <form onSubmit={onSubmit}>
         <label>
           Username

@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "cluster-console.fullname" . }}
+  name: {{ include "kubepilot.fullname" . }}
   labels:
-    {{- include "cluster-console.labels" . | nindent 4 }}
+    {{- include "kubepilot.labels" . | nindent 4 }}
 spec:
   type: ClusterIP
   sessionAffinity: {{ .Values.sessionAffinity }}
@@ -13,4 +13,4 @@ spec:
       protocol: TCP
       name: http
   selector:
-    {{- include "cluster-console.selectorLabels" . | nindent 4 }}
+    {{- include "kubepilot.selectorLabels" . | nindent 4 }}

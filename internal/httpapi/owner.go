@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sahilkhaire/k8s-apis/internal/auth"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/auth"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 func requireOwner(w http.ResponseWriter, r *http.Request, authSvc *auth.Service) (*store.User, bool) {

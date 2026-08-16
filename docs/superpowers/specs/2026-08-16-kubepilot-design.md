@@ -1,4 +1,4 @@
-# Cluster Console — design decision log
+# KubePilot — design decision log
 
 Date: 2026-08-16  
 Status: Approved in design review; product docs written. Implementation waits on user sign-off of `docs/`.

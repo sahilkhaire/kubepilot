@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/sahilkhaire/k8s-apis/internal/audit"
-	"github.com/sahilkhaire/k8s-apis/internal/auth"
-	"github.com/sahilkhaire/k8s-apis/internal/helmctrl"
-	"github.com/sahilkhaire/k8s-apis/internal/kube"
-	"github.com/sahilkhaire/k8s-apis/internal/streams"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/audit"
+	"github.com/sahilkhaire/kubepilot/internal/auth"
+	"github.com/sahilkhaire/kubepilot/internal/helmctrl"
+	"github.com/sahilkhaire/kubepilot/internal/kube"
+	"github.com/sahilkhaire/kubepilot/internal/streams"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 type Deps struct {

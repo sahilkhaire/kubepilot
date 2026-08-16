@@ -1,4 +1,4 @@
-# Cluster Console — audit logs
+# KubePilot — audit logs
 
 Owner can see who logged in, from which IP, and what they did. Owner can delete logs at their convenience. Members cannot see this module.
 

@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sahilkhaire/k8s-apis/internal/audit"
-	"github.com/sahilkhaire/k8s-apis/internal/rbac"
-	"github.com/sahilkhaire/k8s-apis/internal/streams"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/audit"
+	"github.com/sahilkhaire/kubepilot/internal/rbac"
+	"github.com/sahilkhaire/kubepilot/internal/streams"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 func registerStreamRoutes(mux *http.ServeMux, deps Deps) {

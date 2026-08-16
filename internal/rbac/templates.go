@@ -1,6 +1,6 @@
 package rbac
 
-import "github.com/sahilkhaire/k8s-apis/internal/store"
+import "github.com/sahilkhaire/kubepilot/internal/store"
 
 const (
 	BuiltinViewer   = "viewer"

@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sahilkhaire/k8s-apis/internal/httpapi"
-	"github.com/sahilkhaire/k8s-apis/internal/rbac"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/httpapi"
+	"github.com/sahilkhaire/kubepilot/internal/rbac"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 func newHandlerWithStore(t *testing.T, st store.Store) http.Handler {

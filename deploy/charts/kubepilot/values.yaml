@@ -1,5 +1,5 @@
 image:
-  repository: ghcr.io/sahilkhaire/k8s-apis
+  repository: ghcr.io/sahilkhaire/kubepilot
   tag: latest
   pullPolicy: IfNotPresent
   pullSecrets: []

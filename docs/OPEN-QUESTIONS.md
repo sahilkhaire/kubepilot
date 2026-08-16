@@ -1,4 +1,4 @@
-# Cluster Console — open questions
+# KubePilot — open questions
 
 These do not block the product spec. Defaults below are **in effect** until we change a doc on purpose.
 
@@ -6,8 +6,8 @@ These do not block the product spec. Defaults below are **in effect** until we c
 
 | Topic | Decision | Where |
 | --- | --- | --- |
-| Display name | Cluster Console | [PRODUCT.md](PRODUCT.md) |
-| Chart/image name | `cluster-console` | [DEPLOYMENT.md](DEPLOYMENT.md) |
+| Display name | KubePilot | [PRODUCT.md](PRODUCT.md) |
+| Chart/image name | `kubepilot` | [DEPLOYMENT.md](DEPLOYMENT.md) |
 | Cluster scope | In-cluster only | [PRODUCT.md](PRODUCT.md) |
 | Stack | Go + React (TypeScript), one container | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Perimeter | Cloudflare Access; no in-app IP list | [DEPLOYMENT.md](DEPLOYMENT.md) |
@@ -18,7 +18,7 @@ These do not block the product spec. Defaults below are **in effect** until we c
 | Image | Generic public image; all install config via values/Secret | [DEPLOYMENT.md](DEPLOYMENT.md) |
 | Install namespace | `POD_NAMESPACE`; owner-only in the UI | [AUTH-AND-PERMISSIONS.md](AUTH-AND-PERMISSIONS.md) |
 | Metrics | auto Prometheus then metrics-server | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| YAML | Server-side apply, field manager `cluster-console` | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| YAML | Server-side apply, field manager `kubepilot` | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Dashboard SA | `cluster-admin` in v1 | [DEPLOYMENT.md](DEPLOYMENT.md) |
 | Audit reads | Privileged only, not every GET | [AUDIT.md](AUDIT.md) |
 | Replicas | 2, with ClientIP affinity for exec streams | [DEPLOYMENT.md](DEPLOYMENT.md) |
@@ -33,7 +33,7 @@ These can wait until the phase that needs them. If unspecified at implementation
 
 ### 2. Cookie name
 
-**Fallback:** `cluster_console_session`.
+**Fallback:** `kubepilot_session`.
 
 ### 3. Password generator alphabet (members)
 

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 type Event struct {

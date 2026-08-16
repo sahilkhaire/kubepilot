@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/sahilkhaire/k8s-apis/internal/bootstrap"
-	"github.com/sahilkhaire/k8s-apis/internal/password"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/bootstrap"
+	"github.com/sahilkhaire/kubepilot/internal/password"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 func TestSyncOwnerCreatesThenUpdatesPassword(t *testing.T) {

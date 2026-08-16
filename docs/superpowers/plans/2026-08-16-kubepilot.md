@@ -1,8 +1,8 @@
-# Cluster Console Implementation Plan
+# KubePilot Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build Cluster Console, an in-cluster Go + React Kubernetes dashboard with owner/member auth, permission sets, MongoDB audit, and Lens-parity cluster operations, shipped as a generic public image.
+**Goal:** Build KubePilot, an in-cluster Go + React Kubernetes dashboard with owner/member auth, permission sets, MongoDB audit, and Lens-parity cluster operations, shipped as a generic public image.
 
 **Architecture:** One container: Go serves `/api/*` plus the React SPA. The browser never talks to kube-apiserver. Go checks session + permission set + namespaces, then calls Kubernetes, then writes audit. Owner password is always `OWNER_PASSWORD` at process start. Members never see `POD_NAMESPACE`.
 
@@ -19,24 +19,24 @@
 
 ## Global Constraints
 
-- Go module path: `github.com/sahilkhaire/k8s-apis` (change only if the git remote differs).
+- Go module path: `github.com/sahilkhaire/kubepilot` (change only if the git remote differs).
 - Go 1.24, `go test ./...` and `go test -race ./...` must pass.
 - Image is generic: zero install-specific values compiled in. Config is env only: `MONGODB_URI`, `SESSION_SECRET`, `OWNER_USERNAME`, `OWNER_PASSWORD`, `POD_NAMESPACE`, `LISTEN_ADDR`, `TRUST_PROXY`.
-- Cookie name: `cluster_console_session`. HttpOnly, Secure, SameSite=Lax. Idle 8h, absolute 24h.
+- Cookie name: `kubepilot_session`. HttpOnly, Secure, SameSite=Lax. Idle 8h, absolute 24h.
 - Owner cannot `POST /api/auth/password`. Owner password syncs from env on every process start; if the hash changes, delete owner sessions.
 - Members never see or mutate `POD_NAMESPACE` (403, audited), including when namespaces is `["*"]`.
 - 403 for forbidden (not 404). 401 unauthenticated.
 - Passwords: Argon2id. Never log or audit secret values or passwords.
-- YAML apply: server-side apply, field manager `cluster-console`.
+- YAML apply: server-side apply, field manager `kubepilot`.
 - Tests: table-driven with named subtests; integration tests use `//go:build integration`; unit tests use a fake store, not live Mongo.
-- No `cluster-console` string as a required install namespace; detect via `POD_NAMESPACE`.
+- No `kubepilot` string as a required install namespace; detect via `POD_NAMESPACE`.
 
 ---
 
 ## File map (create as tasks require)
 
 ```
-cmd/cluster-console/main.go
+cmd/kubepilot/main.go
 internal/config/config.go
 internal/password/password.go
 internal/store/store.go
@@ -56,7 +56,7 @@ internal/streams/exec.go
 internal/streams/metrics.go
 internal/helmctrl/helmctrl.go
 web/                          # Vite React SPA
-deploy/charts/cluster-console/  # Helm chart
+deploy/charts/kubepilot/  # Helm chart
 Dockerfile
 .dockerignore
 Makefile
@@ -73,7 +73,7 @@ go.mod
 
 **Files:**
 - Create: `go.mod`
-- Create: `cmd/cluster-console/main.go`
+- Create: `cmd/kubepilot/main.go`
 - Create: `internal/httpapi/httpapi.go`
 - Test: `internal/httpapi/httpapi_test.go`
 
@@ -93,7 +93,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/sahilkhaire/k8s-apis/internal/httpapi"
+	"github.com/sahilkhaire/kubepilot/internal/httpapi"
 )
 
 func TestHealthzOK(t *testing.T) {
@@ -148,12 +148,12 @@ Expected: FAIL (package or `New` undefined)
 `go.mod`:
 
 ```
-module github.com/sahilkhaire/k8s-apis
+module github.com/sahilkhaire/kubepilot
 
 go 1.24
 ```
 
-`internal/httpapi/httpapi.go`: `New` returns `http.NewServeMux()` with `/healthz` and `/readyz`. If `Ready` is nil, treat as ready. `cmd/cluster-console/main.go` listens on `:8080` and uses `httpapi.New` with `Ready` returning `fmt.Errorf("not configured")` until later tasks.
+`internal/httpapi/httpapi.go`: `New` returns `http.NewServeMux()` with `/healthz` and `/readyz`. If `Ready` is nil, treat as ready. `cmd/kubepilot/main.go` listens on `:8080` and uses `httpapi.New` with `Ready` returning `fmt.Errorf("not configured")` until later tasks.
 
 - [ ] **Step 4: Run tests**
 
@@ -163,7 +163,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add go.mod cmd/cluster-console/main.go internal/httpapi/httpapi.go internal/httpapi/httpapi_test.go
+git add go.mod cmd/kubepilot/main.go internal/httpapi/httpapi.go internal/httpapi/httpapi_test.go
 git commit -m "feat: add healthz and readyz endpoints"
 ```
 
@@ -172,7 +172,7 @@ git commit -m "feat: add healthz and readyz endpoints"
 **Files:**
 - Create: `internal/config/config.go`
 - Test: `internal/config/config_test.go`
-- Modify: `cmd/cluster-console/main.go` to load config at start
+- Modify: `cmd/kubepilot/main.go` to load config at start
 
 **Interfaces:**
 - Consumes: process environment
@@ -201,7 +201,7 @@ package config_test
 
 func TestLoadRequiresSecrets(t *testing.T) {
 	t.Run("missing_owner_password", func(t *testing.T) {
-		t.Setenv("MONGODB_URI", "mongodb://localhost:27017/cluster_console")
+		t.Setenv("MONGODB_URI", "mongodb://localhost:27017/kubepilot")
 		t.Setenv("SESSION_SECRET", "x")
 		t.Setenv("OWNER_PASSWORD", "")
 		t.Setenv("POD_NAMESPACE", "ns")
@@ -211,7 +211,7 @@ func TestLoadRequiresSecrets(t *testing.T) {
 		}
 	})
 	t.Run("defaults", func(t *testing.T) {
-		t.Setenv("MONGODB_URI", "mongodb://localhost:27017/cluster_console")
+		t.Setenv("MONGODB_URI", "mongodb://localhost:27017/kubepilot")
 		t.Setenv("SESSION_SECRET", "x")
 		t.Setenv("OWNER_PASSWORD", "p")
 		t.Setenv("POD_NAMESPACE", "console")
@@ -452,7 +452,7 @@ func TestSyncOwnerCreatesThenUpdatesPassword(t *testing.T) {
 ```go
 package auth
 
-const CookieName = "cluster_console_session"
+const CookieName = "kubepilot_session"
 
 type Service struct { /* store, sessionSecret, now func */ }
 
@@ -495,7 +495,7 @@ GET  /api/auth/me        JSON user public fields or 401
 POST /api/auth/password  JSON {currentPassword, newPassword} — members only; owner → 403
 ```
 
-Cookie flags: HttpOnly, Secure, SameSite=Lax, Path=/, Name=`cluster_console_session`.
+Cookie flags: HttpOnly, Secure, SameSite=Lax, Path=/, Name=`kubepilot_session`.
 
 Login failure: 401 `{"error":"invalid credentials"}` (same body for all failures).
 
@@ -512,7 +512,7 @@ Login failure: 401 `{"error":"invalid credentials"}` (same body for all failures
 ### Task 8: Process wiring and SPA placeholder
 
 **Files:**
-- Modify: `cmd/cluster-console/main.go`
+- Modify: `cmd/kubepilot/main.go`
 - Create: `web/package.json`, `web/vite.config.ts`, `web/index.html`, `web/src/main.tsx`, `web/src/App.tsx`, `web/src/api.ts`
 - Create: `internal/httpapi/spa.go` (dev: optional `WEB_DIST`; prod: embed)
 
@@ -542,7 +542,7 @@ Vite `base: '/'`. Dev: `vite` proxy `/api` and `/healthz` to `:8080`. Production
 - Consumes: `MONGODB_URI`
 - Produces: `func OpenMongo(ctx context.Context, uri string) (Store, error)`
 
-Database: URI path, or `cluster_console` if path empty. Collections `users`, `sessions`. Unique index `users.username`. `Ping` pings the client.
+Database: URI path, or `kubepilot` if path empty. Collections `users`, `sessions`. Unique index `users.username`. `Ping` pings the client.
 
 - [ ] **Step 1: Write integration test** skipped unless `MONGODB_URI` is set: OpenMongo, Ping, SyncOwner via bootstrap, UserByUsername.
 
@@ -560,35 +560,35 @@ Database: URI path, or `cluster_console` if path empty. Collections `users`, `se
 - Create: `Dockerfile`
 - Create: `.dockerignore`
 - Create: `Makefile`
-- Create: `deploy/charts/cluster-console/Chart.yaml`
-- Create: `deploy/charts/cluster-console/values.yaml`
-- Create: `deploy/charts/cluster-console/templates/deployment.yaml`
-- Create: `deploy/charts/cluster-console/templates/service.yaml`
-- Create: `deploy/charts/cluster-console/templates/secret.yaml`
-- Create: `deploy/charts/cluster-console/templates/ingress.yaml`
-- Create: `deploy/charts/cluster-console/templates/serviceaccount.yaml`
-- Create: `deploy/charts/cluster-console/templates/clusterrolebinding.yaml`
-- Create: `deploy/charts/cluster-console/templates/_helpers.tpl`
-- Create: `deploy/charts/cluster-console/templates/NOTES.txt`
+- Create: `deploy/charts/kubepilot/Chart.yaml`
+- Create: `deploy/charts/kubepilot/values.yaml`
+- Create: `deploy/charts/kubepilot/templates/deployment.yaml`
+- Create: `deploy/charts/kubepilot/templates/service.yaml`
+- Create: `deploy/charts/kubepilot/templates/secret.yaml`
+- Create: `deploy/charts/kubepilot/templates/ingress.yaml`
+- Create: `deploy/charts/kubepilot/templates/serviceaccount.yaml`
+- Create: `deploy/charts/kubepilot/templates/clusterrolebinding.yaml`
+- Create: `deploy/charts/kubepilot/templates/_helpers.tpl`
+- Create: `deploy/charts/kubepilot/templates/NOTES.txt`
 
 **Interfaces:**
 - Image: multi-stage Node build `web` → Go build → distroless or `gcr.io/distroless/static-debian12`. No `ENV MONGODB_URI=...` in Dockerfile.
 - Chart `values.yaml`: `image.repository: ""`, `image.tag: ""`, `ingress.host: ""`, empty secret strings. Deployment envFrom secret; `POD_NAMESPACE` from `fieldRef: metadata.namespace`.
 
-- [ ] **Step 1: Write `deploy/charts/cluster-console/templates/deployment.yaml` so a `helm template` test can grep.** Add script or test file `deploy/charts/cluster-console/tests/no-secrets.txtar` is optional; instead add `Makefile` target `chart-check`:
+- [ ] **Step 1: Write `deploy/charts/kubepilot/templates/deployment.yaml` so a `helm template` test can grep.** Add script or test file `deploy/charts/kubepilot/tests/no-secrets.txtar` is optional; instead add `Makefile` target `chart-check`:
 
 ```makefile
 chart-check:
-	@helm template test deploy/charts/cluster-console \
-	  --set image.repository=example/cluster-console --set image.tag=dev \
+	@helm template test deploy/charts/kubepilot \
+	  --set image.repository=example/kubepilot --set image.tag=dev \
 	  --set ingress.host=console.example.internal \
-	  --set mongodbUri=mongodb://mongo:27017/cluster_console \
+	  --set mongodbUri=mongodb://mongo:27017/kubepilot \
 	  --set sessionSecret=testsecret --set ownerPassword=testpass \
 	  | grep -q 'name: POD_NAMESPACE'
-	@helm template test deploy/charts/cluster-console \
-	  --set image.repository=example/cluster-console --set image.tag=dev \
+	@helm template test deploy/charts/kubepilot \
+	  --set image.repository=example/kubepilot --set image.tag=dev \
 	  --set ingress.host=console.example.internal \
-	  --set mongodbUri=mongodb://mongo:27017/cluster_console \
+	  --set mongodbUri=mongodb://mongo:27017/kubepilot \
 	  --set sessionSecret=testsecret --set ownerPassword=testpass \
 	  | grep -vE 'mongodb://mongo|testpass|testsecret' >/dev/null
 ```
@@ -616,12 +616,12 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /web/dist ./web/dist
-RUN CGO_ENABLED=0 go build -o /cluster-console ./cmd/cluster-console
+RUN CGO_ENABLED=0 go build -o /kubepilot ./cmd/kubepilot
 
 FROM gcr.io/distroless/static-debian12
-COPY --from=build /cluster-console /cluster-console
+COPY --from=build /kubepilot /kubepilot
 USER nonroot:nonroot
-ENTRYPOINT ["/cluster-console"]
+ENTRYPOINT ["/kubepilot"]
 ```
 
 - [ ] **Step 3: Helm templates per [docs/DEPLOYMENT.md](../../DEPLOYMENT.md):** ClusterRoleBinding to `cluster-admin`, Secret keys `MONGODB_URI` `SESSION_SECRET` `OWNER_USERNAME` `OWNER_PASSWORD`, probes `/healthz` `/readyz`.
@@ -633,11 +633,11 @@ ENTRYPOINT ["/cluster-console"]
 **Phase 1 gate:** local run:
 
 ```bash
-export MONGODB_URI=mongodb://127.0.0.1:27017/cluster_console
+export MONGODB_URI=mongodb://127.0.0.1:27017/kubepilot
 export SESSION_SECRET=devsecret
 export OWNER_PASSWORD=devpass
-export POD_NAMESPACE=cluster-console
-go run ./cmd/cluster-console
+export POD_NAMESPACE=kubepilot
+go run ./cmd/kubepilot
 # POST login as owner / devpass
 ```
 
@@ -886,7 +886,7 @@ GET  /api/k8s/yaml?gvk=&namespace=&name=     requires view (not yaml_edit)
 POST /api/k8s/yaml/apply                     requires yaml_edit on that module
 ```
 
-Apply uses `metav1.ApplyOptions{FieldManager: "cluster-console", Force: false}`. Wrong module in YAML vs URL → 403.
+Apply uses `metav1.ApplyOptions{FieldManager: "kubepilot", Force: false}`. Wrong module in YAML vs URL → 403.
 
 - [ ] Tests: apply Deployment without `deployments.yaml_edit` 403; with grant, fake apply called.
 - [ ] Commit `feat: yaml view and server-side apply`

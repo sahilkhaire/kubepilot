@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sahilkhaire/k8s-apis/internal/httpapi"
+	"github.com/sahilkhaire/kubepilot/internal/httpapi"
 )
 
 func TestLoginPageServed(t *testing.T) {

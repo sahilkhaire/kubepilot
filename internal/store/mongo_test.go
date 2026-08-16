@@ -7,8 +7,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sahilkhaire/k8s-apis/internal/bootstrap"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/bootstrap"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 func TestOpenMongoIntegration(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sahilkhaire/k8s-apis/internal/password"
+	"github.com/sahilkhaire/kubepilot/internal/password"
 )
 
 func TestVerifyRejectsMalformedEncodings(t *testing.T) {

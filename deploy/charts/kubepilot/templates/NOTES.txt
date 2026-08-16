@@ -1,4 +1,4 @@
-Cluster Console has been installed.
+KubePilot has been installed.
 
 1. Get the application URL:
 {{- if .Values.ingress.host }}
@@ -7,7 +7,7 @@ Cluster Console has been installed.
 {{- else }}
 
   Ingress host is not set. Forward a local port to the service:
-  kubectl port-forward svc/{{ include "cluster-console.fullname" . }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+  kubectl port-forward svc/{{ include "kubepilot.fullname" . }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
 {{- end }}
 
 2. Log in with the owner credentials from your Secret (OWNER_USERNAME / OWNER_PASSWORD).

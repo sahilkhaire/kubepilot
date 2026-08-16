@@ -13,10 +13,10 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 
-	"github.com/sahilkhaire/k8s-apis/internal/httpapi"
-	"github.com/sahilkhaire/k8s-apis/internal/kube"
-	"github.com/sahilkhaire/k8s-apis/internal/streams"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/httpapi"
+	"github.com/sahilkhaire/kubepilot/internal/kube"
+	"github.com/sahilkhaire/kubepilot/internal/streams"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 type stubLogStreamer struct {

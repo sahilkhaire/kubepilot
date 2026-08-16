@@ -1,8 +1,8 @@
-# Cluster Console — roadmap
+# KubePilot — roadmap
 
 The **product** is fully specified in this `docs/` folder. **Code** ships in phases. Do not start a phase until the previous phase is usable in a cluster.
 
-Step-by-step tasks: [superpowers/plans/2026-08-16-cluster-console.md](superpowers/plans/2026-08-16-cluster-console.md).
+Step-by-step tasks: [superpowers/plans/2026-08-16-kubepilot.md](superpowers/plans/2026-08-16-kubepilot.md).
 
 ## Phase 0 — Documentation (done)
 

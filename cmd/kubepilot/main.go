@@ -5,14 +5,14 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/sahilkhaire/k8s-apis/internal/audit"
-	"github.com/sahilkhaire/k8s-apis/internal/auth"
-	"github.com/sahilkhaire/k8s-apis/internal/bootstrap"
-	"github.com/sahilkhaire/k8s-apis/internal/config"
-	"github.com/sahilkhaire/k8s-apis/internal/helmctrl"
-	"github.com/sahilkhaire/k8s-apis/internal/httpapi"
-	"github.com/sahilkhaire/k8s-apis/internal/kube"
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/audit"
+	"github.com/sahilkhaire/kubepilot/internal/auth"
+	"github.com/sahilkhaire/kubepilot/internal/bootstrap"
+	"github.com/sahilkhaire/kubepilot/internal/config"
+	"github.com/sahilkhaire/kubepilot/internal/helmctrl"
+	"github.com/sahilkhaire/kubepilot/internal/httpapi"
+	"github.com/sahilkhaire/kubepilot/internal/kube"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 func main() {

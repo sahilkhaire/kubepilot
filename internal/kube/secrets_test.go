@@ -8,7 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
-	"github.com/sahilkhaire/k8s-apis/internal/kube"
+	"github.com/sahilkhaire/kubepilot/internal/kube"
 )
 
 func secretWithData() *corev1.Secret {

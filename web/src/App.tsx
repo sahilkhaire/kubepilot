@@ -26,7 +26,7 @@ import MetricsPanel from './components/MetricsPanel'
 function Home({ user }: { user: User }) {
   return (
     <div style={{ maxWidth: '40rem', margin: '2rem auto', padding: '0 1rem' }}>
-      <h1>Cluster Console</h1>
+      <h1>KubePilot</h1>
       <p>
         <strong>{user.username}</strong> ({user.role})
       </p>
@@ -55,7 +55,7 @@ function AppShell({
           background: '#f8f8f8',
         }}
       >
-        <div style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Cluster Console</div>
+        <div style={{ fontWeight: 'bold', marginBottom: '1rem' }}>KubePilot</div>
         <nav>
           <Link to="/" style={linkStyle}>Home</Link>
           <Link to="/workloads" style={linkStyle}>Workloads</Link>

@@ -14,7 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
 
-	"github.com/sahilkhaire/k8s-apis/internal/kube"
+	"github.com/sahilkhaire/kubepilot/internal/kube"
 )
 
 const (

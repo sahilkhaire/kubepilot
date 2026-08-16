@@ -1,13 +1,13 @@
-{{- if eq (include "cluster-console.pdb.enabled" .) "true" }}
+{{- if eq (include "kubepilot.pdb.enabled" .) "true" }}
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ include "cluster-console.fullname" . }}
+  name: {{ include "kubepilot.fullname" . }}
   labels:
-    {{- include "cluster-console.labels" . | nindent 4 }}
+    {{- include "kubepilot.labels" . | nindent 4 }}
 spec:
   minAvailable: 1
   selector:
     matchLabels:
-      {{- include "cluster-console.selectorLabels" . | nindent 6 }}
+      {{- include "kubepilot.selectorLabels" . | nindent 6 }}
 {{- end }}

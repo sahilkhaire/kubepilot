@@ -1,4 +1,4 @@
-# Cluster Console — deployment
+# KubePilot — deployment
 
 How the app is installed into the cluster. Helm is the supported installer. MongoDB is **not** bundled.
 
@@ -11,7 +11,7 @@ User → Cloudflare Access → Ingress (TLS) → Service → Deployment (chart n
 ```
 
 - Configure the public hostname in Cloudflare Access (Zero Trust). Policies (SSO, email, IP, device) live there.
-- Cluster Console still requires username/password.
+- KubePilot still requires username/password.
 - Do **not** expose the Service as NodePort/LoadBalancer without Cloudflare (or equivalent) in front.
 - In-app IP whitelist is **not** implemented.
 
@@ -30,9 +30,9 @@ Must **not** be in the image:
 
 Installers set `image.repository` to this project’s public image or to their own mirror. Default chart values may show the public image name as an example; they must remain overridable. The binary never reads a compiled-in registry or cluster URL.
 
-## Helm chart (`cluster-console`)
+## Helm chart (`kubepilot`)
 
-Install into a **dedicated** namespace (chart default name `cluster-console`, overridable). That namespace is the install namespace: **owner-only** in the UI ([AUTH-AND-PERMISSIONS.md](AUTH-AND-PERMISSIONS.md)).
+Install into a **dedicated** namespace (chart default name `kubepilot`, overridable). That namespace is the install namespace: **owner-only** in the UI ([AUTH-AND-PERMISSIONS.md](AUTH-AND-PERMISSIONS.md)).
 
 Resources (names come from chart fullname, not hardcoded in the image):
 
@@ -53,7 +53,7 @@ Optional: PodDisruptionBudget, HPA — not required for v1. Default replicas: **
 
 ```yaml
 image:
-  repository: ghcr.io/sahilkhaire/k8s-apis
+  repository: ghcr.io/sahilkhaire/kubepilot
   tag: latest
   pullPolicy: IfNotPresent
   pullSecrets: []  # optional, for private mirrors
@@ -134,7 +134,7 @@ Hardening later: replace `cluster-admin` with a custom ClusterRole matching enab
 - Atlas, VM, or in-cluster Mongo: all fine.
 - Network: the dashboard pods must reach the URI (NetworkPolicy egress, Atlas IP access list including NAT/egress IPs of the cluster).
 - Auth in the URI (user/password or similar). TLS as required by the server.
-- Database name is whatever the installer puts in the URI path. If the path is empty, the app uses `cluster_console` as a product default (not an install identity).
+- Database name is whatever the installer puts in the URI path. If the path is empty, the app uses `kubepilot` as a product default (not an install identity).
 - Collections created by the app on start.
 
 ## TLS

@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"github.com/sahilkhaire/k8s-apis/internal/kube"
+	"github.com/sahilkhaire/kubepilot/internal/kube"
 )
 
 func TestDeletePod(t *testing.T) {

@@ -1,4 +1,4 @@
-module github.com/sahilkhaire/k8s-apis
+module github.com/sahilkhaire/kubepilot
 
 go 1.24.0
 

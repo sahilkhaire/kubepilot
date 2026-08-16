@@ -12,7 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 )
 
-const defaultDatabase = "cluster_console"
+const defaultDatabase = "kubepilot"
 
 type mongoStore struct {
 	client   *mongo.Client

@@ -1,4 +1,4 @@
-# Cluster Console — auth and permissions
+# KubePilot — auth and permissions
 
 This is the authorization spec. If the UI and this file disagree, this file wins until we change it on purpose.
 
@@ -7,7 +7,7 @@ This is the authorization spec. If the UI and this file disagree, this file wins
 - Identifier: `username` (case-insensitive, stored lowercase) + password.
 - No self-signup. No magic links. No in-app SSO (Cloudflare Access may still SSO at the edge).
 - Password hashing: Argon2id.
-- Session: HttpOnly, Secure, SameSite=Lax cookie, signed with `SESSION_SECRET`. Session row in MongoDB.
+- Session: HttpOnly, Secure, SameSite=Lax cookie named `kubepilot_session`, signed with `SESSION_SECRET`. Session row in MongoDB.
 - Idle timeout: **8 hours** (`lastSeenAt` refresh on requests). Absolute lifetime: **24 hours**. Either expiry logs the user out.
 - Concurrent sessions: allowed. Disable user or logout-all (owner action on a member) deletes that user’s sessions.
 - Failed login: generic error to the client; audit `login_failed` with username attempted and IP.
@@ -77,7 +77,7 @@ Deletes the `users` document and sessions. **Audit logs are kept.** Each audit r
 
 ### Install namespace (owner only)
 
-The namespace the dashboard pod runs in (`POD_NAMESPACE` from the Downward API). Detected at runtime — not hardcoded as `cluster-console`.
+The namespace the dashboard pod runs in (`POD_NAMESPACE` from the Downward API). Detected at runtime — not hardcoded as `kubepilot`.
 
 - Owner: can see and operate on it like any other namespace (the app itself, its Secret, etc.).
 - Members: **never**. Not in the switcher, search, lists, Helm, events, or YAML apply. API returns 403 (audited).
@@ -125,7 +125,7 @@ Owner can clone these. Clones are normal sets (`builtinTemplate` null). Editing 
 
 - Viewer plus: `logs`, `restart`, `scale`, `trigger` (CronJobs), Pod `delete` (not workload delete), no `exec`, no `yaml_edit`, no `reveal`, no Helm writes, no Access Control writes, no CRD definition writes.
 
-**Admin** (cluster ops, not Cluster Console owner)
+**Admin** (cluster ops, not KubePilot owner)
 
 - All module actions except owner-only settings.
 - Includes `exec`, `yaml_edit`, `reveal`, Helm install/upgrade/rollback/uninstall, node cordon/drain, Access Control CRUD.
@@ -150,11 +150,11 @@ Denials are audited ([AUDIT.md](AUDIT.md)).
 
 Legend:
 
-- **Scope:** `ns` = namespaced (filtered by member namespace list). `cluster` = cluster-scoped (namespace list ignored). `app` = Cluster Console, not Kubernetes.
+- **Scope:** `ns` = namespaced (filtered by member namespace list). `cluster` = cluster-scoped (namespace list ignored). `app` = KubePilot, not Kubernetes.
 - **Base actions:** `view`, `create`, `edit`, `delete`, `yaml_edit` unless a row says otherwise.
 - Extra actions are listed explicitly.
 
-### Cluster Console (owner only)
+### KubePilot (owner only)
 
 | Module id | Scope | Actions | Notes |
 | --- | --- | --- | --- |
@@ -241,7 +241,7 @@ Without `secrets.reveal`, secret **data** is never returned by the API (keys may
 | `clusterroles` | cluster | view, create, edit, delete, yaml_edit | |
 | `clusterrolebindings` | cluster | view, create, edit, delete, yaml_edit | |
 
-Granting these does not grant Cluster Console owner APIs.
+Granting these does not grant KubePilot owner APIs.
 
 ### Custom resources and Helm
 

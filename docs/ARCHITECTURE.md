@@ -1,4 +1,4 @@
-# Cluster Console — architecture
+# KubePilot — architecture
 
 ## Summary
 
@@ -184,7 +184,7 @@ On every start: create the owner if missing, then set the owner password hash fr
 - Config: `rest.InClusterConfig()`.
 - ServiceAccount: bound to `cluster-admin` so the app can perform Lens-parity operations.
 - Members are **not** mapped to Kubernetes Users/ServiceAccounts in v1. App RBAC is the only member control plane.
-- YAML apply: **server-side apply** with field manager `cluster-console`.
+- YAML apply: **server-side apply** with field manager `kubepilot`.
 
 This means a compromised dashboard pod is cluster-admin. Mitigations: Cloudflare Access, app auth, NetworkPolicy to the API server as usual, no extra Ingress except this app, audit everything. Narrowing the SA is a later hardening option and will block some catalog features until grants are re-tuned.
 

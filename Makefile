@@ -8,21 +8,21 @@ no-bake:
 
 chart-check:
 	@command -v helm >/dev/null 2>&1 || { echo "helm not found, skipping chart-check"; exit 0; }
-	@helm template test deploy/charts/cluster-console \
-	  --set image.repository=example/cluster-console --set image.tag=dev \
+	@helm template test deploy/charts/kubepilot \
+	  --set image.repository=example/kubepilot --set image.tag=dev \
 	  --set ingress.host=console.example.internal \
-	  --set mongodbUri=mongodb://mongo:27017/cluster_console \
+	  --set mongodbUri=mongodb://mongo:27017/kubepilot \
 	  --set sessionSecret=testsecret --set ownerPassword=testpass \
 	  | grep -q 'name: POD_NAMESPACE'
-	@helm template test deploy/charts/cluster-console \
-	  --set image.repository=example/cluster-console --set image.tag=dev \
+	@helm template test deploy/charts/kubepilot \
+	  --set image.repository=example/kubepilot --set image.tag=dev \
 	  --set ingress.host=console.example.internal \
-	  --set mongodbUri=mongodb://mongo:27017/cluster_console \
+	  --set mongodbUri=mongodb://mongo:27017/kubepilot \
 	  --set sessionSecret=testsecret --set ownerPassword=testpass \
 	  | grep -q 'sessionAffinity: ClientIP'
-	@helm template test deploy/charts/cluster-console \
-	  --set image.repository=example/cluster-console --set image.tag=dev \
+	@helm template test deploy/charts/kubepilot \
+	  --set image.repository=example/kubepilot --set image.tag=dev \
 	  --set ingress.host=console.example.internal \
-	  --set mongodbUri=mongodb://mongo:27017/cluster_console \
+	  --set mongodbUri=mongodb://mongo:27017/kubepilot \
 	  --set sessionSecret=testsecret --set ownerPassword=testpass \
 	  | grep -q 'kind: PodDisruptionBudget'

@@ -1,6 +1,6 @@
 package rbac
 
-import "github.com/sahilkhaire/k8s-apis/internal/store"
+import "github.com/sahilkhaire/kubepilot/internal/store"
 
 func VisibleNamespaces(user store.User, installNS string, clusterNamespaces []string) []string {
 	if len(clusterNamespaces) == 0 {

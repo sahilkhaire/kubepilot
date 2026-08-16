@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sahilkhaire/k8s-apis/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/store"
 )
 
 func TestCreateOwnerAndOwner(t *testing.T) {

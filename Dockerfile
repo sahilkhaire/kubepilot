@@ -11,11 +11,11 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /web/dist ./web/dist
-RUN CGO_ENABLED=0 go build -o /cluster-console ./cmd/cluster-console
+RUN CGO_ENABLED=0 go build -o /kubepilot ./cmd/kubepilot
 
 FROM gcr.io/distroless/static-debian12
-COPY --from=build /cluster-console /cluster-console
+COPY --from=build /kubepilot /kubepilot
 COPY --from=web /web/dist /web/dist
 ENV WEB_DIST=/web/dist
 USER nonroot:nonroot
-ENTRYPOINT ["/cluster-console"]
+ENTRYPOINT ["/kubepilot"]

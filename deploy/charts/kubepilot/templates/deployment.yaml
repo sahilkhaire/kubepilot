@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "cluster-console.fullname" . }}
+  name: {{ include "kubepilot.fullname" . }}
   labels:
-    {{- include "cluster-console.labels" . | nindent 4 }}
+    {{- include "kubepilot.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "cluster-console.selectorLabels" . | nindent 6 }}
+      {{- include "kubepilot.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "cluster-console.selectorLabels" . | nindent 8 }}
+        {{- include "kubepilot.selectorLabels" . | nindent 8 }}
     spec:
-      serviceAccountName: {{ include "cluster-console.serviceAccountName" . }}
+      serviceAccountName: {{ include "kubepilot.serviceAccountName" . }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -29,7 +29,7 @@ spec:
               protocol: TCP
           envFrom:
             - secretRef:
-                name: {{ include "cluster-console.secretName" . }}
+                name: {{ include "kubepilot.secretName" . }}
           env:
             - name: POD_NAMESPACE
               valueFrom:

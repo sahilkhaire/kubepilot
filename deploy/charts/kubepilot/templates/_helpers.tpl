@@ -1,14 +1,14 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "cluster-console.name" -}}
+{{- define "kubepilot.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Create a default fully qualified app name.
 */}}
-{{- define "cluster-console.fullname" -}}
+{{- define "kubepilot.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -24,9 +24,9 @@ Create a default fully qualified app name.
 {{/*
 Common labels
 */}}
-{{- define "cluster-console.labels" -}}
-helm.sh/chart: {{ include "cluster-console.chart" . }}
-{{ include "cluster-console.selectorLabels" . }}
+{{- define "kubepilot.labels" -}}
+helm.sh/chart: {{ include "kubepilot.chart" . }}
+{{ include "kubepilot.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -36,24 +36,24 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Selector labels
 */}}
-{{- define "cluster-console.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "cluster-console.name" . }}
+{{- define "kubepilot.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "kubepilot.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
 Chart label
 */}}
-{{- define "cluster-console.chart" -}}
+{{- define "kubepilot.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Service account name
 */}}
-{{- define "cluster-console.serviceAccountName" -}}
+{{- define "kubepilot.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "cluster-console.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "kubepilot.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
@@ -62,7 +62,7 @@ Service account name
 {{/*
 PodDisruptionBudget enabled: explicit value, else true when replicaCount >= 2.
 */}}
-{{- define "cluster-console.pdb.enabled" -}}
+{{- define "kubepilot.pdb.enabled" -}}
 {{- if kindIs "bool" .Values.podDisruptionBudget.enabled -}}
 {{- .Values.podDisruptionBudget.enabled -}}
 {{- else -}}
@@ -73,10 +73,10 @@ PodDisruptionBudget enabled: explicit value, else true when replicaCount >= 2.
 {{/*
 Secret name for envFrom
 */}}
-{{- define "cluster-console.secretName" -}}
+{{- define "kubepilot.secretName" -}}
 {{- if .Values.existingSecret }}
 {{- .Values.existingSecret }}
 {{- else }}
-{{- include "cluster-console.fullname" . }}
+{{- include "kubepilot.fullname" . }}
 {{- end }}
 {{- end }}

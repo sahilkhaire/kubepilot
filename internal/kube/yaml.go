@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-const YAMLFieldManager = "cluster-console"
+const YAMLFieldManager = "kubepilot"
 
 // YAMLApplier fetches and applies YAML documents. Injected in tests when SSA is unavailable.
 type YAMLApplier interface {
