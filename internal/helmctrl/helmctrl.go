@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/release"
+	"helm.sh/helm/v3/pkg/repo"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/discovery"
@@ -28,6 +30,13 @@ type Release struct {
 	AppVersion string `json:"appVersion,omitempty"`
 	Updated    string `json:"updated,omitempty"`
 }
+
+type Repository struct {
+	Name string
+	URL  string
+}
+
+type RepositoriesGetter func(ctx context.Context) ([]Repository, error)
 
 type InstallRequest struct {
 	Name      string
@@ -61,10 +70,11 @@ type Client interface {
 
 type SDKClient struct {
 	restConfig *rest.Config
+	getRepos   RepositoriesGetter
 }
 
-func NewSDKClient(cfg *rest.Config) *SDKClient {
-	return &SDKClient{restConfig: cfg}
+func NewSDKClient(cfg *rest.Config, getRepos RepositoriesGetter) *SDKClient {
+	return &SDKClient{restConfig: cfg, getRepos: getRepos}
 }
 
 type restConfigGetter struct {
@@ -100,7 +110,6 @@ func (c *SDKClient) actionConfig(ns string) (*action.Configuration, error) {
 		return nil, fmt.Errorf("kubernetes config not available")
 	}
 	var getter genericclioptions.RESTClientGetter = &restConfigGetter{cfg: c.restConfig}
-	settings := cli.New()
 	actionConfig := new(action.Configuration)
 	driver := os.Getenv("HELM_DRIVER")
 	if driver == "" {
@@ -109,8 +118,48 @@ func (c *SDKClient) actionConfig(ns string) (*action.Configuration, error) {
 	if err := actionConfig.Init(getter, ns, driver, func(format string, v ...interface{}) {}); err != nil {
 		return nil, err
 	}
-	_ = settings
 	return actionConfig, nil
+}
+
+func (c *SDKClient) helmEnvSettings(ctx context.Context) (*cli.EnvSettings, func(), error) {
+	settings := cli.New()
+	cleanup := func() {}
+	if c.getRepos == nil {
+		return settings, cleanup, nil
+	}
+	repos, err := c.getRepos(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(repos) == 0 {
+		return settings, cleanup, nil
+	}
+
+	dir, err := os.MkdirTemp("", "helm-repos-*")
+	if err != nil {
+		return nil, nil, err
+	}
+	cleanup = func() { _ = os.RemoveAll(dir) }
+
+	rf := repo.NewFile()
+	for _, r := range repos {
+		if r.Name == "" || r.URL == "" {
+			continue
+		}
+		rf.Add(&repo.Entry{Name: r.Name, URL: r.URL})
+	}
+	repoFile := filepath.Join(dir, "repositories.yaml")
+	if err := rf.WriteFile(repoFile, 0600); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	settings.RepositoryConfig = repoFile
+	settings.RepositoryCache = filepath.Join(dir, "cache")
+	if err := os.MkdirAll(settings.RepositoryCache, 0755); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	return settings, cleanup, nil
 }
 
 func (c *SDKClient) List(ctx context.Context, ns string) ([]Release, error) {
@@ -136,11 +185,17 @@ func (c *SDKClient) Install(ctx context.Context, req InstallRequest) (*Release, 
 	if err != nil {
 		return nil, err
 	}
+	settings, cleanup, err := c.helmEnvSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
 	install := action.NewInstall(actionConfig)
 	install.Namespace = req.Namespace
 	install.ReleaseName = req.Name
 	install.Version = req.Version
-	chartPath, err := install.ChartPathOptions.LocateChart(req.Chart, cli.New())
+	chartPath, err := install.ChartPathOptions.LocateChart(req.Chart, settings)
 	if err != nil {
 		return nil, err
 	}
@@ -161,10 +216,16 @@ func (c *SDKClient) Upgrade(ctx context.Context, req UpgradeRequest) (*Release, 
 	if err != nil {
 		return nil, err
 	}
+	settings, cleanup, err := c.helmEnvSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
 	upgrade := action.NewUpgrade(actionConfig)
 	upgrade.Namespace = req.Namespace
 	upgrade.Version = req.Version
-	chartPath, err := upgrade.ChartPathOptions.LocateChart(req.Chart, cli.New())
+	chartPath, err := upgrade.ChartPathOptions.LocateChart(req.Chart, settings)
 	if err != nil {
 		return nil, err
 	}

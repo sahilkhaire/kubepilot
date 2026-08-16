@@ -39,7 +39,17 @@ func main() {
 	auditor := audit.New(st)
 	var helmClient helmctrl.Client
 	if kubeClient.Config != nil {
-		helmClient = helmctrl.NewSDKClient(kubeClient.Config)
+		helmClient = helmctrl.NewSDKClient(kubeClient.Config, func(ctx context.Context) ([]helmctrl.Repository, error) {
+			settings, err := st.GetAppSettings(ctx)
+			if err != nil {
+				return nil, err
+			}
+			repos := make([]helmctrl.Repository, 0, len(settings.HelmRepositories))
+			for _, r := range settings.HelmRepositories {
+				repos = append(repos, helmctrl.Repository{Name: r.Name, URL: r.URL})
+			}
+			return repos, nil
+		})
 	}
 	handler := httpapi.New(httpapi.Deps{
 		Ready:      st.Ping,
