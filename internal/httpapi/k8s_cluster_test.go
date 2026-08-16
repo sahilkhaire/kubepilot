@@ -30,12 +30,27 @@ func seedEventsFakeClientWithInstallNS() *kube.Client {
 			Namespace: "dev",
 		},
 	}
+	evDevEmptyInvolved := &corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{Name: "ev-dev-empty-involved", Namespace: "dev"},
+		InvolvedObject: corev1.ObjectReference{
+			Kind: "Node",
+			Name: "node-1",
+		},
+	}
 	evInstall := &corev1.Event{
 		ObjectMeta: metav1.ObjectMeta{Name: "ev-install", Namespace: testInstallNS},
 		InvolvedObject: corev1.ObjectReference{
 			Kind:      "Pod",
 			Name:      "pod-install",
 			Namespace: testInstallNS,
+		},
+	}
+	evInstallMetaOnly := &corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{Name: "ev-install-meta", Namespace: testInstallNS},
+		InvolvedObject: corev1.ObjectReference{
+			Kind:      "Pod",
+			Name:      "pod-dev",
+			Namespace: "dev",
 		},
 	}
 	evNode := &corev1.Event{
@@ -48,7 +63,7 @@ func seedEventsFakeClientWithInstallNS() *kube.Client {
 	nsDev := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "dev"}}
 	nsInstall := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testInstallNS}}
 	nsDefault := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "default"}}
-	return kube.ForTest(fake.NewSimpleClientset(evDev, evInstall, evNode, nsDev, nsInstall, nsDefault))
+	return kube.ForTest(fake.NewSimpleClientset(evDev, evDevEmptyInvolved, evInstall, evInstallMetaOnly, evNode, nsDev, nsInstall, nsDefault))
 }
 
 type fakeNodeDrainer struct{}
@@ -158,6 +173,23 @@ func TestMemberCannotDeleteInstallNamespace(t *testing.T) {
 	}
 }
 
+func TestUnauthenticatedDeleteInstallNamespaceReturns401(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	nsInstall := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testInstallNS}}
+	h := newK8sHandler(t, st, kube.ForTest(fake.NewSimpleClientset(nsInstall)))
+
+	body := bytes.NewBufferString(`{"confirm":"` + testInstallNS + `"}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/k8s/namespaces/"+testInstallNS+"/delete", body)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("code=%d want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
 func TestOwnerCannotDeleteInstallNamespace(t *testing.T) {
 	t.Parallel()
 
@@ -210,13 +242,24 @@ func TestMemberEventsExcludeInstallNS(t *testing.T) {
 		}
 	}
 	foundDev := false
+	foundDevEmptyInvolved := false
 	for _, ev := range events {
-		obj, _ := ev["involvedObject"].(map[string]any)
-		if obj != nil && obj["namespace"] == "dev" {
+		meta, _ := ev["metadata"].(map[string]any)
+		if meta != nil && meta["namespace"] == "dev" {
 			foundDev = true
+		}
+		obj, _ := ev["involvedObject"].(map[string]any)
+		if meta != nil && meta["namespace"] == "dev" && obj != nil && obj["namespace"] == nil {
+			foundDevEmptyInvolved = true
+		}
+		if meta != nil && meta["name"] == "ev-dev-empty-involved" {
+			foundDevEmptyInvolved = true
 		}
 	}
 	if !foundDev {
 		t.Fatalf("expected dev event in %v", events)
+	}
+	if !foundDevEmptyInvolved {
+		t.Fatalf("expected dev event with empty involvedObject.namespace in %v", events)
 	}
 }

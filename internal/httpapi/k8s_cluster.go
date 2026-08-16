@@ -92,17 +92,17 @@ func handleListEvents(w http.ResponseWriter, r *http.Request, deps Deps) {
 }
 
 func eventVisibleToUser(u store.User, installNS string, ev corev1.Event, visibleSet map[string]bool) bool {
-	objNS := strings.TrimSpace(ev.InvolvedObject.Namespace)
 	if u.Role == store.RoleOwner {
 		return true
 	}
-	if objNS == installNS {
+	evNS := strings.TrimSpace(ev.Namespace)
+	if evNS == "" {
 		return false
 	}
-	if objNS == "" {
+	if evNS == installNS {
 		return false
 	}
-	return visibleSet[objNS]
+	return visibleSet[evNS]
 }
 
 func handleCreateNamespace(w http.ResponseWriter, r *http.Request, deps Deps) {
@@ -197,6 +197,9 @@ func handleEditNamespace(w http.ResponseWriter, r *http.Request, deps Deps) {
 
 func handleDeleteNamespace(w http.ResponseWriter, r *http.Request, deps Deps) {
 	name := r.PathValue("name")
+	if _, ok := authenticateKubeMutation(w, r, deps); !ok {
+		return
+	}
 	if deps.InstallNS != "" && name == deps.InstallNS {
 		w.WriteHeader(http.StatusForbidden)
 		return
