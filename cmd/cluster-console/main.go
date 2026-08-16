@@ -19,7 +19,10 @@ func main() {
 	}
 
 	ctx := context.Background()
-	st := store.NewMemory()
+	st, err := store.OpenMongo(ctx, cfg.MongoURI)
+	if err != nil {
+		log.Fatal(err)
+	}
 	if err := bootstrap.SyncOwner(ctx, st, cfg.OwnerUsername, cfg.OwnerPassword); err != nil {
 		log.Fatal(err)
 	}

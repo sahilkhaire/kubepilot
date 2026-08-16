@@ -1,0 +1,304 @@
+package store
+
+import (
+	"context"
+	"net/url"
+	"strings"
+	"time"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
+)
+
+const defaultDatabase = "cluster_console"
+
+type mongoStore struct {
+	client *mongo.Client
+	users  *mongo.Collection
+	sess   *mongo.Collection
+}
+
+type mongoUser struct {
+	ID                 bson.ObjectID `bson:"_id,omitempty"`
+	Username           string        `bson:"username"`
+	DisplayName        string        `bson:"displayName"`
+	Role               Role          `bson:"role"`
+	PasswordHash       string        `bson:"passwordHash"`
+	MustChangePassword bool          `bson:"mustChangePassword"`
+	Enabled            bool          `bson:"enabled"`
+	PermissionSetID    string        `bson:"permissionSetId,omitempty"`
+	Namespaces         []string      `bson:"namespaces,omitempty"`
+	CreatedAt          time.Time     `bson:"createdAt"`
+	UpdatedAt          time.Time     `bson:"updatedAt"`
+	CreatedBy          string        `bson:"createdBy,omitempty"`
+}
+
+type mongoSession struct {
+	ID            string    `bson:"_id"`
+	UserID        string    `bson:"userId"`
+	Username      string    `bson:"username"`
+	CreatedAt     time.Time `bson:"createdAt"`
+	LastSeenAt    time.Time `bson:"lastSeenAt"`
+	ExpiresAt     time.Time `bson:"expiresAt"`
+	IdleExpiresAt time.Time `bson:"idleExpiresAt"`
+	IP            string    `bson:"ip"`
+	UserAgent     string    `bson:"userAgent"`
+}
+
+func OpenMongo(ctx context.Context, uri string) (Store, error) {
+	client, err := mongo.Connect(options.Client().ApplyURI(uri))
+	if err != nil {
+		return nil, err
+	}
+
+	if err := client.Ping(ctx, readpref.Primary()); err != nil {
+		_ = client.Disconnect(ctx)
+		return nil, err
+	}
+
+	dbName, err := databaseName(uri)
+	if err != nil {
+		_ = client.Disconnect(ctx)
+		return nil, err
+	}
+
+	db := client.Database(dbName)
+	users := db.Collection("users")
+	sess := db.Collection("sessions")
+
+	indexModel := options.Index().SetUnique(true)
+	if _, err := users.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "username", Value: 1}},
+		Options: indexModel,
+	}); err != nil {
+		_ = client.Disconnect(ctx)
+		return nil, err
+	}
+
+	return &mongoStore{
+		client: client,
+		users:  users,
+		sess:   sess,
+	}, nil
+}
+
+func databaseName(uri string) (string, error) {
+	u, err := url.Parse(uri)
+	if err != nil {
+		return "", err
+	}
+	dbName := strings.TrimPrefix(u.Path, "/")
+	if dbName == "" {
+		return defaultDatabase, nil
+	}
+	return dbName, nil
+}
+
+func (m *mongoStore) Ping(ctx context.Context) error {
+	return m.client.Ping(ctx, readpref.Primary())
+}
+
+func (m *mongoStore) Owner(ctx context.Context) (*User, error) {
+	var doc mongoUser
+	err := m.users.FindOne(ctx, bson.M{"role": RoleOwner}).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return mongoUserToUser(&doc), nil
+}
+
+func (m *mongoStore) CreateOwner(ctx context.Context, u User) error {
+	doc, err := userToMongoUser(u)
+	if err != nil {
+		return err
+	}
+	doc.Role = RoleOwner
+	_, err = m.users.InsertOne(ctx, doc)
+	return err
+}
+
+func (m *mongoStore) CreateMember(ctx context.Context, u User) error {
+	doc, err := userToMongoUser(u)
+	if err != nil {
+		return err
+	}
+	doc.Role = RoleMember
+	_, err = m.users.InsertOne(ctx, doc)
+	return err
+}
+
+func (m *mongoStore) UpdateOwnerPassword(ctx context.Context, userID, hash string) error {
+	oid, err := bson.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil
+	}
+	_, err = m.users.UpdateOne(ctx,
+		bson.M{"_id": oid, "role": RoleOwner},
+		bson.M{"$set": bson.M{"passwordHash": hash}},
+	)
+	return err
+}
+
+func (m *mongoStore) UpdatePassword(ctx context.Context, userID, hash string) error {
+	oid, err := bson.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil
+	}
+	_, err = m.users.UpdateOne(ctx,
+		bson.M{"_id": oid},
+		bson.M{"$set": bson.M{
+			"passwordHash":       hash,
+			"mustChangePassword": false,
+			"updatedAt":          time.Now().UTC(),
+		}},
+	)
+	return err
+}
+
+func (m *mongoStore) UserByUsername(ctx context.Context, username string) (*User, error) {
+	var doc mongoUser
+	err := m.users.FindOne(ctx, bson.M{"username": strings.ToLower(username)}).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return mongoUserToUser(&doc), nil
+}
+
+func (m *mongoStore) UserByID(ctx context.Context, id string) (*User, error) {
+	oid, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, nil
+	}
+	var doc mongoUser
+	err = m.users.FindOne(ctx, bson.M{"_id": oid}).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return mongoUserToUser(&doc), nil
+}
+
+func (m *mongoStore) CreateSession(ctx context.Context, s Session) error {
+	_, err := m.sess.InsertOne(ctx, sessionToMongoSession(s))
+	return err
+}
+
+func (m *mongoStore) Session(ctx context.Context, id string) (*Session, error) {
+	var doc mongoSession
+	err := m.sess.FindOne(ctx, bson.M{"_id": id}).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return mongoSessionToSession(&doc), nil
+}
+
+func (m *mongoStore) TouchSession(ctx context.Context, id string, lastSeen, idleExpires time.Time) error {
+	_, err := m.sess.UpdateOne(ctx,
+		bson.M{"_id": id},
+		bson.M{"$set": bson.M{
+			"lastSeenAt":    lastSeen,
+			"idleExpiresAt": idleExpires,
+		}},
+	)
+	return err
+}
+
+func (m *mongoStore) DeleteSession(ctx context.Context, id string) error {
+	_, err := m.sess.DeleteOne(ctx, bson.M{"_id": id})
+	return err
+}
+
+func (m *mongoStore) DeleteSessionsForUser(ctx context.Context, userID string) error {
+	_, err := m.sess.DeleteMany(ctx, bson.M{"userId": userID})
+	return err
+}
+
+func userToMongoUser(u User) (mongoUser, error) {
+	doc := mongoUser{
+		Username:           strings.ToLower(u.Username),
+		DisplayName:        u.DisplayName,
+		Role:               u.Role,
+		PasswordHash:       u.PasswordHash,
+		MustChangePassword: u.MustChangePassword,
+		Enabled:            u.Enabled,
+		PermissionSetID:    u.PermissionSetID,
+		Namespaces:         append([]string(nil), u.Namespaces...),
+		CreatedAt:          u.CreatedAt,
+		UpdatedAt:          u.UpdatedAt,
+		CreatedBy:          u.CreatedBy,
+	}
+
+	if u.ID != "" {
+		oid, err := bson.ObjectIDFromHex(u.ID)
+		if err == nil {
+			doc.ID = oid
+			return doc, nil
+		}
+	}
+	doc.ID = bson.NewObjectID()
+	return doc, nil
+}
+
+func mongoUserToUser(doc *mongoUser) *User {
+	if doc == nil {
+		return nil
+	}
+	return &User{
+		ID:                 doc.ID.Hex(),
+		Username:           doc.Username,
+		DisplayName:        doc.DisplayName,
+		Role:               doc.Role,
+		PasswordHash:       doc.PasswordHash,
+		MustChangePassword: doc.MustChangePassword,
+		Enabled:            doc.Enabled,
+		PermissionSetID:    doc.PermissionSetID,
+		Namespaces:         append([]string(nil), doc.Namespaces...),
+		CreatedAt:          doc.CreatedAt,
+		UpdatedAt:          doc.UpdatedAt,
+		CreatedBy:          doc.CreatedBy,
+	}
+}
+
+func sessionToMongoSession(s Session) mongoSession {
+	return mongoSession{
+		ID:            s.ID,
+		UserID:        s.UserID,
+		Username:      s.Username,
+		CreatedAt:     s.CreatedAt,
+		LastSeenAt:    s.LastSeenAt,
+		ExpiresAt:     s.ExpiresAt,
+		IdleExpiresAt: s.IdleExpiresAt,
+		IP:            s.IP,
+		UserAgent:     s.UserAgent,
+	}
+}
+
+func mongoSessionToSession(doc *mongoSession) *Session {
+	if doc == nil {
+		return nil
+	}
+	return &Session{
+		ID:            doc.ID,
+		UserID:        doc.UserID,
+		Username:      doc.Username,
+		CreatedAt:     doc.CreatedAt,
+		LastSeenAt:    doc.LastSeenAt,
+		ExpiresAt:     doc.ExpiresAt,
+		IdleExpiresAt: doc.IdleExpiresAt,
+		IP:            doc.IP,
+		UserAgent:     doc.UserAgent,
+	}
+}
