@@ -39,15 +39,36 @@ func (m *mockHelmClient) List(ctx context.Context, ns string) ([]helmctrl.Releas
 }
 
 func (m *mockHelmClient) Install(ctx context.Context, req helmctrl.InstallRequest) (*helmctrl.Release, error) {
-	return nil, nil
+	return &helmctrl.Release{
+		Name:      req.Name,
+		Namespace: req.Namespace,
+		Revision:  1,
+		Chart:     req.Chart,
+		Status:    "deployed",
+	}, nil
 }
 
 func (m *mockHelmClient) Upgrade(ctx context.Context, req helmctrl.UpgradeRequest) (*helmctrl.Release, error) {
-	return nil, nil
+	return &helmctrl.Release{
+		Name:      req.Name,
+		Namespace: req.Namespace,
+		Revision:  2,
+		Chart:     req.Chart,
+		Status:    "deployed",
+	}, nil
 }
 
 func (m *mockHelmClient) Rollback(ctx context.Context, req helmctrl.RollbackRequest) (*helmctrl.Release, error) {
-	return nil, nil
+	rev := req.Revision
+	if rev == 0 {
+		rev = 1
+	}
+	return &helmctrl.Release{
+		Name:      req.Name,
+		Namespace: req.Namespace,
+		Revision:  rev,
+		Status:    "deployed",
+	}, nil
 }
 
 func (m *mockHelmClient) Uninstall(ctx context.Context, ns, name string) error {
@@ -130,6 +151,71 @@ func TestHelmUninstallAllowedNamespace(t *testing.T) {
 	}
 	if !mock.wasUninstallCalled() {
 		t.Fatal("helm Uninstall should be called")
+	}
+
+	logs, err := st.QueryAudit(context.Background(), store.AuditFilter{
+		Module: "helm",
+		Action: "uninstall",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 1 {
+		t.Fatalf("audit logs=%d want 1", len(logs))
+	}
+	log := logs[0]
+	if log.Result != "success" || log.Namespace != "dev" || log.Name != "web" {
+		t.Fatalf("audit=%+v", log)
+	}
+	for _, key := range []string{"values", "password", "chart"} {
+		if _, ok := log.Details[key]; ok {
+			t.Fatalf("details must not include %q: %v", key, log.Details)
+		}
+	}
+}
+
+func TestHelmInstallWritesAuditWithoutValues(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps-helm", map[string][]string{
+		"helm": {"view", "install"},
+	})
+	createK8sMember(t, st, "member", "pass", "ps-helm", []string{"dev"})
+	mock := &mockHelmClient{}
+	h := newHelmHandler(t, st, mock)
+	session := login(t, h, "member", "pass")
+
+	body := bytes.NewBufferString(`{"name":"web","namespace":"dev","chart":"nginx","values":{"password":"secret"}}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/helm/releases", body)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	logs, err := st.QueryAudit(context.Background(), store.AuditFilter{
+		Module: "helm",
+		Action: "install",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 1 {
+		t.Fatalf("audit logs=%d want 1", len(logs))
+	}
+	log := logs[0]
+	if log.Result != "success" || log.Namespace != "dev" || log.Name != "web" {
+		t.Fatalf("audit=%+v", log)
+	}
+	if log.Details["chart"] != "nginx" {
+		t.Fatalf("details=%v", log.Details)
+	}
+	for _, key := range []string{"values", "password"} {
+		if _, ok := log.Details[key]; ok {
+			t.Fatalf("details must not include %q: %v", key, log.Details)
+		}
 	}
 }
 

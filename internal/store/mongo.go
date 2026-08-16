@@ -132,6 +132,13 @@ func OpenMongo(ctx context.Context, uri string) (Store, error) {
 			return nil, err
 		}
 	}
+	if _, err := sess.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "expiresAt", Value: 1}},
+		Options: options.Index().SetExpireAfterSeconds(0),
+	}); err != nil {
+		_ = client.Disconnect(ctx)
+		return nil, err
+	}
 
 	return &mongoStore{
 		client:   client,

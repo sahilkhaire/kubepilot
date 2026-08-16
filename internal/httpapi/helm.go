@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/zixflow/k8s/internal/audit"
 	"github.com/zixflow/k8s/internal/helmctrl"
 	"github.com/zixflow/k8s/internal/rbac"
+	"github.com/zixflow/k8s/internal/store"
 )
 
 func registerHelmRoutes(mux *http.ServeMux, deps Deps) {
@@ -139,7 +141,8 @@ func handleInstallHelmRelease(w http.ResponseWriter, r *http.Request, deps Deps)
 		return
 	}
 
-	if _, ok := requireKubeAllow(w, r, deps.Auth, deps.Store, deps.InstallNS, "helm", "install", body.Namespace, false); !ok {
+	u, ok := requireKubeAllow(w, r, deps.Auth, deps.Store, deps.InstallNS, "helm", "install", body.Namespace, false)
+	if !ok {
 		return
 	}
 	if deps.Helm == nil {
@@ -159,6 +162,14 @@ func handleInstallHelmRelease(w http.ResponseWriter, r *http.Request, deps Deps)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	details := map[string]any{"chart": body.Chart}
+	if body.Version != "" {
+		details["version"] = body.Version
+	}
+	if rel != nil && rel.Revision > 0 {
+		details["revision"] = rel.Revision
+	}
+	writeHelmMutationAudit(r, deps, u, "install", body.Namespace, body.Name, http.StatusCreated, details)
 	writeJSON(w, http.StatusCreated, rel)
 }
 
@@ -176,7 +187,8 @@ func handleUpgradeHelmRelease(w http.ResponseWriter, r *http.Request, deps Deps)
 		return
 	}
 
-	if _, ok := requireKubeAllow(w, r, deps.Auth, deps.Store, deps.InstallNS, "helm", "upgrade", body.Namespace, false); !ok {
+	u, ok := requireKubeAllow(w, r, deps.Auth, deps.Store, deps.InstallNS, "helm", "upgrade", body.Namespace, false)
+	if !ok {
 		return
 	}
 	if deps.Helm == nil {
@@ -196,6 +208,14 @@ func handleUpgradeHelmRelease(w http.ResponseWriter, r *http.Request, deps Deps)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	details := map[string]any{"chart": body.Chart}
+	if body.Version != "" {
+		details["version"] = body.Version
+	}
+	if rel != nil && rel.Revision > 0 {
+		details["revision"] = rel.Revision
+	}
+	writeHelmMutationAudit(r, deps, u, "upgrade", body.Namespace, name, http.StatusOK, details)
 	writeJSON(w, http.StatusOK, rel)
 }
 
@@ -212,7 +232,8 @@ func handleRollbackHelmRelease(w http.ResponseWriter, r *http.Request, deps Deps
 		return
 	}
 
-	if _, ok := requireKubeAllow(w, r, deps.Auth, deps.Store, deps.InstallNS, "helm", "rollback", body.Namespace, false); !ok {
+	u, ok := requireKubeAllow(w, r, deps.Auth, deps.Store, deps.InstallNS, "helm", "rollback", body.Namespace, false)
+	if !ok {
 		return
 	}
 	if deps.Helm == nil {
@@ -230,6 +251,13 @@ func handleRollbackHelmRelease(w http.ResponseWriter, r *http.Request, deps Deps
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	details := map[string]any{}
+	if body.Revision > 0 {
+		details["revision"] = body.Revision
+	} else if rel != nil && rel.Revision > 0 {
+		details["revision"] = rel.Revision
+	}
+	writeHelmMutationAudit(r, deps, u, "rollback", body.Namespace, name, http.StatusOK, details)
 	writeJSON(w, http.StatusOK, rel)
 }
 
@@ -275,5 +303,29 @@ func handleUninstallHelmRelease(w http.ResponseWriter, r *http.Request, deps Dep
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	writeHelmMutationAudit(r, deps, u, "uninstall", body.Namespace, name, http.StatusNoContent, nil)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func writeHelmMutationAudit(r *http.Request, deps Deps, u *store.User, action, ns, name string, status int, details map[string]any) {
+	if deps.Audit == nil {
+		return
+	}
+	writeAuditOrLog(r.Context(), deps.Audit, audit.Event{
+		UserID:     u.ID,
+		Username:   u.Username,
+		Role:       string(u.Role),
+		IP:         clientIP(r, deps.TrustProxy),
+		UserAgent:  audit.TruncateUserAgent(r.UserAgent()),
+		SessionID:  actorSessionID(r, deps.Auth),
+		Module:     "helm",
+		Action:     action,
+		Result:     "success",
+		HTTPStatus: status,
+		Namespace:  ns,
+		Name:       name,
+		Path:       r.URL.Path,
+		Method:     r.Method,
+		Details:    details,
+	})
 }

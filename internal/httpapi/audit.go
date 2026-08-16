@@ -1,9 +1,12 @@
 package httpapi
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -287,9 +290,28 @@ type statusRecorder struct {
 	status int
 }
 
+var (
+	_ http.Hijacker = (*statusRecorder)(nil)
+	_ http.Flusher  = (*statusRecorder)(nil)
+)
+
 func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
+}
+
+func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hj, ok := r.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("http.Hijacker not supported by underlying ResponseWriter")
+	}
+	return hj.Hijack()
+}
+
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 func actorFromRequest(r *http.Request, authSvc *auth.Service) (userID, username, role, sessionID string) {

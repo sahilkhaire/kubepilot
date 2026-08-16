@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -147,8 +148,13 @@ func handleCreateMember(w http.ResponseWriter, r *http.Request, authSvc *auth.Se
 	}
 
 	now := time.Now().UTC()
+	memberID, err := newMemberID()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	u := store.User{
-		ID:                 newMemberID(),
+		ID:                 memberID,
 		Username:           username,
 		DisplayName:        displayName,
 		Role:               store.RoleMember,
@@ -399,10 +405,10 @@ func memberPublic(u *store.User) memberResponse {
 	return resp
 }
 
-func newMemberID() string {
+func newMemberID() (string, error) {
 	var b [12]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		return hex.EncodeToString(b[:])
+		return "", fmt.Errorf("generate member id: %w", err)
 	}
-	return hex.EncodeToString(b[:])
+	return hex.EncodeToString(b[:]), nil
 }

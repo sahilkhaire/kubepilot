@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -95,8 +96,13 @@ func handleCreatePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 	}
 
 	now := time.Now().UTC()
+	psID, err := newPermissionSetID()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	ps := store.PermissionSet{
-		ID:              newPermissionSetID(),
+		ID:              psID,
 		Name:            strings.TrimSpace(req.Name),
 		Description:     strings.TrimSpace(req.Description),
 		BuiltinTemplate: "",
@@ -211,12 +217,12 @@ func handleDeletePermissionSet(w http.ResponseWriter, r *http.Request, authSvc *
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func newPermissionSetID() string {
+func newPermissionSetID() (string, error) {
 	var b [12]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		return hex.EncodeToString(b[:])
+		return "", fmt.Errorf("generate permission set id: %w", err)
 	}
-	return hex.EncodeToString(b[:])
+	return hex.EncodeToString(b[:]), nil
 }
 
 func cloneGrantsHTTP(grants map[string][]string) map[string][]string {
