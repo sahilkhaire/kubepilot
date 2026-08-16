@@ -47,5 +47,9 @@ func New(deps Deps) http.Handler {
 	if webDist == "" {
 		webDist = os.Getenv("WEB_DIST")
 	}
-	return registerSPARoutes(mux, webDist)
+	handler := http.Handler(mux)
+	if deps.Auth != nil {
+		handler = mustChangePasswordMiddleware(deps.Auth, handler)
+	}
+	return registerSPARoutes(handler, webDist)
 }

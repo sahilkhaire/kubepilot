@@ -106,18 +106,18 @@ type spaFilesystem struct {
 	root string
 }
 
-func registerSPARoutes(mux *http.ServeMux, webDist string) http.Handler {
+func registerSPARoutes(next http.Handler, webDist string) http.Handler {
 	webDist = strings.TrimSpace(webDist)
 	if webDist == "" {
-		return builtinWrap(mux)
+		return builtinWrap(next)
 	}
 
 	indexPath := filepath.Join(webDist, "index.html")
 	if _, err := os.Stat(indexPath); err != nil {
-		return builtinWrap(mux)
+		return builtinWrap(next)
 	}
 
-	return spaWrap(mux, &spaFilesystem{root: webDist})
+	return spaWrap(next, &spaFilesystem{root: webDist})
 }
 
 func builtinWrap(next http.Handler) http.Handler {
