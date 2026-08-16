@@ -198,6 +198,32 @@ func ensureSlice(items any) any {
 	return items
 }
 
+func ObjectNames(items any) []string {
+	if items == nil {
+		return nil
+	}
+	rv := reflect.ValueOf(items)
+	if rv.Kind() != reflect.Slice {
+		return nil
+	}
+	n := rv.Len()
+	if n == 0 {
+		return nil
+	}
+	out := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		meta := rv.Index(i).FieldByName("ObjectMeta")
+		if !meta.IsValid() {
+			continue
+		}
+		name := meta.FieldByName("Name")
+		if name.IsValid() && name.Kind() == reflect.String {
+			out = append(out, name.String())
+		}
+	}
+	return out
+}
+
 func sliceLen(v any) int {
 	if v == nil {
 		return 0

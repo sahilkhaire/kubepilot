@@ -14,7 +14,19 @@ import (
 	"github.com/zixflow/k8s/internal/store"
 )
 
+type searchHit struct {
+	Kind      string `json:"kind"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+}
+
 func registerK8sRoutes(mux *http.ServeMux, deps Deps) {
+	mux.HandleFunc("GET /api/k8s/namespaces", func(w http.ResponseWriter, r *http.Request) {
+		handleListNamespaces(w, r, deps)
+	})
+	mux.HandleFunc("GET /api/k8s/search", func(w http.ResponseWriter, r *http.Request) {
+		handleSearch(w, r, deps)
+	})
 	mux.HandleFunc("GET /api/k8s/namespaces/{ns}/{resource}/{name}/events", func(w http.ResponseWriter, r *http.Request) {
 		handleResourceEvents(w, r, deps)
 	})
@@ -30,6 +42,93 @@ func registerK8sRoutes(mux *http.ServeMux, deps Deps) {
 	mux.HandleFunc("GET /api/k8s/cluster/overview", func(w http.ResponseWriter, r *http.Request) {
 		handleClusterOverview(w, r, deps)
 	})
+}
+
+func handleListNamespaces(w http.ResponseWriter, r *http.Request, deps Deps) {
+	u, _, ok := authenticateForKube(w, r, deps.Auth, deps.Store)
+	if !ok {
+		return
+	}
+	if deps.Kube == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	clusterNS, err := deps.Kube.ClusterNamespaces(r.Context())
+	if err != nil {
+		log.Printf("kube list namespaces: err=%v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	visible := rbac.VisibleNamespaces(*u, deps.InstallNS, clusterNS)
+	writeJSON(w, http.StatusOK, visible)
+}
+
+func handleSearch(w http.ResponseWriter, r *http.Request, deps Deps) {
+	u, ps, ok := authenticateForKube(w, r, deps.Auth, deps.Store)
+	if !ok {
+		return
+	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if deps.Kube == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	nsFilter := strings.TrimSpace(r.URL.Query().Get("namespace"))
+	var searchNS []string
+	if nsFilter != "" {
+		if !namespaceAccessible(*u, deps.InstallNS, nsFilter) {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		searchNS = []string{nsFilter}
+	} else {
+		clusterNS, err := deps.Kube.ClusterNamespaces(r.Context())
+		if err != nil {
+			log.Printf("kube list namespaces: err=%v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		searchNS = rbac.VisibleNamespaces(*u, deps.InstallNS, clusterNS)
+	}
+
+	qLower := strings.ToLower(q)
+	hits := make([]searchHit, 0)
+	for _, module := range kube.WorkloadModules {
+		kind, ok := kube.ResourceKind(module)
+		if !ok {
+			continue
+		}
+		for _, ns := range searchNS {
+			if !rbac.Allow(rbac.Request{
+				User:          *u,
+				InstallNS:     deps.InstallNS,
+				PermissionSet: ps,
+				Module:        module,
+				Action:        "view",
+				Namespace:     ns,
+			}) {
+				continue
+			}
+			items, err := deps.Kube.ListResource(r.Context(), module, ns)
+			if err != nil {
+				log.Printf("kube list %s: ns=%s err=%v", module, ns, err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			for _, name := range kube.ObjectNames(items) {
+				if strings.Contains(strings.ToLower(name), qLower) {
+					hits = append(hits, searchHit{Kind: kind, Namespace: ns, Name: name})
+				}
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, hits)
 }
 
 func handleListResource(w http.ResponseWriter, r *http.Request, deps Deps) {

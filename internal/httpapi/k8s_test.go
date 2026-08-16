@@ -363,6 +363,170 @@ func TestWorkloadsOverviewDeniedNamespace(t *testing.T) {
 	}
 }
 
+func TestListNamespacesAuthz(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"*"})
+	h := newK8sHandler(t, st, seedWorkloadFakeClientWithInstallNS())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/namespaces", nil)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauth code=%d want %d", rec.Code, http.StatusUnauthorized)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/k8s/namespaces", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("member code=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var memberNS []string
+	if err := json.Unmarshal(rec.Body.Bytes(), &memberNS); err != nil {
+		t.Fatal(err)
+	}
+	for _, ns := range memberNS {
+		if ns == testInstallNS {
+			t.Fatalf("member namespaces include install NS: %v", memberNS)
+		}
+	}
+	if len(memberNS) != 2 {
+		t.Fatalf("member namespaces=%v want dev+prod", memberNS)
+	}
+
+	ownerSession := login(t, h, "owner", "secret")
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/k8s/namespaces", nil)
+	req.AddCookie(ownerSession)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("owner code=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var ownerNS []string
+	if err := json.Unmarshal(rec.Body.Bytes(), &ownerNS); err != nil {
+		t.Fatal(err)
+	}
+	foundInstall := false
+	for _, ns := range ownerNS {
+		if ns == testInstallNS {
+			foundInstall = true
+			break
+		}
+	}
+	if !foundInstall {
+		t.Fatalf("owner namespaces=%v want install NS included", ownerNS)
+	}
+}
+
+func TestListNamespacesKubeNil(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSet(t, st, "ps1")
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	h := newK8sHandler(t, st, nil)
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/namespaces", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("code=%d want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestSearchAuthz(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	h := newK8sHandler(t, st, seedWorkloadFakeClient())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/search", nil)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauth code=%d want %d", rec.Code, http.StatusUnauthorized)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/k8s/search?q=", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("blank q code=%d want %d", rec.Code, http.StatusBadRequest)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/k8s/search?q=pod&namespace=prod", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("prod search code=%d want %d", rec.Code, http.StatusForbidden)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/k8s/search?q=pod-dev", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("dev search code=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var hits []map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &hits); err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 {
+		t.Fatalf("hits=%v want one match", hits)
+	}
+	if hits[0]["kind"] != "Pod" || hits[0]["namespace"] != "dev" || hits[0]["name"] != "pod-dev" {
+		t.Fatalf("hit=%v want Pod/dev/pod-dev", hits[0])
+	}
+}
+
+func TestSearchWildcardMemberExcludesInstallNS(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"*"})
+	h := newK8sHandler(t, st, seedWorkloadFakeClientWithInstallNS())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/search?q=pod", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var hits []map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &hits); err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 2 {
+		t.Fatalf("hits=%v want dev+prod pods only", hits)
+	}
+	for _, hit := range hits {
+		if hit["namespace"] == testInstallNS {
+			t.Fatalf("hit from install NS: %v", hit)
+		}
+	}
+}
+
 func TestUnknownResource404(t *testing.T) {
 	t.Parallel()
 
