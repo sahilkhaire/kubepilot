@@ -9,10 +9,12 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/zixflow/k8s/internal/auth"
 	"github.com/zixflow/k8s/internal/bootstrap"
 	"github.com/zixflow/k8s/internal/httpapi"
+	"github.com/zixflow/k8s/internal/password"
 	"github.com/zixflow/k8s/internal/store"
 )
 
@@ -20,14 +22,40 @@ const testSessionSecret = "test-session-secret"
 
 func newAuthHandler(t *testing.T) http.Handler {
 	t.Helper()
+	return newAuthHandlerWithStore(t, store.NewMemory())
+}
+
+func newAuthHandlerWithStore(t *testing.T, st store.Store) http.Handler {
+	t.Helper()
 	ctx := context.Background()
-	st := store.NewMemory()
 	if err := bootstrap.SyncOwner(ctx, st, "owner", "secret"); err != nil {
 		t.Fatal(err)
 	}
 	return httpapi.New(httpapi.Deps{
 		Auth: auth.New(st, testSessionSecret),
 	})
+}
+
+func createMember(t *testing.T, st store.Store, username, plainPassword string) {
+	t.Helper()
+	hash, err := password.Hash(plainPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if err := st.CreateMember(context.Background(), store.User{
+		ID:                 "member-1",
+		Username:           username,
+		DisplayName:        "Member",
+		Role:               store.RoleMember,
+		PasswordHash:       hash,
+		MustChangePassword: true,
+		Enabled:            true,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func login(t *testing.T, h http.Handler, username, password string) *http.Cookie {
@@ -178,5 +206,45 @@ func TestPasswordChangeOwnerForbidden(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPasswordChangeMember(t *testing.T) {
+	t.Parallel()
+	st := store.NewMemory()
+	createMember(t, st, "member", "oldpass")
+	h := newAuthHandlerWithStore(t, st)
+	session := login(t, h, "member", "oldpass")
+
+	rec := httptest.NewRecorder()
+	body := strings.NewReader(`{"currentPassword":"oldpass","newPassword":"newpass"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/password", body)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("password change code=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	meRec := httptest.NewRecorder()
+	meReq := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	meReq.AddCookie(session)
+	h.ServeHTTP(meRec, meReq)
+	if meRec.Code != http.StatusOK {
+		t.Fatalf("me code=%d body=%s", meRec.Code, meRec.Body.String())
+	}
+	var me map[string]any
+	if err := json.Unmarshal(meRec.Body.Bytes(), &me); err != nil {
+		t.Fatal(err)
+	}
+	if me["mustChangePassword"] != false {
+		t.Fatalf("mustChangePassword=%v want false", me["mustChangePassword"])
+	}
+
+	loginRec := httptest.NewRecorder()
+	loginBody := strings.NewReader(`{"username":"member","password":"newpass"}`)
+	h.ServeHTTP(loginRec, httptest.NewRequest(http.MethodPost, "/api/auth/login", loginBody))
+	if loginRec.Code != http.StatusOK {
+		t.Fatalf("login with new password code=%d body=%s", loginRec.Code, loginRec.Body.String())
 	}
 }

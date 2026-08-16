@@ -45,6 +45,17 @@ func (m *memoryStore) CreateOwner(ctx context.Context, u User) error {
 	return nil
 }
 
+func (m *memoryStore) CreateMember(ctx context.Context, u User) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	u.Username = strings.ToLower(u.Username)
+	clone := cloneUser(&u)
+	m.users[u.ID] = clone
+	m.usersByUsername[u.Username] = u.ID
+	return nil
+}
+
 func (m *memoryStore) UpdateOwnerPassword(ctx context.Context, userID, hash string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -54,6 +65,20 @@ func (m *memoryStore) UpdateOwnerPassword(ctx context.Context, userID, hash stri
 		return nil
 	}
 	u.PasswordHash = hash
+	return nil
+}
+
+func (m *memoryStore) UpdatePassword(ctx context.Context, userID, hash string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	u, ok := m.users[userID]
+	if !ok {
+		return nil
+	}
+	u.PasswordHash = hash
+	u.MustChangePassword = false
+	u.UpdatedAt = time.Now().UTC()
 	return nil
 }
 

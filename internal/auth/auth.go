@@ -78,6 +78,22 @@ func (s *Service) Logout(ctx context.Context, sessionID string) error {
 	return s.store.DeleteSession(ctx, sessionID)
 }
 
+func (s *Service) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	u, err := s.store.UserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if u == nil || !password.Verify(currentPassword, u.PasswordHash) {
+		return ErrInvalidCredentials
+	}
+
+	hash, err := password.Hash(newPassword)
+	if err != nil {
+		return err
+	}
+	return s.store.UpdatePassword(ctx, userID, hash)
+}
+
 func (s *Service) Authenticate(ctx context.Context, sessionID string) (*store.User, *store.Session, error) {
 	sess, err := s.store.Session(ctx, sessionID)
 	if err != nil {

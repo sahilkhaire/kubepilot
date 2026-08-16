@@ -42,7 +42,9 @@ type Session struct {
 type Store interface {
 	Owner(ctx context.Context) (*User, error) // nil, nil if none
 	CreateOwner(ctx context.Context, u User) error
+	CreateMember(ctx context.Context, u User) error
 	UpdateOwnerPassword(ctx context.Context, userID, hash string) error
+	UpdatePassword(ctx context.Context, userID, hash string) error
 	UserByUsername(ctx context.Context, username string) (*User, error)
 	UserByID(ctx context.Context, id string) (*User, error)
 	CreateSession(ctx context.Context, s Session) error

@@ -14,6 +14,11 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
+type passwordChangeRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
+}
+
 type loginResponse struct {
 	Username           string `json:"username"`
 	Role               string `json:"role"`
@@ -109,7 +114,21 @@ func handlePassword(w http.ResponseWriter, r *http.Request, authSvc *auth.Servic
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
-	w.WriteHeader(http.StatusNotImplemented)
+
+	var req passwordChangeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeLoginError(w)
+		return
+	}
+	if err := authSvc.ChangePassword(r.Context(), u.ID, req.CurrentPassword, req.NewPassword); err != nil {
+		if err == auth.ErrInvalidCredentials {
+			writeLoginError(w)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func authenticateRequest(r *http.Request, authSvc *auth.Service) (*store.User, error) {
