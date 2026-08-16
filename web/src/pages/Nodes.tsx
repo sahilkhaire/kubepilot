@@ -94,7 +94,7 @@ export default function Nodes() {
   useLiveRefresh(() => load(true))
 
   const visible = useMemo(() => nodes.filter((n) => matchesQuery(n, query)), [nodes, query])
-  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const { sort, sortKey, sortDir, onSort } = useTableSort('nodes')
   const metricsTick = useMetricSortTick()
   const sorted = useMemo(
     () =>

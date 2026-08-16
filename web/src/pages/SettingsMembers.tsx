@@ -78,7 +78,7 @@ export default function SettingsMembers() {
     load()
   }, [])
 
-  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const { sort, sortKey, sortDir, onSort } = useTableSort('settings-members')
   const sortedMembers = useMemo(
     () =>
       sortBy(members, sort, (m, key) => {

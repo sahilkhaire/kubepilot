@@ -83,7 +83,7 @@ export default function Workloads() {
   }, [loadCounts])
   useLiveRefresh(() => loadCounts(true), Boolean(namespace))
 
-  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const { sort, sortKey, sortDir, onSort } = useTableSort('workloads')
   const sortedRows = sortBy(visibleRows, sort, (row, key) =>
     key === 'count' ? (counts[row.module] ?? Number.NEGATIVE_INFINITY) : row.label,
   )

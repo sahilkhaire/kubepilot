@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Label } from '@/components/ui/label'
 
 type Props = {
@@ -33,7 +34,10 @@ export default function ChangePassword({ onChanged }: Props) {
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center bg-muted/40 p-6">
+    <main className="relative flex min-h-svh items-center justify-center bg-muted/40 p-6">
+      <div className="absolute top-3 right-3">
+        <ThemeToggle />
+      </div>
       <Card className="w-full max-w-sm shadow-sm">
         <CardHeader>
           <CardTitle className="text-2xl font-semibold tracking-tight">Change password</CardTitle>

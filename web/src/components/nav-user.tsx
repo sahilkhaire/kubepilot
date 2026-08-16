@@ -7,7 +7,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -16,7 +21,8 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { EllipsisVerticalIcon, LogOutIcon } from 'lucide-react'
+import { EllipsisVerticalIcon, LogOutIcon, MonitorIcon, MoonIcon, SunIcon } from 'lucide-react'
+import { type Theme, useTheme } from '@/lib/theme'
 
 export function NavUser({
   user,
@@ -29,6 +35,7 @@ export function NavUser({
   onLogout: () => void
 }) {
   const { isMobile } = useSidebar()
+  const { theme, setTheme } = useTheme()
   const initials = user.name.slice(0, 2).toUpperCase()
 
   return (
@@ -67,6 +74,29 @@ export function NavUser({
                 </div>
               </div>
             </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <SunIcon />
+                Theme
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as Theme)}>
+                  <DropdownMenuRadioItem value="light">
+                    <SunIcon />
+                    Light
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="dark">
+                    <MoonIcon />
+                    Dark
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="system">
+                    <MonitorIcon />
+                    System
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onLogout}>
               <LogOutIcon />

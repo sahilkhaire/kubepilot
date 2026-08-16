@@ -134,8 +134,8 @@ export default function CustomResources() {
   }, [loadInstances])
   useLiveRefresh(() => loadInstances(true), selected != null)
 
-  const crdSort = useTableSort()
-  const instanceSort = useTableSort()
+  const crdSort = useTableSort('custom-resources')
+  const instanceSort = useTableSort('custom-resource-instances')
 
   const grouped = useMemo(() => {
     const q = query.toLowerCase()

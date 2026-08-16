@@ -56,7 +56,7 @@ export default function Namespaces() {
     const q = query.toLowerCase()
     return namespaces.filter((ns) => !q || ns.toLowerCase().includes(q))
   }, [namespaces, query])
-  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const { sort, sortKey, sortDir, onSort } = useTableSort('namespaces')
   const sorted = useMemo(() => sortBy(visible, sort, (ns) => ns), [visible, sort])
 
   if (loading) return <PageLoading />

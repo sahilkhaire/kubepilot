@@ -107,7 +107,7 @@ export default function Helm() {
   }, [loadReleasesForNamespace])
   useLiveRefresh(() => loadReleasesForNamespace(true), Boolean(namespace))
 
-  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const { sort, sortKey, sortDir, onSort } = useTableSort('helm')
   const sorted = useMemo(
     () =>
       sortBy(releases, sort, (rel, key) => {

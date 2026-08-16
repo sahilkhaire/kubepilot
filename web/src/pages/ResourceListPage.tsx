@@ -308,7 +308,7 @@ export default function ResourceListPage({
     () => items.filter((item) => matchesQuery(item, query)),
     [items, query],
   )
-  const { sort, sortKey, sortDir, onSort } = useTableSort(module)
+  const { sort, sortKey, sortDir, onSort } = useTableSort(module ? `resource:${module}` : undefined)
   const metricsTick = useMetricSortTick()
   const sorted = useMemo(
     () =>

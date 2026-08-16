@@ -79,7 +79,7 @@ export default function SettingsAudit() {
     load()
   }, [])
 
-  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const { sort, sortKey, sortDir, onSort } = useTableSort('settings-audit')
   const sortedLogs = useMemo(
     () =>
       sortBy(logs, sort, (log, key) => {

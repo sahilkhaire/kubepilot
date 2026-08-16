@@ -88,7 +88,7 @@ export default function SettingsSets() {
     load()
   }, [])
 
-  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const { sort, sortKey, sortDir, onSort } = useTableSort('settings-sets')
   const sortedSets = useMemo(
     () =>
       sortBy(sets, sort, (ps, key) => {

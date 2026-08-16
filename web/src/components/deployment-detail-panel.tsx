@@ -163,7 +163,7 @@ export default function DeploymentDetailPanel({
   }, [loadLive])
   useLiveRefresh(loadLive, view === 'details')
 
-  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const { sort, sortKey, sortDir, onSort } = useTableSort('deployment-detail-pods')
   const sortedPods = useMemo(
     () =>
       sortBy(pods, sort, (pod, key) => {

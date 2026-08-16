@@ -8,6 +8,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
 import { Separator } from '@/components/ui/separator'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { catalog, kindUrl, settingsSection } from '@/lib/catalog'
 
@@ -81,6 +82,9 @@ export function SiteHeader() {
             })}
           </BreadcrumbList>
         </Breadcrumb>
+        <div className="ml-auto">
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   )

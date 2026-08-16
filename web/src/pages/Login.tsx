@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { LayoutDashboardIcon } from 'lucide-react'
 
 type Props = {
@@ -37,7 +38,10 @@ export default function Login({ onLogin }: Props) {
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center bg-muted/40 p-6">
+    <main className="relative flex min-h-svh items-center justify-center bg-muted/40 p-6">
+      <div className="absolute top-3 right-3">
+        <ThemeToggle />
+      </div>
       <Card className="w-full max-w-sm shadow-sm">
         <CardHeader className="space-y-3">
           <div className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">

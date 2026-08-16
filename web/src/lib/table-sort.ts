@@ -7,6 +7,35 @@ export type TableSort = {
   dir: SortDir
 }
 
+const STORAGE_PREFIX = 'kubepilot.table-sort.'
+
+function readStoredSort(id: string | undefined): TableSort | null {
+  if (!id) return null
+  try {
+    const raw = localStorage.getItem(STORAGE_PREFIX + id)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { key?: unknown; dir?: unknown }
+    if (typeof parsed.key !== 'string' || parsed.key.length === 0) return null
+    if (parsed.dir !== 'asc' && parsed.dir !== 'desc') return null
+    return { key: parsed.key, dir: parsed.dir }
+  } catch {
+    return null
+  }
+}
+
+function writeStoredSort(id: string | undefined, sort: TableSort | null) {
+  if (!id) return
+  try {
+    if (!sort) {
+      localStorage.removeItem(STORAGE_PREFIX + id)
+      return
+    }
+    localStorage.setItem(STORAGE_PREFIX + id, JSON.stringify(sort))
+  } catch {
+    // ignore quota / private-mode failures
+  }
+}
+
 export function toggleSort(current: TableSort | null, key: string): TableSort | null {
   if (!current || current.key !== key) {
     return { key, dir: 'asc' }
@@ -46,14 +75,21 @@ export function sortBy<T>(
   return copy
 }
 
-export function useTableSort(resetKey?: string) {
-  const [sort, setSort] = useState<TableSort | null>(null)
-  const onSort = useCallback((key: string) => {
-    setSort((prev) => toggleSort(prev, key))
-  }, [])
+export function useTableSort(id?: string) {
+  const [sort, setSort] = useState<TableSort | null>(() => readStoredSort(id))
+  const onSort = useCallback(
+    (key: string) => {
+      setSort((prev) => {
+        const next = toggleSort(prev, key)
+        writeStoredSort(id, next)
+        return next
+      })
+    },
+    [id],
+  )
   useEffect(() => {
-    setSort(null)
-  }, [resetKey])
+    setSort(readStoredSort(id))
+  }, [id])
   return {
     sort,
     sortKey: sort?.key ?? null,

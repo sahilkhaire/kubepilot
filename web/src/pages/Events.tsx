@@ -77,7 +77,7 @@ export default function Events() {
       return hay.includes(q)
     })
   }, [events, query])
-  const { sort, sortKey, sortDir, onSort } = useTableSort()
+  const { sort, sortKey, sortDir, onSort } = useTableSort('events')
   const sorted = useMemo(
     () =>
       sortBy(visible, sort, (ev, key) => {
