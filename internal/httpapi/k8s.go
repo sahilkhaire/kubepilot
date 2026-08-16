@@ -3,6 +3,7 @@ package httpapi
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -119,7 +120,11 @@ func handleResourceEvents(w http.ResponseWriter, r *http.Request, deps Deps) {
 }
 
 func handleWorkloadsOverview(w http.ResponseWriter, r *http.Request, deps Deps) {
-	ns := r.URL.Query().Get("namespace")
+	ns := strings.TrimSpace(r.URL.Query().Get("namespace"))
+	if ns == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	u, ps, ok := authenticateForKube(w, r, deps.Auth, deps.Store)
 	if !ok {
 		return

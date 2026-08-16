@@ -77,6 +77,22 @@ func seedWorkloadFakeClient() *kube.Client {
 	return kube.ForTest(fake.NewSimpleClientset(podDev, podProd, nsDev, nsProd))
 }
 
+func seedWorkloadFakeClientWithInstallNS() *kube.Client {
+	podDev := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "pod-dev", Namespace: "dev"},
+	}
+	podProd := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "pod-prod", Namespace: "prod"},
+	}
+	podInstall := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "pod-install", Namespace: testInstallNS},
+	}
+	nsDev := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "dev"}}
+	nsProd := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "prod"}}
+	nsInstall := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testInstallNS}}
+	return kube.ForTest(fake.NewSimpleClientset(podDev, podProd, podInstall, nsDev, nsProd, nsInstall))
+}
+
 func TestListPodsAuthz(t *testing.T) {
 	t.Parallel()
 
@@ -219,6 +235,72 @@ func TestWorkloadsOverviewOmitsDeniedModules(t *testing.T) {
 	}
 	if _, ok := counts["deployments"]; ok {
 		t.Fatalf("deployments should be omitted: %v", counts)
+	}
+}
+
+func TestWorkloadsOverviewRequiresNamespace(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"*"})
+	h := newK8sHandler(t, st, seedWorkloadFakeClientWithInstallNS())
+	session := login(t, h, "member", "pass")
+
+	tests := []struct {
+		name       string
+		path       string
+		wantStatus int
+	}{
+		{name: "missing namespace", path: "/api/k8s/workloads/overview", wantStatus: http.StatusBadRequest},
+		{name: "blank namespace", path: "/api/k8s/workloads/overview?namespace=", wantStatus: http.StatusBadRequest},
+		{name: "whitespace namespace", path: "/api/k8s/workloads/overview?namespace=%20", wantStatus: http.StatusBadRequest},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req.AddCookie(session)
+			h.ServeHTTP(rec, req)
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), tc.wantStatus)
+			}
+		})
+	}
+}
+
+func TestMemberStarCannotSeeInstallNS(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"*"})
+	h := newK8sHandler(t, st, seedWorkloadFakeClientWithInstallNS())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/workloads/overview?namespace="+testInstallNS, nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("workloads overview code=%d want %d", rec.Code, http.StatusForbidden)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/k8s/cluster/overview", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("cluster overview code=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var counts map[string]int
+	if err := json.Unmarshal(rec.Body.Bytes(), &counts); err != nil {
+		t.Fatal(err)
+	}
+	if counts["pods"] != 2 {
+		t.Fatalf("pods=%d want 2 (dev+prod, excluding install NS)", counts["pods"])
 	}
 }
 
