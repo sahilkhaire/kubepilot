@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/zixflow/k8s/internal/httpapi"
@@ -48,13 +50,40 @@ func createK8sMember(t *testing.T, st store.Store, username, plainPassword, perm
 	}
 }
 
+func createPermissionSetWithGrants(t *testing.T, st store.Store, id string, grants map[string][]string) {
+	t.Helper()
+	now := time.Now().UTC()
+	if err := st.CreatePermissionSet(context.Background(), store.PermissionSet{
+		ID:          id,
+		Name:        "Viewer",
+		Description: "test",
+		Grants:      grants,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func seedWorkloadFakeClient() *kube.Client {
+	podDev := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "pod-dev", Namespace: "dev"},
+	}
+	podProd := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "pod-prod", Namespace: "prod"},
+	}
+	nsDev := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "dev"}}
+	nsProd := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "prod"}}
+	return kube.ForTest(fake.NewSimpleClientset(podDev, podProd, nsDev, nsProd))
+}
+
 func TestListPodsAuthz(t *testing.T) {
 	t.Parallel()
 
 	st := store.NewMemory()
 	createPermissionSet(t, st, "ps1")
 	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
-	h := newK8sHandler(t, st, kube.ForTest(fake.NewSimpleClientset()))
+	h := newK8sHandler(t, st, seedWorkloadFakeClient())
 	session := login(t, h, "member", "pass")
 
 	tests := []struct {
@@ -76,11 +105,10 @@ func TestListPodsAuthz(t *testing.T) {
 			wantStatus: http.StatusForbidden,
 		},
 		{
-			name:       "allowed empty list",
+			name:       "allowed list",
 			path:       "/api/k8s/namespaces/dev/pods",
 			session:    session,
 			wantStatus: http.StatusOK,
-			wantEmpty:  true,
 		},
 	}
 
@@ -97,14 +125,49 @@ func TestListPodsAuthz(t *testing.T) {
 				t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), tc.wantStatus)
 			}
 
-			if tc.wantEmpty {
-				var pods []any
+			if tc.wantStatus == http.StatusOK {
+				var pods []map[string]any
 				if err := json.Unmarshal(rec.Body.Bytes(), &pods); err != nil {
 					t.Fatalf("decode: %v body=%s", err, rec.Body.String())
 				}
-				if len(pods) != 0 {
+				if tc.wantEmpty && len(pods) != 0 {
 					t.Fatalf("pods=%v want empty array", pods)
 				}
+				if !tc.wantEmpty && tc.path == "/api/k8s/namespaces/dev/pods" && len(pods) != 1 {
+					t.Fatalf("pods=%v want one pod in dev", pods)
+				}
+			}
+		})
+	}
+}
+
+func TestGetPodAuthz(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSet(t, st, "ps1")
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	h := newK8sHandler(t, st, seedWorkloadFakeClient())
+	session := login(t, h, "member", "pass")
+
+	tests := []struct {
+		name       string
+		path       string
+		wantStatus int
+	}{
+		{name: "denied prod", path: "/api/k8s/namespaces/prod/pods/pod-prod", wantStatus: http.StatusForbidden},
+		{name: "get dev", path: "/api/k8s/namespaces/dev/pods/pod-dev", wantStatus: http.StatusOK},
+		{name: "missing name", path: "/api/k8s/namespaces/dev/pods/missing", wantStatus: http.StatusNotFound},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req.AddCookie(session)
+			h.ServeHTTP(rec, req)
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), tc.wantStatus)
 			}
 		})
 	}
@@ -126,5 +189,73 @@ func TestListPodsKubeNil(t *testing.T) {
 
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("code=%d want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestWorkloadsOverviewOmitsDeniedModules(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	h := newK8sHandler(t, st, seedWorkloadFakeClient())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/workloads/overview?namespace=dev", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var counts map[string]int
+	if err := json.Unmarshal(rec.Body.Bytes(), &counts); err != nil {
+		t.Fatal(err)
+	}
+	if counts["pods"] != 1 {
+		t.Fatalf("pods=%d want 1", counts["pods"])
+	}
+	if _, ok := counts["deployments"]; ok {
+		t.Fatalf("deployments should be omitted: %v", counts)
+	}
+}
+
+func TestWorkloadsOverviewDeniedNamespace(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSet(t, st, "ps1")
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	h := newK8sHandler(t, st, seedWorkloadFakeClient())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/workloads/overview?namespace=prod", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("code=%d want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestUnknownResource404(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSet(t, st, "ps1")
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	h := newK8sHandler(t, st, seedWorkloadFakeClient())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/namespaces/dev/secrets", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("code=%d want %d", rec.Code, http.StatusNotFound)
 	}
 }

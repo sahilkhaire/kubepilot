@@ -6,6 +6,29 @@ import (
 	"github.com/zixflow/k8s/internal/audit"
 )
 
+func TestModuleForPathK8s(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		path string
+		want string
+	}{
+		{"/api/k8s/namespaces/dev/pods", "pods"},
+		{"/api/k8s/namespaces/dev/deployments", "deployments"},
+		{"/api/k8s/namespaces/dev/pods/my-pod", "pods"},
+		{"/api/k8s/namespaces/dev/pods/my-pod/events", "pods"},
+		{"/api/k8s/workloads/overview", "workloads.overview"},
+		{"/api/k8s/cluster/overview", "cluster.overview"},
+		{"/api/k8s/namespaces/dev/secrets", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.path, func(t *testing.T) {
+			if got := audit.ModuleForPath(tc.path); got != tc.want {
+				t.Fatalf("ModuleForPath(%q)=%q want %q", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestRedactDetailsStripsPasswordKeys(t *testing.T) {
 	t.Parallel()
 	in := map[string]any{

@@ -125,6 +125,27 @@ func ModuleForPath(path string) string {
 		return "settings.permission_sets"
 	case strings.HasPrefix(path, "/api/settings/audit"):
 		return "settings.audit"
+	case path == "/api/k8s/workloads/overview":
+		return "workloads.overview"
+	case path == "/api/k8s/cluster/overview":
+		return "cluster.overview"
+	case strings.HasPrefix(path, "/api/k8s/namespaces/"):
+		return moduleForK8sNamespacePath(path)
+	default:
+		return ""
+	}
+}
+
+func moduleForK8sNamespacePath(path string) string {
+	rest := strings.TrimPrefix(path, "/api/k8s/namespaces/")
+	parts := strings.Split(rest, "/")
+	if len(parts) < 2 {
+		return ""
+	}
+	module := parts[1]
+	switch module {
+	case "pods", "deployments", "statefulsets", "daemonsets", "replicasets", "jobs", "cronjobs":
+		return module
 	default:
 		return ""
 	}
