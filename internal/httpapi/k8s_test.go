@@ -270,6 +270,46 @@ func TestWorkloadsOverviewRequiresNamespace(t *testing.T) {
 	}
 }
 
+func TestOwnerCanSeeInstallNSOverview(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	h := newK8sHandler(t, st, seedWorkloadFakeClientWithInstallNS())
+	session := login(t, h, "owner", "secret")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/workloads/overview?namespace="+testInstallNS, nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), http.StatusOK)
+	}
+
+	var counts map[string]int
+	if err := json.Unmarshal(rec.Body.Bytes(), &counts); err != nil {
+		t.Fatal(err)
+	}
+	if counts["pods"] != 1 {
+		t.Fatalf("pods=%d want 1 in install NS", counts["pods"])
+	}
+}
+
+func TestWorkloadsOverviewUnauthenticatedMissingNamespace(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	h := newK8sHandler(t, st, seedWorkloadFakeClientWithInstallNS())
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/workloads/overview", nil)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("code=%d want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
 func TestMemberStarCannotSeeInstallNS(t *testing.T) {
 	t.Parallel()
 

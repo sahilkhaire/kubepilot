@@ -120,13 +120,13 @@ func handleResourceEvents(w http.ResponseWriter, r *http.Request, deps Deps) {
 }
 
 func handleWorkloadsOverview(w http.ResponseWriter, r *http.Request, deps Deps) {
+	u, ps, ok := authenticateForKube(w, r, deps.Auth, deps.Store)
+	if !ok {
+		return
+	}
 	ns := strings.TrimSpace(r.URL.Query().Get("namespace"))
 	if ns == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	u, ps, ok := authenticateForKube(w, r, deps.Auth, deps.Store)
-	if !ok {
 		return
 	}
 	if !namespaceAccessible(*u, deps.InstallNS, ns) {
@@ -220,11 +220,11 @@ func isWorkloadModule(module string) bool {
 }
 
 func namespaceAccessible(u store.User, installNS, namespace string) bool {
-	if installNS != "" && namespace == installNS {
-		return false
-	}
 	if u.Role == store.RoleOwner {
 		return true
+	}
+	if installNS != "" && namespace == installNS {
+		return false
 	}
 	for _, n := range u.Namespaces {
 		if n == "*" || n == namespace {
