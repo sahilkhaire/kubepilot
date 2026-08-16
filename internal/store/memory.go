@@ -17,6 +17,7 @@ type memoryStore struct {
 	sessions        map[string]*Session
 	permissionSets  map[string]*PermissionSet
 	auditLogs       map[string]*AuditLog
+	appSettings     *AppSettings
 	nextAuditID     int
 }
 
@@ -329,6 +330,22 @@ func (m *memoryStore) DeleteAuditIDs(ctx context.Context, ids []string) (int64, 
 	return n, nil
 }
 
+func (m *memoryStore) GetAppSettings(ctx context.Context) (*AppSettings, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.appSettings == nil {
+		return &AppSettings{HelmRepositories: []HelmRepository{}}, nil
+	}
+	return cloneAppSettings(m.appSettings), nil
+}
+
+func (m *memoryStore) PutAppSettings(ctx context.Context, settings AppSettings) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.appSettings = cloneAppSettings(&settings)
+	return nil
+}
+
 func (m *memoryStore) DeleteAuditFilter(ctx context.Context, filter AuditFilter) (int64, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -429,5 +446,19 @@ func cloneSession(s *Session) *Session {
 		return nil
 	}
 	clone := *s
+	return &clone
+}
+
+func cloneAppSettings(s *AppSettings) *AppSettings {
+	if s == nil {
+		return nil
+	}
+	clone := *s
+	if s.HelmRepositories != nil {
+		clone.HelmRepositories = make([]HelmRepository, len(s.HelmRepositories))
+		copy(clone.HelmRepositories, s.HelmRepositories)
+	} else {
+		clone.HelmRepositories = []HelmRepository{}
+	}
 	return &clone
 }

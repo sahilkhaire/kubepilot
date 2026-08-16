@@ -7,6 +7,7 @@ import (
 
 	"github.com/zixflow/k8s/internal/audit"
 	"github.com/zixflow/k8s/internal/auth"
+	"github.com/zixflow/k8s/internal/helmctrl"
 	"github.com/zixflow/k8s/internal/kube"
 	"github.com/zixflow/k8s/internal/streams"
 	"github.com/zixflow/k8s/internal/store"
@@ -25,6 +26,7 @@ type Deps struct {
 	ExecUpgrader    streams.ExecUpgrader
 	MetricsProvider streams.MetricsProvider
 	PrometheusURL   string
+	Helm            helmctrl.Client
 }
 
 func New(deps Deps) http.Handler {
@@ -36,6 +38,8 @@ func New(deps Deps) http.Handler {
 		registerPermissionSetRoutes(mux, deps.Auth, deps.Store, deps.Audit, deps.TrustProxy)
 		registerMemberRoutes(mux, deps.Auth, deps.Store, deps.InstallNS, deps.Audit, deps.TrustProxy)
 		registerAuditRoutes(mux, deps.Auth, deps.Store, deps.Audit, deps.TrustProxy)
+		registerAppSettingsRoutes(mux, deps)
+		registerHelmRoutes(mux, deps)
 		registerK8sRoutes(mux, deps)
 		registerStreamRoutes(mux, deps)
 	}

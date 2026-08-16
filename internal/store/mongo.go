@@ -15,11 +15,12 @@ import (
 const defaultDatabase = "cluster_console"
 
 type mongoStore struct {
-	client *mongo.Client
-	users  *mongo.Collection
-	sess   *mongo.Collection
-	psets  *mongo.Collection
-	audit  *mongo.Collection
+	client   *mongo.Client
+	users    *mongo.Collection
+	sess     *mongo.Collection
+	psets    *mongo.Collection
+	audit    *mongo.Collection
+	settings *mongo.Collection
 }
 
 type mongoUser struct {
@@ -82,6 +83,11 @@ type mongoAuditLog struct {
 	Error      string        `bson:"error,omitempty"`
 }
 
+type mongoAppSettings struct {
+	ID               string             `bson:"_id"`
+	HelmRepositories []HelmRepository   `bson:"helmRepositories"`
+}
+
 func OpenMongo(ctx context.Context, uri string) (Store, error) {
 	client, err := mongo.Connect(options.Client().ApplyURI(uri))
 	if err != nil {
@@ -104,6 +110,7 @@ func OpenMongo(ctx context.Context, uri string) (Store, error) {
 	sess := db.Collection("sessions")
 	psets := db.Collection("permission_sets")
 	audit := db.Collection("audit_logs")
+	settings := db.Collection("settings")
 
 	indexModel := options.Index().SetUnique(true)
 	if _, err := users.Indexes().CreateOne(ctx, mongo.IndexModel{
@@ -127,11 +134,12 @@ func OpenMongo(ctx context.Context, uri string) (Store, error) {
 	}
 
 	return &mongoStore{
-		client: client,
-		users:  users,
-		sess:   sess,
-		psets:  psets,
-		audit:  audit,
+		client:   client,
+		users:    users,
+		sess:     sess,
+		psets:    psets,
+		audit:    audit,
+		settings: settings,
 	}, nil
 }
 
@@ -717,4 +725,37 @@ func mongoSessionToSession(doc *mongoSession) *Session {
 		IP:            doc.IP,
 		UserAgent:     doc.UserAgent,
 	}
+}
+
+func (m *mongoStore) GetAppSettings(ctx context.Context) (*AppSettings, error) {
+	var doc mongoAppSettings
+	err := m.settings.FindOne(ctx, bson.M{"_id": "app"}).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return &AppSettings{HelmRepositories: []HelmRepository{}}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	repos := doc.HelmRepositories
+	if repos == nil {
+		repos = []HelmRepository{}
+	}
+	return &AppSettings{HelmRepositories: repos}, nil
+}
+
+func (m *mongoStore) PutAppSettings(ctx context.Context, settings AppSettings) error {
+	repos := settings.HelmRepositories
+	if repos == nil {
+		repos = []HelmRepository{}
+	}
+	_, err := m.settings.UpdateOne(
+		ctx,
+		bson.M{"_id": "app"},
+		bson.M{"$set": mongoAppSettings{
+			ID:               "app",
+			HelmRepositories: repos,
+		}},
+		options.UpdateOne().SetUpsert(true),
+	)
+	return err
 }

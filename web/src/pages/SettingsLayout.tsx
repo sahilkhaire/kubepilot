@@ -13,6 +13,7 @@ export default function SettingsLayout() {
         <NavLink to="/settings/members" style={tabStyle}>Members</NavLink>
         <NavLink to="/settings/sets" style={tabStyle}>Permission sets</NavLink>
         <NavLink to="/settings/audit" style={tabStyle}>Audit</NavLink>
+        <NavLink to="/settings/app" style={tabStyle}>App</NavLink>
       </nav>
       <Outlet />
     </div>

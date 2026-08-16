@@ -9,6 +9,7 @@ import (
 	"github.com/zixflow/k8s/internal/auth"
 	"github.com/zixflow/k8s/internal/bootstrap"
 	"github.com/zixflow/k8s/internal/config"
+	"github.com/zixflow/k8s/internal/helmctrl"
 	"github.com/zixflow/k8s/internal/httpapi"
 	"github.com/zixflow/k8s/internal/kube"
 	"github.com/zixflow/k8s/internal/store"
@@ -36,6 +37,10 @@ func main() {
 
 	authSvc := auth.New(st, cfg.SessionSecret)
 	auditor := audit.New(st)
+	var helmClient helmctrl.Client
+	if kubeClient.Config != nil {
+		helmClient = helmctrl.NewSDKClient(kubeClient.Config)
+	}
 	handler := httpapi.New(httpapi.Deps{
 		Ready:      st.Ping,
 		Auth:       authSvc,
@@ -45,6 +50,7 @@ func main() {
 		TrustProxy:    cfg.TrustProxy,
 		Kube:          kubeClient,
 		PrometheusURL: cfg.PrometheusURL,
+		Helm:          helmClient,
 	})
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, handler))
 }

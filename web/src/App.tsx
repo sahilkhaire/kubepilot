@@ -6,6 +6,7 @@ import ChangePassword from './pages/ChangePassword'
 import Config from './pages/Config'
 import CustomResources from './pages/CustomResources'
 import Events from './pages/Events'
+import Helm from './pages/Helm'
 import Login from './pages/Login'
 import Network from './pages/Network'
 import Nodes from './pages/Nodes'
@@ -14,6 +15,7 @@ import PodLogs from './pages/PodLogs'
 import ResourceYAML from './pages/ResourceYAML'
 import WorkloadYAML from './pages/WorkloadYAML'
 import SettingsAudit from './pages/SettingsAudit'
+import SettingsApp from './pages/SettingsApp'
 import SettingsLayout from './pages/SettingsLayout'
 import SettingsMembers from './pages/SettingsMembers'
 import SettingsSets from './pages/SettingsSets'
@@ -64,6 +66,7 @@ function AppShell({
           <Link to="/network" style={linkStyle}>Network</Link>
           <Link to="/storage" style={linkStyle}>Storage</Link>
           <Link to="/custom-resources" style={linkStyle}>Custom Resources</Link>
+          <Link to="/helm" style={linkStyle}>Helm</Link>
           {user.role === 'owner' && (
             <Link to="/settings/members" style={linkStyle}>Settings</Link>
           )}
@@ -148,11 +151,13 @@ export default function App() {
           <Route path="/storage/:ns/:resource/:name/yaml" element={<ResourceYAML backLink="/storage" backLabel="Storage" />} />
           <Route path="/storage/cluster/:resource/:name/yaml" element={<ResourceYAML backLink="/storage" backLabel="Storage" />} />
           <Route path="/custom-resources" element={<CustomResources />} />
+          <Route path="/helm" element={<Helm />} />
           <Route path="/settings" element={<OwnerGuard user={user} />}>
             <Route index element={<Navigate to="members" replace />} />
             <Route path="members" element={<SettingsMembers />} />
             <Route path="sets" element={<SettingsSets />} />
             <Route path="audit" element={<SettingsAudit />} />
+            <Route path="app" element={<SettingsApp />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

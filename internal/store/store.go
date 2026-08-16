@@ -75,6 +75,15 @@ type AuditLog struct {
 	Error      string
 }
 
+type HelmRepository struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+type AppSettings struct {
+	HelmRepositories []HelmRepository `json:"helmRepositories"`
+}
+
 type AuditFilter struct {
 	From      *time.Time
 	To        *time.Time
@@ -114,4 +123,6 @@ type Store interface {
 	QueryAudit(ctx context.Context, filter AuditFilter) ([]AuditLog, error)
 	DeleteAuditIDs(ctx context.Context, ids []string) (int64, error)
 	DeleteAuditFilter(ctx context.Context, filter AuditFilter) (int64, error)
+	GetAppSettings(ctx context.Context) (*AppSettings, error)
+	PutAppSettings(ctx context.Context, settings AppSettings) error
 }

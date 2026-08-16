@@ -125,6 +125,10 @@ func ModuleForPath(path string) string {
 		return "settings.permission_sets"
 	case strings.HasPrefix(path, "/api/settings/audit"):
 		return "settings.audit"
+	case strings.HasPrefix(path, "/api/settings/app"):
+		return "settings.app"
+	case strings.HasPrefix(path, "/api/helm/"):
+		return "helm"
 	case path == "/api/k8s/workloads/overview":
 		return "workloads.overview"
 	case path == "/api/k8s/cluster/overview":
