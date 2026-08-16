@@ -183,3 +183,131 @@ func TestPodLogsDeniedWrongNamespace(t *testing.T) {
 		t.Fatal("streamer should not be called for denied namespace")
 	}
 }
+
+type stubExecUpgrader struct {
+	called int
+}
+
+func (s *stubExecUpgrader) Handle(w http.ResponseWriter, _ *http.Request, _, _, _ string, onUpgraded func()) error {
+	s.called++
+	if onUpgraded != nil {
+		onUpgraded()
+	}
+	w.WriteHeader(http.StatusOK)
+	return nil
+}
+
+func newExecHandler(t *testing.T, st store.Store, upgrader streams.ExecUpgrader) http.Handler {
+	t.Helper()
+	return newAuthHandlerWithOptions(t, st, httpapi.Deps{
+		InstallNS:    testInstallNS,
+		ExecUpgrader: upgrader,
+	})
+}
+
+func TestPodExecUnauthenticated(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	upgrader := &stubExecUpgrader{}
+	h := newExecHandler(t, st, upgrader)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/streams/exec?namespace=dev&pod=pod-dev", nil)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("code=%d want %d", rec.Code, http.StatusUnauthorized)
+	}
+	if upgrader.called != 0 {
+		t.Fatal("upgrader should not be called")
+	}
+}
+
+func TestPodExecDeniedWithoutExecGrant(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view", "logs"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	upgrader := &stubExecUpgrader{}
+	h := newExecHandler(t, st, upgrader)
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/streams/exec?namespace=dev&pod=pod-dev", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), http.StatusForbidden)
+	}
+	if upgrader.called != 0 {
+		t.Fatal("upgrader should not be called without exec grant")
+	}
+}
+
+func TestPodExecDeniedInstallNS(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view", "exec"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"*"})
+	upgrader := &stubExecUpgrader{}
+	h := newExecHandler(t, st, upgrader)
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/streams/exec?namespace="+testInstallNS+"&pod=pod-install", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("code=%d want %d", rec.Code, http.StatusForbidden)
+	}
+	if upgrader.called != 0 {
+		t.Fatal("upgrader should not be called for install namespace")
+	}
+}
+
+func TestPodExecAllowedWithExecGrant(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view", "exec"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	upgrader := &stubExecUpgrader{}
+	h := newExecHandler(t, st, upgrader)
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/streams/exec?namespace=dev&pod=pod-dev", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d want %d", rec.Code, http.StatusOK)
+	}
+	if upgrader.called != 1 {
+		t.Fatalf("upgrader called=%d want 1", upgrader.called)
+	}
+
+	entries, err := st.QueryAudit(context.Background(), store.AuditFilter{Module: "pods", Action: "exec"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("audit logs=%d want start+stop", len(entries))
+	}
+	phases := map[string]bool{}
+	for _, entry := range entries {
+		if entry.Kind != "Pod" || entry.Namespace != "dev" || entry.Name != "pod-dev" {
+			t.Fatalf("audit entry=%+v unexpected resource", entry)
+		}
+		phase, _ := entry.Details["phase"].(string)
+		phases[phase] = true
+	}
+	if !phases["start"] || !phases["stop"] {
+		t.Fatalf("audit phases=%v want start and stop", phases)
+	}
+}

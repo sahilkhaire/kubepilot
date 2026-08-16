@@ -20,8 +20,9 @@ type Deps struct {
 	InstallNS  string
 	TrustProxy bool
 	WebDist    string // optional; falls back to WEB_DIST env
-	Kube        *kube.Client
-	LogStreamer streams.LogStreamer
+	Kube         *kube.Client
+	LogStreamer  streams.LogStreamer
+	ExecUpgrader streams.ExecUpgrader
 }
 
 func New(deps Deps) http.Handler {

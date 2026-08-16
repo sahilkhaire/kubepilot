@@ -20,6 +20,8 @@ func TestModuleForPathK8s(t *testing.T) {
 		{"/api/k8s/cluster/overview", "cluster.overview"},
 		{"/api/streams/logs", "pods"},
 		{"/api/streams/logs?namespace=dev&pod=my-pod", "pods"},
+		{"/api/streams/exec", "pods"},
+		{"/api/streams/exec?namespace=dev&pod=my-pod", "pods"},
 		{"/api/k8s/namespaces/dev/secrets", ""},
 	}
 	for _, tc := range tests {

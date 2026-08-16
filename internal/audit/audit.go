@@ -131,6 +131,8 @@ func ModuleForPath(path string) string {
 		return "cluster.overview"
 	case strings.HasPrefix(path, "/api/streams/logs"):
 		return "pods"
+	case strings.HasPrefix(path, "/api/streams/exec"):
+		return "pods"
 	case strings.HasPrefix(path, "/api/k8s/namespaces/"):
 		return moduleForK8sNamespacePath(path)
 	default:

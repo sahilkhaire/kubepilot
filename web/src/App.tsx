@@ -8,6 +8,7 @@ import Events from './pages/Events'
 import Login from './pages/Login'
 import Network from './pages/Network'
 import Nodes from './pages/Nodes'
+import PodExec from './pages/PodExec'
 import PodLogs from './pages/PodLogs'
 import ResourceYAML from './pages/ResourceYAML'
 import WorkloadYAML from './pages/WorkloadYAML'
@@ -126,6 +127,7 @@ export default function App() {
           <Route path="/workloads" element={<Workloads />} />
           <Route path="/workloads/:ns/:resource/:name/yaml" element={<WorkloadYAML />} />
           <Route path="/workloads/:ns/pods/:pod/logs" element={<PodLogs />} />
+          <Route path="/workloads/:ns/pods/:pod/exec" element={<PodExec />} />
           <Route path="/nodes" element={<Nodes />} />
           <Route path="/nodes/cluster/:resource/:name/yaml" element={<ResourceYAML backLink="/nodes" backLabel="Nodes" />} />
           <Route path="/events" element={<Events />} />

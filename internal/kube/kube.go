@@ -16,6 +16,7 @@ import (
 
 type Client struct {
 	Inner   kubernetes.Interface
+	Config  *rest.Config // for SPDY exec; nil in test clients without exec
 	Dynamic dynamic.Interface
 	Mapper  meta.RESTMapper
 	YAML    YAMLApplier // optional override for tests
@@ -49,7 +50,7 @@ func NewInCluster() (*Client, error) {
 		return nil, err
 	}
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(dc))
-	return &Client{Inner: cs, Dynamic: dyn, Mapper: mapper}, nil
+	return &Client{Inner: cs, Config: cfg, Dynamic: dyn, Mapper: mapper}, nil
 }
 
 func ForTest(c kubernetes.Interface) *Client {

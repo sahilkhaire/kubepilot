@@ -116,6 +116,10 @@ export default function Workloads() {
                     Logs
                   </Link>
                   {' · '}
+                  <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/exec`}>
+                    Exec
+                  </Link>
+                  {' · '}
                   <Link to={`/workloads/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(name)}/yaml`}>
                     YAML
                   </Link>

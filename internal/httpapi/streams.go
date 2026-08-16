@@ -17,6 +17,9 @@ func registerStreamRoutes(mux *http.ServeMux, deps Deps) {
 	mux.HandleFunc("GET /api/streams/logs", func(w http.ResponseWriter, r *http.Request) {
 		handlePodLogs(w, r, deps)
 	})
+	mux.HandleFunc("GET /api/streams/exec", func(w http.ResponseWriter, r *http.Request) {
+		handlePodExec(w, r, deps)
+	})
 }
 
 func handlePodLogs(w http.ResponseWriter, r *http.Request, deps Deps) {
@@ -132,6 +135,92 @@ func parseTailLines(v string) int64 {
 		return 200
 	}
 	return n
+}
+
+func handlePodExec(w http.ResponseWriter, r *http.Request, deps Deps) {
+	ns := strings.TrimSpace(r.URL.Query().Get("namespace"))
+	pod := strings.TrimSpace(r.URL.Query().Get("pod"))
+
+	u, err := authenticateRequest(r, deps.Auth)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if ns == "" || pod == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	var ps *rbac.PermissionSet
+	if u.Role != store.RoleOwner {
+		ps, err = permissionSetForRBAC(r.Context(), deps.Store, u.PermissionSetID)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+	if !rbac.Allow(rbac.Request{
+		User:          *u,
+		InstallNS:     deps.InstallNS,
+		PermissionSet: ps,
+		Module:        "pods",
+		Action:        "exec",
+		Namespace:     ns,
+		ClusterScoped: false,
+	}) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	upgrader := execUpgraderFor(deps)
+	if upgrader == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	container := strings.TrimSpace(r.URL.Query().Get("container"))
+	if err := upgrader.Handle(w, r, ns, pod, container, func() {
+		writePodExecAudit(r, deps, u, ns, pod, "start", http.StatusSwitchingProtocols)
+	}); err != nil {
+		log.Printf("pod exec: ns=%s pod=%s err=%v", ns, pod, err)
+		return
+	}
+
+	writePodExecAudit(r, deps, u, ns, pod, "stop", http.StatusOK)
+}
+
+func execUpgraderFor(deps Deps) streams.ExecUpgrader {
+	if deps.ExecUpgrader != nil {
+		return deps.ExecUpgrader
+	}
+	if deps.Kube != nil {
+		return streams.NewKubeExecUpgrader(deps.Kube)
+	}
+	return nil
+}
+
+func writePodExecAudit(r *http.Request, deps Deps, u *store.User, ns, pod, phase string, status int) {
+	if deps.Audit == nil {
+		return
+	}
+	writeAuditOrLog(r.Context(), deps.Audit, audit.Event{
+		UserID:     u.ID,
+		Username:   u.Username,
+		Role:       string(u.Role),
+		IP:         clientIP(r, deps.TrustProxy),
+		UserAgent:  audit.TruncateUserAgent(r.UserAgent()),
+		SessionID:  actorSessionID(r, deps.Auth),
+		Module:     "pods",
+		Action:     "exec",
+		Result:     "success",
+		HTTPStatus: status,
+		Kind:       "Pod",
+		Namespace:  ns,
+		Name:       pod,
+		Path:       r.URL.Path,
+		Method:     r.Method,
+		Details:    map[string]any{"phase": phase},
+	})
 }
 
 func writePodLogsAudit(r *http.Request, deps Deps, u *store.User, ns, pod, phase string, status int) {
