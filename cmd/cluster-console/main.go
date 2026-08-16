@@ -10,6 +10,7 @@ import (
 	"github.com/zixflow/k8s/internal/bootstrap"
 	"github.com/zixflow/k8s/internal/config"
 	"github.com/zixflow/k8s/internal/httpapi"
+	"github.com/zixflow/k8s/internal/kube"
 	"github.com/zixflow/k8s/internal/store"
 )
 
@@ -28,6 +29,11 @@ func main() {
 		log.Fatal(err)
 	}
 
+	clientset, err := kube.InCluster()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	authSvc := auth.New(st, cfg.SessionSecret)
 	auditor := audit.New(st)
 	handler := httpapi.New(httpapi.Deps{
@@ -37,6 +43,7 @@ func main() {
 		Audit:      auditor,
 		InstallNS:  cfg.PodNamespace,
 		TrustProxy: cfg.TrustProxy,
+		Kube:       kube.ForTest(clientset),
 	})
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, handler))
 }

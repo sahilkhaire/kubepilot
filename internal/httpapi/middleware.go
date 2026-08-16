@@ -1,10 +1,12 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
 	"github.com/zixflow/k8s/internal/auth"
+	"github.com/zixflow/k8s/internal/rbac"
 	"github.com/zixflow/k8s/internal/store"
 )
 
@@ -46,4 +48,55 @@ func mustChangePasswordRestricted(r *http.Request) bool {
 	}
 
 	return true
+}
+
+func requireKubeAllow(w http.ResponseWriter, r *http.Request, authSvc *auth.Service, st store.Store, installNS, module, action, namespace string, clusterScoped bool) (*store.User, bool) {
+	u, err := authenticateRequest(r, authSvc)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return nil, false
+	}
+
+	var ps *rbac.PermissionSet
+	if u.Role != store.RoleOwner {
+		var loadErr error
+		ps, loadErr = permissionSetForRBAC(r.Context(), st, u.PermissionSetID)
+		if loadErr != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return nil, false
+		}
+	}
+
+	if !rbac.Allow(rbac.Request{
+		User:          *u,
+		InstallNS:     installNS,
+		PermissionSet: ps,
+		Module:        module,
+		Action:        action,
+		Namespace:     namespace,
+		ClusterScoped: clusterScoped,
+	}) {
+		w.WriteHeader(http.StatusForbidden)
+		return nil, false
+	}
+	return u, true
+}
+
+func permissionSetForRBAC(ctx context.Context, st store.Store, id string) (*rbac.PermissionSet, error) {
+	if id == "" {
+		return nil, nil
+	}
+	ps, err := st.PermissionSet(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if ps == nil {
+		return nil, nil
+	}
+	return &rbac.PermissionSet{
+		ID:          ps.ID,
+		Name:        ps.Name,
+		Description: ps.Description,
+		Grants:      ps.Grants,
+	}, nil
 }
