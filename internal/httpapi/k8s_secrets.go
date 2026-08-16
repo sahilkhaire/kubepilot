@@ -4,8 +4,6 @@ import (
 	"net/http"
 	"strings"
 
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/zixflow/k8s/internal/audit"
 	"github.com/zixflow/k8s/internal/kube"
 	"github.com/zixflow/k8s/internal/rbac"
@@ -17,25 +15,11 @@ func secretRevealRequested(r *http.Request) bool {
 }
 
 func sanitizeSecretList(items any, reveal bool) any {
-	if reveal {
-		return items
-	}
-	secrets, ok := items.([]corev1.Secret)
-	if !ok {
-		return items
-	}
-	return kube.StripSecrets(secrets)
+	return kube.SanitizeSecrets(items, reveal)
 }
 
 func sanitizeSecretGet(obj any, reveal bool) any {
-	if reveal {
-		return obj
-	}
-	secret, ok := obj.(*corev1.Secret)
-	if !ok {
-		return obj
-	}
-	return kube.StripSecret(secret)
+	return kube.SanitizeSecret(obj, reveal)
 }
 
 func writeSecretRevealAudit(r *http.Request, deps Deps, u *store.User, ns, name string) {

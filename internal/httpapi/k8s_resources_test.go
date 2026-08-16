@@ -31,6 +31,41 @@ func seedStorageClassFakeClient() *kube.Client {
 	return kube.ForTest(fake.NewSimpleClientset(sc))
 }
 
+func TestListSecretsWithoutRevealStripsData(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"secrets": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	h := newK8sHandler(t, st, seedSecretFakeClient())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/namespaces/dev/secrets", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), http.StatusOK)
+	}
+
+	var items []map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &items); err != nil {
+		t.Fatal(err)
+	}
+	if len(items) == 0 {
+		t.Fatal("expected at least one secret")
+	}
+	for i, item := range items {
+		if _, ok := item["data"]; ok {
+			t.Fatalf("item[%d] data should be stripped: %s", i, rec.Body.String())
+		}
+		if _, ok := item["stringData"]; ok {
+			t.Fatalf("item[%d] stringData should be stripped: %s", i, rec.Body.String())
+		}
+	}
+}
+
 func TestGetSecretWithoutRevealStripsData(t *testing.T) {
 	t.Parallel()
 
