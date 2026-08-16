@@ -8,7 +8,7 @@ Product documentation lives in [docs/](docs/README.md).
 
 ```bash
 helm install cluster-console deploy/charts/cluster-console \
-  --namespace cluster-console --create-namespace \
+  --namespace YOUR_NAMESPACE --create-namespace \
   --set image.repository=<your-registry>/cluster-console \
   --set image.tag=<version> \
   --set mongodbUri=mongodb://<host>:27017/cluster_console \
@@ -29,7 +29,7 @@ Alternatively, create a Secret yourself and set `existingSecret` instead of `mon
 | `ownerPassword` | Owner account password (from env on every boot; not changeable in UI) |
 | `sessionSecret` | Cookie signing secret |
 
-The chart sets `POD_NAMESPACE` on the Deployment via the Downward API (`metadata.namespace`). Default `replicaCount` is 2 with `sessionAffinity: ClientIP` on the Service for stream stickiness. A PodDisruptionBudget (`minAvailable: 1`) is created when replicas ≥ 2 (disable with `podDisruptionBudget.enabled: false`).
+The install namespace is whatever you pass to `helm install --namespace`; the app reads it from `POD_NAMESPACE` on the Deployment (Downward API, `metadata.namespace`). Default `replicaCount` is 2 with `sessionAffinity: ClientIP` on the Service for stream stickiness. A PodDisruptionBudget (`minAvailable: 1`) is created when replicas ≥ 2 (disable with `podDisruptionBudget.enabled: false`).
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for ingress, TLS, Cloudflare Access, and full values reference.
 
