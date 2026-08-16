@@ -2,6 +2,7 @@ package httpapi_test
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -190,12 +191,16 @@ func TestPodLogsDeniedWrongNamespace(t *testing.T) {
 
 type stubExecUpgrader struct {
 	called int
+	err    error
 }
 
 func (s *stubExecUpgrader) Handle(w http.ResponseWriter, _ *http.Request, _, _, _ string, onUpgraded func()) error {
 	s.called++
 	if onUpgraded != nil {
 		onUpgraded()
+	}
+	if s.err != nil {
+		return s.err
 	}
 	w.WriteHeader(http.StatusOK)
 	return nil
@@ -316,6 +321,42 @@ func TestPodExecAllowedWithExecGrant(t *testing.T) {
 	}
 }
 
+func TestPodExecStopAuditOnHandleError(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view", "exec"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	upgrader := &stubExecUpgrader{err: io.EOF}
+	h := newExecHandler(t, st, upgrader)
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/streams/exec?namespace=dev&pod=pod-dev", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if upgrader.called != 1 {
+		t.Fatalf("upgrader called=%d want 1", upgrader.called)
+	}
+
+	entries, err := st.QueryAudit(context.Background(), store.AuditFilter{Module: "pods", Action: "exec"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("audit logs=%d want start+stop after handle error", len(entries))
+	}
+	phases := map[string]bool{}
+	for _, entry := range entries {
+		phase, _ := entry.Details["phase"].(string)
+		phases[phase] = true
+	}
+	if !phases["start"] || !phases["stop"] {
+		t.Fatalf("audit phases=%v want start and stop", phases)
+	}
+}
+
 func TestPodExecRejectsCrossOrigin(t *testing.T) {
 	t.Parallel()
 
@@ -335,6 +376,7 @@ func TestPodExecRejectsCrossOrigin(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/streams/exec?namespace=dev&pod=pod-dev", nil)
 	req.Host = "app.example.com"
+	req.TLS = &tls.ConnectionState{}
 	req.Header.Set("Origin", "https://evil.example.com")
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "websocket")

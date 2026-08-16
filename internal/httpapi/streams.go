@@ -179,14 +179,19 @@ func handlePodExec(w http.ResponseWriter, r *http.Request, deps Deps) {
 	}
 
 	container := strings.TrimSpace(r.URL.Query().Get("container"))
+	execStarted := false
+	defer func() {
+		if execStarted {
+			writePodExecAudit(r, deps, u, ns, pod, "stop", http.StatusOK)
+		}
+	}()
 	if err := upgrader.Handle(w, r, ns, pod, container, func() {
 		writePodExecAudit(r, deps, u, ns, pod, "start", http.StatusSwitchingProtocols)
+		execStarted = true
 	}); err != nil {
 		log.Printf("pod exec: ns=%s pod=%s err=%v", ns, pod, err)
 		return
 	}
-
-	writePodExecAudit(r, deps, u, ns, pod, "stop", http.StatusOK)
 }
 
 func execUpgraderFor(deps Deps) streams.ExecUpgrader {
