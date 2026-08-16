@@ -1,0 +1,16 @@
+.git
+.gitignore
+.superpowers
+.worktrees
+*.md
+docs/
+.env
+.env.*
+web/node_modules
+web/dist
+web/*.tsbuildinfo
+bin/
+dist/
+coverage/
+vendor/
+deploy/

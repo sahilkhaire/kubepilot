@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cluster-console.fullname" . }}
+  labels:
+    {{- include "cluster-console.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  sessionAffinity: {{ .Values.sessionAffinity }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "cluster-console.selectorLabels" . | nindent 4 }}

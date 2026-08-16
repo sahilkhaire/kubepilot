@@ -1,0 +1,39 @@
+image:
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+replicaCount: 2
+
+service:
+  port: 8080
+
+ingress:
+  host: ""
+  tlsSecretName: ""
+  className: nginx
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "2"
+    memory: 1Gi
+
+existingSecret: ""
+
+mongodbUri: ""
+sessionSecret: ""
+ownerUsername: owner
+ownerPassword: ""
+
+sessionAffinity: ClientIP
+
+serviceAccount:
+  create: true
+  name: ""
+
+nameOverride: ""
+fullnameOverride: ""

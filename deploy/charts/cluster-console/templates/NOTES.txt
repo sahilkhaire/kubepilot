@@ -1,0 +1,17 @@
+Cluster Console has been installed.
+
+1. Get the application URL:
+{{- if .Values.ingress.host }}
+
+  https://{{ .Values.ingress.host }}/
+{{- else }}
+
+  Ingress host is not set. Forward a local port to the service:
+  kubectl port-forward svc/{{ include "cluster-console.fullname" . }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+{{- end }}
+
+2. Log in with the owner credentials from your Secret (OWNER_USERNAME / OWNER_PASSWORD).
+
+3. Place Cloudflare Access (or equivalent) in front of the public hostname before exposing to users.
+
+Install namespace (owner-only in UI): {{ .Release.Namespace }}

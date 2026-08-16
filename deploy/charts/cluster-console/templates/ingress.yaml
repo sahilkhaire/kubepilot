@@ -1,0 +1,33 @@
+{{- if .Values.ingress.host }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "cluster-console.fullname" . }}
+  labels:
+    {{- include "cluster-console.labels" . | nindent 4 }}
+  {{- if .Values.ingress.className }}
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.ingress.className | quote }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "cluster-console.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+  {{- if .Values.ingress.tlsSecretName }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host | quote }}
+      secretName: {{ .Values.ingress.tlsSecretName }}
+  {{- end }}
+{{- end }}
