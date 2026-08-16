@@ -101,7 +101,7 @@ var catalogGroups = []catalogGroupDef{
 				label:   "Pods",
 				scope:   ScopeNamespaced,
 				actions: []string{"view", "delete", "yaml_edit", "logs", "exec"},
-				notes:   "No structured create/edit. Creating a bare pod is yaml_edit.",
+				notes:   "No structured create. yaml_edit allows editing container env on the owning workload. Pod YAML is view-only.",
 			},
 			{id: "deployments", label: "Deployments", scope: ScopeNamespaced, actions: []string{"view", "create", "edit", "delete", "yaml_edit", "scale", "restart", "rollback"}},
 			{id: "statefulsets", label: "StatefulSets", scope: ScopeNamespaced, actions: []string{"view", "create", "edit", "delete", "yaml_edit", "scale", "restart"}},

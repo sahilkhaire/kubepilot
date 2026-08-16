@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ListFilterIcon } from 'lucide-react'
 import {
   deleteAuditFilter,
   deleteAuditIds,
@@ -11,11 +12,20 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import EmptyState from '@/components/EmptyState'
 import { ErrorAlert } from '@/components/error-alert'
 import { PageLoading } from '@/components/page-loading'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import {
   Table,
   TableBody,
@@ -41,6 +51,7 @@ export default function SettingsAudit() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [confirm, setConfirm] = useState<'selected' | 'filter' | null>(null)
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   const [fromLocal, setFromLocal] = useState('')
   const [toLocal, setToLocal] = useState('')
@@ -108,7 +119,8 @@ export default function SettingsAudit() {
   function onFilterSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    load()
+    setFiltersOpen(false)
+    void load()
   }
 
   function onClearFilters() {
@@ -121,6 +133,17 @@ export default function SettingsAudit() {
     setNamespace('')
     setKind('')
   }
+
+  const activeFilterCount = [
+    fromLocal,
+    toLocal,
+    username,
+    module,
+    action,
+    result,
+    namespace,
+    kind,
+  ].filter(Boolean).length
 
   function toggleSelect(id: string) {
     setSelected((prev) => {
@@ -160,60 +183,23 @@ export default function SettingsAudit() {
     <div className="space-y-6">
       <ErrorAlert message={error} />
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onFilterSubmit} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="grid gap-2">
-              <Label htmlFor="from">From</Label>
-              <Input id="from" type="datetime-local" value={fromLocal} onChange={(e) => setFromLocal(e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="to">To</Label>
-              <Input id="to" type="datetime-local" value={toLocal} onChange={(e) => setToLocal(e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="username">Username</Label>
-              <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="module">Module</Label>
-              <Input id="module" value={module} onChange={(e) => setModule(e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="action">Action</Label>
-              <Input id="action" value={action} onChange={(e) => setAction(e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="result">Result</Label>
-              <Input id="result" value={result} onChange={(e) => setResult(e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="namespace">Namespace</Label>
-              <Input id="namespace" value={namespace} onChange={(e) => setNamespace(e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="kind">Kind</Label>
-              <Input id="kind" value={kind} onChange={(e) => setKind(e.target.value)} />
-            </div>
-            <div className="flex items-end gap-2 sm:col-span-2">
-              <Button type="submit">Apply</Button>
-              <Button type="button" variant="outline" onClick={onClearFilters}>
-                Clear
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="destructive" onClick={() => setConfirm('selected')} disabled={selected.size === 0}>
-          Delete selected ({selected.size})
-        </Button>
-        <Button type="button" variant="outline" onClick={() => setConfirm('filter')}>
-          Delete matching filter
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="destructive" onClick={() => setConfirm('selected')} disabled={selected.size === 0}>
+            Delete selected ({selected.size})
+          </Button>
+          <Button type="button" variant="outline" onClick={() => setConfirm('filter')}>
+            Delete matching filter
+          </Button>
+        </div>
+        <Button type="button" variant="outline" onClick={() => setFiltersOpen(true)}>
+          <ListFilterIcon />
+          Filter
+          {activeFilterCount > 0 ? (
+            <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+              {activeFilterCount}
+            </Badge>
+          ) : null}
         </Button>
       </div>
 
@@ -263,6 +249,56 @@ export default function SettingsAudit() {
         </CardContent>
       </Card>
 
+      <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Filters</SheetTitle>
+            <SheetDescription>Narrow the audit log by time, user, or resource.</SheetDescription>
+          </SheetHeader>
+          <form onSubmit={onFilterSubmit} className="flex min-h-0 flex-1 flex-col">
+            <div className="grid gap-4 overflow-auto px-4">
+              <div className="grid gap-2">
+                <Label htmlFor="from">From</Label>
+                <Input id="from" type="datetime-local" value={fromLocal} onChange={(e) => setFromLocal(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="to">To</Label>
+                <Input id="to" type="datetime-local" value={toLocal} onChange={(e) => setToLocal(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="username">Username</Label>
+                <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="module">Module</Label>
+                <Input id="module" value={module} onChange={(e) => setModule(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="action">Action</Label>
+                <Input id="action" value={action} onChange={(e) => setAction(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="result">Result</Label>
+                <Input id="result" value={result} onChange={(e) => setResult(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="namespace">Namespace</Label>
+                <Input id="namespace" value={namespace} onChange={(e) => setNamespace(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="kind">Kind</Label>
+                <Input id="kind" value={kind} onChange={(e) => setKind(e.target.value)} />
+              </div>
+            </div>
+            <SheetFooter className="flex-row justify-end">
+              <Button type="button" variant="outline" onClick={onClearFilters}>
+                Clear
+              </Button>
+              <Button type="submit">Apply</Button>
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
       <ConfirmDialog
         open={confirm != null}
         title={confirm === 'selected' ? 'Delete selected entries' : 'Delete matching entries'}

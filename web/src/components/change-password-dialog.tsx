@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { changePassword } from '@/api'
+import { ErrorAlert } from '@/components/error-alert'
 import {
   Dialog,
   DialogContent,
@@ -100,7 +101,7 @@ export function ChangePasswordDialog({
             />
           </div>
           {mismatch && newPassword && confirm ? <p className="text-sm text-destructive">{mismatch}</p> : null}
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          <ErrorAlert message={error} className="mx-0 mt-0" onDismiss={() => setError('')} />
           <DialogFooter>
             <Button type="button" variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>
               Cancel

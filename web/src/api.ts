@@ -365,6 +365,47 @@ export async function scaleK8sResource(
   }
 }
 
+export type PodEnvOwner = {
+  kind: string
+  name: string
+}
+
+export async function updateResourceEnv(
+  module: 'pods' | 'deployments',
+  namespace: string,
+  name: string,
+  containers: {
+    name: string
+    kind: string
+    env: { name: string; value?: string; valueFrom?: Record<string, unknown> }[]
+  }[],
+): Promise<PodEnvOwner> {
+  const res = await apiFetch(
+    `/api/k8s/namespaces/${encodeURIComponent(namespace)}/${encodeURIComponent(module)}/${encodeURIComponent(name)}/env`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ containers }),
+    },
+  )
+  if (!res.ok) {
+    throw new Error(await readAPIError(res, 'failed to update environment'))
+  }
+  return res.json()
+}
+
+export async function updatePodEnv(
+  namespace: string,
+  name: string,
+  containers: {
+    name: string
+    kind: string
+    env: { name: string; value?: string; valueFrom?: Record<string, unknown> }[]
+  }[],
+): Promise<PodEnvOwner> {
+  return updateResourceEnv('pods', namespace, name, containers)
+}
+
 export async function restartK8sResource(module: string, name: string, namespace: string): Promise<void> {
   const res = await apiFetch(
     `/api/k8s/namespaces/${encodeURIComponent(namespace)}/${encodeURIComponent(module)}/${encodeURIComponent(name)}/restart`,

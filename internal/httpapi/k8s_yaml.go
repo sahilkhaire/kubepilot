@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -186,17 +187,13 @@ func handleApplyYAML(w http.ResponseWriter, r *http.Request, deps Deps) {
 		return
 	}
 
+	if module == "pods" {
+		writeError(w, http.StatusBadRequest, "pod spec is immutable; edit environment variables instead of applying yaml")
+		return
+	}
+
 	if err := deps.Kube.ApplyYAML(r.Context(), doc, nsOverride); err != nil {
-		if apierrors.IsNotFound(err) {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		if apierrors.IsForbidden(err) {
-			w.WriteHeader(http.StatusForbidden)
-			return
-		}
-		log.Printf("kube apply yaml %s: ns=%s err=%v", module, ns, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		writeKubeClientError(w, err, "kube apply yaml "+module+" ns="+ns)
 		return
 	}
 
@@ -222,6 +219,44 @@ func parseYAMLApplyBody(w http.ResponseWriter, r *http.Request) (doc []byte, nsO
 		return nil, "", "", false
 	}
 	return []byte(req.YAML), strings.TrimSpace(req.Namespace), strings.TrimSpace(req.Module), true
+}
+
+func writeKubeClientError(w http.ResponseWriter, err error, logMsg string) {
+	if apierrors.IsNotFound(err) {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	if apierrors.IsForbidden(err) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	var se *apierrors.StatusError
+	if errors.As(err, &se) {
+		st := se.Status()
+		if st.Code >= 400 && st.Code < 500 {
+			msg := st.Message
+			if msg == "" {
+				msg = err.Error()
+			}
+			writeError(w, int(st.Code), msg)
+			return
+		}
+	}
+	if isYAMLClientError(err) {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	log.Printf("%s: %v", logMsg, err)
+	w.WriteHeader(http.StatusInternalServerError)
+}
+
+func isYAMLClientError(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "invalid yaml") ||
+		strings.Contains(msg, "empty yaml") ||
+		strings.Contains(msg, "yaml missing") ||
+		strings.Contains(msg, "namespace required") ||
+		strings.Contains(msg, "unsupported kind")
 }
 
 func writeKubeYAMLAudit(r *http.Request, deps Deps, u *store.User, module, ns, name, kind string) {

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { login, me, type User } from '@/api'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { ErrorAlert } from '@/components/error-alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -77,11 +77,7 @@ export default function Login({ onLogin }: Props) {
                 required
               />
             </div>
-            {error ? (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            ) : null}
+            <ErrorAlert message={error} className="mx-0 mt-0" onDismiss={() => setError('')} />
             <Button type="submit" disabled={pending}>
               {pending ? 'Signing in…' : 'Log in'}
             </Button>

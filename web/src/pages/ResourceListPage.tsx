@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
-import { EllipsisVerticalIcon, PencilIcon, ScrollTextIcon, SquareTerminalIcon, Trash2Icon } from 'lucide-react'
+import { EllipsisVerticalIcon, FileCodeIcon, PencilIcon, ScrollTextIcon, SquareTerminalIcon, Trash2Icon } from 'lucide-react'
 import { toast } from 'sonner'
 import { deleteK8sResource, restartK8sResource, scaleK8sResource, type User } from '@/api'
 import DeleteConfirm from '@/components/DeleteConfirm'
 import EmptyState from '@/components/EmptyState'
 import DeploymentDetailPanel from '@/components/deployment-detail-panel'
-import PodDetailPanel from '@/components/pod-detail-panel'
+import PodDetailPanel, { type PodPanelView } from '@/components/pod-detail-panel'
 import { PodContainersCell } from '@/components/pod-containers'
 import ResourceYAMLSheet from '@/components/resource-yaml-sheet'
 import { StatusBadge } from '@/components/status-badge'
@@ -138,6 +138,7 @@ function ResourceRowMenu({
   onScale,
   onRestart,
   onLogs,
+  onEdit,
   onYaml,
   onDelete,
 }: {
@@ -150,6 +151,7 @@ function ResourceRowMenu({
   onScale?: () => void
   onRestart?: () => void
   onLogs?: () => void
+  onEdit?: () => void
   onYaml: () => void
   onDelete: () => void
 }) {
@@ -180,8 +182,15 @@ function ResourceRowMenu({
             ) : null}
             {can(user, 'pods', 'logs') ? <DropdownMenuItem onClick={onLogs}>Logs</DropdownMenuItem> : null}
             {can(user, 'deployments', 'yaml_edit') ? (
-              <DropdownMenuItem onClick={onYaml}>Edit</DropdownMenuItem>
+              <DropdownMenuItem onClick={onEdit}>
+                <PencilIcon />
+                Edit
+              </DropdownMenuItem>
             ) : null}
+            <DropdownMenuItem onClick={onYaml}>
+              <FileCodeIcon />
+              YAML
+            </DropdownMenuItem>
           </>
         ) : isPod ? (
           <>
@@ -203,11 +212,15 @@ function ResourceRowMenu({
               </DropdownMenuItem>
             ) : null}
             {can(user, 'pods', 'yaml_edit') ? (
-              <DropdownMenuItem onClick={onYaml}>
+              <DropdownMenuItem onClick={onEdit}>
                 <PencilIcon />
                 Edit
               </DropdownMenuItem>
             ) : null}
+            <DropdownMenuItem onClick={onYaml}>
+              <FileCodeIcon />
+              YAML
+            </DropdownMenuItem>
           </>
         ) : (
           <>
@@ -256,7 +269,7 @@ export default function ResourceListPage({
   const [deleteTarget, setDeleteTarget] = useState<{ name: string; namespace?: string } | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
-  const [panelView, setPanelView] = useState<'details' | 'yaml'>('details')
+  const [panelView, setPanelView] = useState<PodPanelView>('details')
   const [scaleTarget, setScaleTarget] = useState<{ name: string; namespace: string; replicas: number } | null>(null)
   const [restartTarget, setRestartTarget] = useState<{ name: string; namespace: string } | null>(null)
   const [logPods, setLogPods] = useState<{ name: string; namespace: string; phase: string }[] | null>(null)
@@ -395,7 +408,7 @@ export default function ResourceListPage({
     }
   }
 
-  function openDeployment(item: K8sObject, view: 'details' | 'yaml' = 'details') {
+  function openDeployment(item: K8sObject, view: PodPanelView = 'details') {
     const ns = objectNamespace(item)
     const name = objectName(item)
     setSelectedKey(`${ns}/${name}`)
@@ -611,6 +624,7 @@ export default function ResourceListPage({
                       onScale={() => setScaleTarget({ name, namespace: ns, replicas: replicaDesired(item) })}
                       onRestart={() => setRestartTarget({ name, namespace: ns })}
                       onLogs={() => void openDeploymentLogs(item)}
+                      onEdit={() => openDeployment(item, 'edit')}
                       onYaml={() =>
                         module === 'deployments' || module === 'pods'
                           ? openDeployment(item, 'yaml')

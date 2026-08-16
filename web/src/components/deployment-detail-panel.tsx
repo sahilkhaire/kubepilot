@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ChevronDownIcon,
+  FileCodeIcon,
   PencilIcon,
   RefreshCwIcon,
   RotateCcwIcon,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react'
 import type { User } from '@/api'
 import ResourceYAMLEditor from '@/components/resource-yaml-editor'
+import WorkloadEnvEditor from '@/components/workload-env-editor'
 import { IconActionButton } from '@/components/icon-action-button'
 import { PodContainersCell } from '@/components/pod-containers'
 import { statusTextClass } from '@/components/status-badge'
@@ -93,6 +95,8 @@ function MetaList({ title, entries }: { title: string; entries: Record<string, s
   )
 }
 
+export type DeploymentPanelView = 'details' | 'yaml' | 'edit'
+
 export default function DeploymentDetailPanel({
   deployment,
   user,
@@ -107,8 +111,8 @@ export default function DeploymentDetailPanel({
 }: {
   deployment: K8sObject
   user: User
-  view: 'details' | 'yaml'
-  onViewChange: (view: 'details' | 'yaml') => void
+  view: DeploymentPanelView
+  onViewChange: (view: DeploymentPanelView) => void
   onClose: () => void
   onScale: () => void
   onRestart: () => void
@@ -223,12 +227,18 @@ export default function DeploymentDetailPanel({
         </IconActionButton>
         {can(user, 'deployments', 'yaml_edit') ? (
           <IconActionButton
-            tooltip={view === 'yaml' ? 'Details' : 'Edit'}
-            onClick={() => onViewChange(view === 'yaml' ? 'details' : 'yaml')}
+            tooltip={view === 'edit' ? 'Details' : 'Edit env'}
+            onClick={() => onViewChange(view === 'edit' ? 'details' : 'edit')}
           >
             <PencilIcon />
           </IconActionButton>
         ) : null}
+        <IconActionButton
+          tooltip={view === 'yaml' ? 'Details' : 'YAML'}
+          onClick={() => onViewChange(view === 'yaml' ? 'details' : 'yaml')}
+        >
+          <FileCodeIcon />
+        </IconActionButton>
         {can(user, 'deployments', 'delete') ? (
           <IconActionButton tooltip="Delete" onClick={onDelete}>
             <Trash2Icon />
@@ -249,6 +259,10 @@ export default function DeploymentDetailPanel({
             canDelete={can(user, 'deployments', 'delete')}
             onDeleted={onClose}
           />
+        </div>
+      ) : view === 'edit' ? (
+        <div className="flex min-h-0 flex-1 flex-col p-3">
+          <WorkloadEnvEditor resource={deployment} module="deployments" />
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto overscroll-contain px-3 py-3">

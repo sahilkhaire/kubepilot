@@ -19,6 +19,14 @@ import { SetPasswordDialog } from '@/components/set-password-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -51,6 +59,9 @@ export default function SettingsMembers() {
   const [accessTarget, setAccessTarget] = useState<Member | null>(null)
   const [accessPending, setAccessPending] = useState(false)
 
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [invitePending, setInvitePending] = useState(false)
+  const [inviteError, setInviteError] = useState('')
   const [inviteUsername, setInviteUsername] = useState('')
   const [inviteDisplayName, setInviteDisplayName] = useState('')
   const [inviteSetId, setInviteSetId] = useState('')
@@ -102,14 +113,25 @@ export default function SettingsMembers() {
     [members, sort, sets],
   )
 
+  function openInvite() {
+    setInviteError('')
+    setInviteUsername('')
+    setInviteDisplayName('')
+    setInvitePassword('')
+    setInviteConfirm('')
+    setInviteSetId(sets[0]?.id ?? '')
+    setInviteOpen(true)
+  }
+
   async function onInvite(e: React.FormEvent) {
     e.preventDefault()
     const pwError = passwordError(invitePassword, inviteConfirm)
     if (pwError) {
-      setError(pwError)
+      setInviteError(pwError)
       return
     }
-    setError('')
+    setInviteError('')
+    setInvitePending(true)
     try {
       await createMember({
         username: inviteUsername,
@@ -118,13 +140,12 @@ export default function SettingsMembers() {
         password: invitePassword,
       })
       toast.success(`Invited ${inviteUsername}. They can sign in with the password you set.`)
-      setInviteUsername('')
-      setInviteDisplayName('')
-      setInvitePassword('')
-      setInviteConfirm('')
+      setInviteOpen(false)
       await load()
     } catch {
-      setError('Failed to invite member')
+      setInviteError('Failed to invite member')
+    } finally {
+      setInvitePending(false)
     }
   }
 
@@ -178,89 +199,11 @@ export default function SettingsMembers() {
     <div className="space-y-6">
       <ErrorAlert message={error} />
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Invite member</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onInvite} className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="invite-username">Username</Label>
-              <Input
-                id="invite-username"
-                value={inviteUsername}
-                onChange={(e) => setInviteUsername(e.target.value)}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="invite-display">Display name</Label>
-              <Input
-                id="invite-display"
-                value={inviteDisplayName}
-                onChange={(e) => setInviteDisplayName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="invite-set">Permission set</Label>
-              <Select value={inviteSetId} onValueChange={setInviteSetId} required>
-                <SelectTrigger id="invite-set" className="w-full">
-                  <SelectValue placeholder="Select a set" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sets.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="invite-password">Password</Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    const next = generatePassword()
-                    setInvitePassword(next)
-                    setInviteConfirm(next)
-                  }}
-                >
-                  Generate
-                </Button>
-              </div>
-              <Input
-                id="invite-password"
-                type="text"
-                autoComplete="new-password"
-                value={invitePassword}
-                onChange={(e) => setInvitePassword(e.target.value)}
-                required
-                minLength={8}
-                maxLength={128}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="invite-confirm">Confirm password</Label>
-              <Input
-                id="invite-confirm"
-                type="password"
-                autoComplete="new-password"
-                value={inviteConfirm}
-                onChange={(e) => setInviteConfirm(e.target.value)}
-                required
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <Button type="submit">Invite</Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+      <div className="flex justify-end">
+        <Button type="button" onClick={openInvite} disabled={sets.length === 0}>
+          Add member
+        </Button>
+      </div>
 
       <Card className="shadow-sm">
         <CardHeader>
@@ -327,6 +270,103 @@ export default function SettingsMembers() {
         </CardContent>
       </Card>
 
+      <Dialog open={inviteOpen} onOpenChange={(open) => !invitePending && setInviteOpen(open)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add member</DialogTitle>
+            <DialogDescription>Set a username, permission set, and password so they can sign in immediately.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={onInvite} className="grid gap-4">
+            <ErrorAlert message={inviteError} className="mx-0 mt-0" onDismiss={() => setInviteError('')} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="invite-username">Username</Label>
+                <Input
+                  id="invite-username"
+                  value={inviteUsername}
+                  onChange={(e) => setInviteUsername(e.target.value)}
+                  required
+                  disabled={invitePending}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="invite-display">Display name</Label>
+                <Input
+                  id="invite-display"
+                  value={inviteDisplayName}
+                  onChange={(e) => setInviteDisplayName(e.target.value)}
+                  required
+                  disabled={invitePending}
+                />
+              </div>
+              <div className="grid gap-2 sm:col-span-2">
+                <Label htmlFor="invite-set">Permission set</Label>
+                <Select value={inviteSetId} onValueChange={setInviteSetId} required disabled={invitePending}>
+                  <SelectTrigger id="invite-set" className="w-full">
+                    <SelectValue placeholder="Select a set" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sets.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="invite-password">Password</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={invitePending}
+                    onClick={() => {
+                      const next = generatePassword()
+                      setInvitePassword(next)
+                      setInviteConfirm(next)
+                    }}
+                  >
+                    Generate
+                  </Button>
+                </div>
+                <Input
+                  id="invite-password"
+                  type="text"
+                  autoComplete="new-password"
+                  value={invitePassword}
+                  onChange={(e) => setInvitePassword(e.target.value)}
+                  required
+                  minLength={8}
+                  maxLength={128}
+                  disabled={invitePending}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="invite-confirm">Confirm password</Label>
+                <Input
+                  id="invite-confirm"
+                  type="password"
+                  autoComplete="new-password"
+                  value={inviteConfirm}
+                  onChange={(e) => setInviteConfirm(e.target.value)}
+                  required
+                  disabled={invitePending}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled={invitePending} onClick={() => setInviteOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={invitePending || !inviteSetId}>
+                {invitePending ? 'Adding…' : 'Add member'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
       <SetPasswordDialog
         open={resetTarget != null}
         title={`Set password for ${resetTarget?.username ?? ''}`}

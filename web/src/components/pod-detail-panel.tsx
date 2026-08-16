@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ChevronDownIcon,
+  FileCodeIcon,
   PencilIcon,
   RefreshCwIcon,
   ScrollTextIcon,
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react'
 import type { User } from '@/api'
 import { PodContainersCell } from '@/components/pod-containers'
+import WorkloadEnvEditor from '@/components/workload-env-editor'
 import ResourceYAMLEditor from '@/components/resource-yaml-editor'
 import { IconActionButton } from '@/components/icon-action-button'
 import { StatusBadge } from '@/components/status-badge'
@@ -91,6 +93,8 @@ function MetaList({ title, entries }: { title: string; entries: Record<string, s
   )
 }
 
+export type PodPanelView = 'details' | 'yaml' | 'edit'
+
 export default function PodDetailPanel({
   pod,
   user,
@@ -102,8 +106,8 @@ export default function PodDetailPanel({
 }: {
   pod: K8sObject
   user: User
-  view: 'details' | 'yaml'
-  onViewChange: (view: 'details' | 'yaml') => void
+  view: PodPanelView
+  onViewChange: (view: PodPanelView) => void
   onClose: () => void
   onDelete: () => void
   onRefreshed: (next: K8sObject) => void
@@ -179,12 +183,18 @@ export default function PodDetailPanel({
         </IconActionButton>
         {can(user, 'pods', 'yaml_edit') ? (
           <IconActionButton
-            tooltip={view === 'yaml' ? 'Details' : 'Edit'}
-            onClick={() => onViewChange(view === 'yaml' ? 'details' : 'yaml')}
+            tooltip={view === 'edit' ? 'Details' : 'Edit env'}
+            onClick={() => onViewChange(view === 'edit' ? 'details' : 'edit')}
           >
             <PencilIcon />
           </IconActionButton>
         ) : null}
+        <IconActionButton
+          tooltip={view === 'yaml' ? 'Details' : 'YAML'}
+          onClick={() => onViewChange(view === 'yaml' ? 'details' : 'yaml')}
+        >
+          <FileCodeIcon />
+        </IconActionButton>
         {can(user, 'pods', 'delete') ? (
           <IconActionButton tooltip="Delete" onClick={onDelete}>
             <Trash2Icon />
@@ -201,10 +211,13 @@ export default function PodDetailPanel({
             module="pods"
             name={name}
             namespace={ns}
-            canEdit={can(user, 'pods', 'yaml_edit')}
-            canDelete={can(user, 'pods', 'delete')}
-            onDeleted={onClose}
+            canEdit={false}
+            hint="YAML is read-only. Use Edit env to change environment variables."
           />
+        </div>
+      ) : view === 'edit' ? (
+        <div className="flex min-h-0 flex-1 flex-col p-3">
+          <WorkloadEnvEditor resource={pod} module="pods" />
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto overscroll-contain px-3 py-3">

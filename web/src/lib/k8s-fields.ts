@@ -205,6 +205,75 @@ export function podControlledBy(obj: K8sObject): string {
   return `${ref.kind}/${ref.name}`
 }
 
+export const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
+
+export type PodEnvVar = {
+  name: string
+  value: string
+  valueFrom?: Record<string, unknown>
+}
+
+export type PodEnvContainer = {
+  name: string
+  kind: 'container' | 'init'
+  env: PodEnvVar[]
+}
+
+export function workloadEnvContainers(obj: K8sObject): PodEnvContainer[] {
+  const spec = obj.spec ?? {}
+  const template = spec.template as { spec?: Record<string, unknown> } | undefined
+  if (template?.spec) {
+    return envContainersFromPodSpec(template.spec)
+  }
+  return envContainersFromPodSpec(spec)
+}
+
+function envContainersFromPodSpec(spec: Record<string, unknown> | undefined): PodEnvContainer[] {
+  const podSpec = spec ?? {}
+  return [
+    ...parseEnvContainers(podSpec.initContainers, 'init'),
+    ...parseEnvContainers(podSpec.containers, 'container'),
+  ]
+}
+
+function parseEnvContainers(raw: unknown, kind: 'container' | 'init'): PodEnvContainer[] {
+  if (!Array.isArray(raw)) return []
+  const out: PodEnvContainer[] = []
+  for (const item of raw) {
+    const row = (item ?? {}) as { name?: string; env?: unknown }
+    const name = str(row.name)
+    if (!name) continue
+    out.push({ name, kind, env: parseEnvVars(row.env) })
+  }
+  return out
+}
+
+function parseEnvVars(raw: unknown): PodEnvVar[] {
+  if (!Array.isArray(raw)) return []
+  const out: PodEnvVar[] = []
+  for (const item of raw) {
+    const row = (item ?? {}) as { name?: string; value?: string; valueFrom?: Record<string, unknown> }
+    const name = str(row.name)
+    const valueFrom = row.valueFrom && typeof row.valueFrom === 'object' ? row.valueFrom : undefined
+    const value = typeof row.value === 'string' ? row.value : ''
+    if (!name && !value && !valueFrom) continue
+    out.push({ name, value, valueFrom })
+  }
+  return out
+}
+
+export function envValueFromLabel(valueFrom: Record<string, unknown>): string {
+  const secret = valueFrom.secretKeyRef as { name?: string; key?: string } | undefined
+  if (secret?.name) return `secret:${secret.name}/${secret.key ?? ''}`
+  const cm = valueFrom.configMapKeyRef as { name?: string; key?: string } | undefined
+  if (cm?.name) return `configMap:${cm.name}/${cm.key ?? ''}`
+  const field = valueFrom.fieldRef as { fieldPath?: string } | undefined
+  if (field?.fieldPath) return `field:${field.fieldPath}`
+  const resource = valueFrom.resourceFieldRef as { resource?: string } | undefined
+  if (resource?.resource) return `resource:${resource.resource}`
+  return 'valueFrom'
+}
+
 export function podQOS(obj: K8sObject): string {
   return str(obj.status?.qosClass) || '—'
 }

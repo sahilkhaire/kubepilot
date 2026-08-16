@@ -217,3 +217,33 @@ func TestApplyYAMLInstallNSForbidden(t *testing.T) {
 		t.Fatal("applier should not be called for install namespace")
 	}
 }
+
+func TestApplyPodYAMLRejected(t *testing.T) {
+	t.Parallel()
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"pods": {"view", "yaml_edit"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	rec := &recordingYAMLApplier{}
+	client := kube.ForTest(fake.NewSimpleClientset(
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "dev"}},
+	))
+	client.YAML = rec
+	h := newK8sHandler(t, st, client)
+	session := login(t, h, "member", "pass")
+
+	body := bytes.NewBufferString(`{"yaml":"apiVersion: v1\nkind: Pod\nmetadata:\n  name: p1\n  namespace: dev\n"}`)
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/k8s/yaml/apply", body)
+	req.AddCookie(session)
+	h.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("code=%d body=%s want %d", recorder.Code, recorder.Body.String(), http.StatusBadRequest)
+	}
+	if rec.applyCalled {
+		t.Fatal("applier should not be called for pod yaml")
+	}
+	if !strings.Contains(recorder.Body.String(), "immutable") {
+		t.Fatalf("body=%s", recorder.Body.String())
+	}
+}

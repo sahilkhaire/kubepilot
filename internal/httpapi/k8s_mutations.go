@@ -60,6 +60,13 @@ func registerK8sMutationRoutes(mux *http.ServeMux, deps Deps) {
 	mux.HandleFunc("POST /api/k8s/namespaces/{ns}/cronjobs/{name}/trigger", func(w http.ResponseWriter, r *http.Request) {
 		handleCronJobTrigger(w, r, deps)
 	})
+
+	mux.HandleFunc("POST /api/k8s/namespaces/{ns}/pods/{name}/env", func(w http.ResponseWriter, r *http.Request) {
+		handleUpdatePodEnv(w, r, deps)
+	})
+	mux.HandleFunc("POST /api/k8s/namespaces/{ns}/deployments/{name}/env", func(w http.ResponseWriter, r *http.Request) {
+		handleUpdateDeploymentEnv(w, r, deps)
+	})
 }
 
 func handleNamespacedDelete(w http.ResponseWriter, r *http.Request, deps Deps) {

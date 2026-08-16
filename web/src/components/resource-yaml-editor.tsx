@@ -16,6 +16,7 @@ export default function ResourceYAMLEditor({
   clusterScoped,
   canEdit = true,
   canDelete = false,
+  hint,
   onDeleted,
 }: {
   module: string
@@ -24,9 +25,14 @@ export default function ResourceYAMLEditor({
   clusterScoped?: boolean
   canEdit?: boolean
   canDelete?: boolean
+  hint?: string
   onDeleted?: () => void
 }) {
   const scoped = clusterScoped ?? isClusterScopedModule(module)
+  const allowEdit = Boolean(canEdit) && module !== 'pods'
+  const readOnlyHint =
+    hint ??
+    (module === 'pods' ? 'YAML is read-only. Use Edit env to change environment variables.' : undefined)
   const [yaml, setYaml] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -80,7 +86,16 @@ export default function ResourceYAMLEditor({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ yaml }),
       })
-      if (!res.ok) throw new Error(`apply failed (${res.status})`)
+      if (!res.ok) {
+        let message = `apply failed (${res.status})`
+        try {
+          const data = (await res.json()) as { error?: string }
+          if (data?.error) message = data.error
+        } catch {
+          // keep status fallback
+        }
+        throw new Error(message)
+      }
       setConfirmOpen(false)
       toast.success(`Applied ${module}/${name}`)
     } catch (e) {
@@ -112,8 +127,9 @@ export default function ResourceYAMLEditor({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
+      {(allowEdit || canDelete) ? (
       <div className="flex flex-wrap items-center justify-end gap-2">
-        {canEdit ? (
+        {allowEdit ? (
           <Button type="button" size="sm" onClick={() => setConfirmOpen(true)} disabled={applying || deleting}>
             Apply
           </Button>
@@ -130,11 +146,13 @@ export default function ResourceYAMLEditor({
           </Button>
         ) : null}
       </div>
+      ) : null}
+      {readOnlyHint ? <p className="text-xs text-muted-foreground">{readOnlyHint}</p> : null}
       <ErrorAlert message={error} />
       <Textarea
         value={yaml}
         onChange={(e) => setYaml(e.target.value)}
-        readOnly={!canEdit}
+        readOnly={!allowEdit}
         className="min-h-0 flex-1 overflow-auto font-mono text-xs"
       />
       <ConfirmDialog

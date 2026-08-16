@@ -23,7 +23,7 @@ export default function SettingsLayout() {
           const tab = tabs.find((t) => t.value === value)
           if (tab) navigate(tab.to)
         }}
-        className="px-3 pt-2"
+        className="px-3 pt-2 pb-1"
       >
         <TabsList variant="line">
           {tabs.map((tab) => (
@@ -33,7 +33,7 @@ export default function SettingsLayout() {
           ))}
         </TabsList>
       </Tabs>
-      <div className="min-h-0 flex-1 overflow-auto px-3 pb-3">
+      <div className="min-h-0 flex-1 overflow-auto px-3 pt-4 pb-3">
         <Outlet />
       </div>
     </PageBody>
