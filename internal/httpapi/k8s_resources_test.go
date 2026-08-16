@@ -96,6 +96,61 @@ func TestGetSecretWithoutRevealStripsData(t *testing.T) {
 	}
 }
 
+func TestListSecretsWithRevealAudited(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"secrets": {"view", "reveal"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev"})
+	h := newK8sHandler(t, st, seedSecretFakeClient())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/k8s/namespaces/dev/secrets?reveal=1", nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), http.StatusOK)
+	}
+
+	var items []map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &items); err != nil {
+		t.Fatal(err)
+	}
+	if len(items) == 0 {
+		t.Fatal("expected at least one secret")
+	}
+	for i, item := range items {
+		if _, ok := item["data"]; !ok {
+			t.Fatalf("item[%d] data should be present: %s", i, rec.Body.String())
+		}
+	}
+
+	logs, err := st.QueryAudit(context.Background(), store.AuditFilter{
+		Module: "secrets",
+		Action: "reveal",
+		Result: "success",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 1 {
+		t.Fatalf("audit logs=%d want 1", len(logs))
+	}
+	if logs[0].Namespace != "dev" || logs[0].Name != "" {
+		t.Fatalf("audit=%+v", logs[0])
+	}
+	if logs[0].Details == nil {
+		t.Fatal("audit details should include count")
+	}
+	for _, key := range []string{"data", "stringData"} {
+		if _, ok := logs[0].Details[key]; ok {
+			t.Fatalf("audit details must not include %q: %+v", key, logs[0].Details)
+		}
+	}
+}
+
 func TestGetSecretWithRevealAudited(t *testing.T) {
 	t.Parallel()
 

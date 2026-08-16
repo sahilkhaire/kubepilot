@@ -22,7 +22,7 @@ func sanitizeSecretGet(obj any, reveal bool) any {
 	return kube.SanitizeSecret(obj, reveal)
 }
 
-func writeSecretRevealAudit(r *http.Request, deps Deps, u *store.User, ns, name string) {
+func writeSecretRevealAudit(r *http.Request, deps Deps, u *store.User, ns, name string, details map[string]any) {
 	if deps.Audit == nil {
 		return
 	}
@@ -42,6 +42,7 @@ func writeSecretRevealAudit(r *http.Request, deps Deps, u *store.User, ns, name 
 		Name:       name,
 		Path:       r.URL.Path,
 		Method:     r.Method,
+		Details:    details,
 	})
 }
 

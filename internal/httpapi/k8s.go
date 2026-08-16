@@ -147,11 +147,14 @@ func handleListNamespacedResource(w http.ResponseWriter, r *http.Request, deps D
 		return
 	}
 	reveal := false
+	var revealUser *store.User
 	if module == "secrets" && secretRevealRequested(r) {
-		if _, ok := requireKubeAllow(w, r, deps.Auth, deps.Store, deps.InstallNS, "secrets", "reveal", ns, false); !ok {
+		u, ok := requireKubeAllow(w, r, deps.Auth, deps.Store, deps.InstallNS, "secrets", "reveal", ns, false)
+		if !ok {
 			return
 		}
 		reveal = true
+		revealUser = u
 	}
 	if _, ok := requireKubeAllow(w, r, deps.Auth, deps.Store, deps.InstallNS, module, "view", ns, false); !ok {
 		return
@@ -169,6 +172,11 @@ func handleListNamespacedResource(w http.ResponseWriter, r *http.Request, deps D
 	}
 	if module == "secrets" {
 		items = sanitizeSecretList(items, reveal)
+		if reveal && revealUser != nil {
+			writeSecretRevealAudit(r, deps, revealUser, ns, "", map[string]any{
+				"count": len(kube.ObjectNames(items)),
+			})
+		}
 	}
 	writeJSON(w, http.StatusOK, items)
 }
@@ -212,7 +220,7 @@ func handleGetNamespacedResource(w http.ResponseWriter, r *http.Request, deps De
 	if module == "secrets" {
 		obj = sanitizeSecretGet(obj, reveal)
 		if reveal && revealUser != nil {
-			writeSecretRevealAudit(r, deps, revealUser, ns, name)
+			writeSecretRevealAudit(r, deps, revealUser, ns, name, nil)
 		}
 	}
 	writeJSON(w, http.StatusOK, obj)

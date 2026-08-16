@@ -129,7 +129,7 @@ func handleGetYAML(w http.ResponseWriter, r *http.Request, deps Deps) {
 			return
 		}
 	} else if module == "secrets" && reveal {
-		writeSecretRevealAudit(r, deps, u, ns, name)
+		writeSecretRevealAudit(r, deps, u, ns, name, nil)
 	}
 
 	w.Header().Set("Content-Type", "application/yaml")
