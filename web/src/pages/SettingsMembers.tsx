@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { EllipsisVerticalIcon, KeyRoundIcon, PauseCircleIcon, PlayCircleIcon, PlusIcon, Trash2Icon, UserPenIcon } from 'lucide-react'
+import { UserPlusIcon, EllipsisVerticalIcon, KeyRoundIcon, PauseCircleIcon, PlayCircleIcon, PlusIcon, Trash2Icon, UserPenIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   createMember,
@@ -19,7 +19,6 @@ import { PageLoading } from '@/components/page-loading'
 import { SetPasswordDialog } from '@/components/set-password-dialog'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -238,21 +237,21 @@ export default function SettingsMembers() {
   if (loading) return <PageLoading compact />
 
   return (
-    <div className="space-y-6">
-      <ErrorAlert message={error} />
+    <div className="space-y-4">
+      <ErrorAlert message={error} className="mx-0 mt-0" />
 
-      <div className="flex justify-end">
-        <Button type="button" onClick={openInvite} disabled={sets.length === 0}>
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-medium">Members</h2>
+          <p className="text-xs text-muted-foreground">People who can sign in, and the permission set each one uses.</p>
+        </div>
+        <Button type="button" size="sm" onClick={openInvite} disabled={sets.length === 0}>
           <PlusIcon />
           Add member
         </Button>
       </div>
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Members</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
+      <div className="overflow-hidden rounded-xl border bg-card">
           <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -332,12 +331,11 @@ export default function SettingsMembers() {
                 : 'No members yet. Add one to give a teammate access.'}
             </EmptyState>
           ) : null}
-        </CardContent>
-      </Card>
+      </div>
 
       <Dialog open={inviteOpen} onOpenChange={(open) => !invitePending && setInviteOpen(open)}>
         <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
+          <DialogHeader icon={UserPlusIcon}>
             <DialogTitle>Add member</DialogTitle>
             <DialogDescription>Set a username, permission set, and password so they can sign in immediately.</DialogDescription>
           </DialogHeader>
@@ -435,7 +433,7 @@ export default function SettingsMembers() {
       <Dialog open={editTarget != null} onOpenChange={(open) => !open && !editPending && setEditTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <form onSubmit={onEditSave} className="grid gap-4">
-            <DialogHeader>
+            <DialogHeader icon={UserPenIcon}>
               <DialogTitle>Edit {editTarget?.username}</DialogTitle>
               <DialogDescription>Permission changes apply on their next request.</DialogDescription>
             </DialogHeader>

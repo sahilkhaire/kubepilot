@@ -10,6 +10,8 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { SidebarTrigger } from '@/components/ui/sidebar'
+import { SearchIcon } from 'lucide-react'
+import { useCommandPalette } from '@/components/command-palette'
 import { catalog, kindUrl, settingsSection } from '@/lib/catalog'
 
 type Crumb = { label: string; href?: string }
@@ -60,24 +62,26 @@ function crumbsFor(pathname: string): Crumb[] {
 export function SiteHeader() {
   const { pathname } = useLocation()
   const crumbs = crumbsFor(pathname)
+  const palette = useCommandPalette()
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 
   return (
-    <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b">
-      <div className="flex w-full items-center gap-1 px-3">
-        <SidebarTrigger className="-ml-1" />
-        <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
+    <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b border-border/70">
+      <div className="flex w-full min-w-0 items-center gap-1 px-3">
+        <SidebarTrigger className="-ml-1 text-muted-foreground" />
+        <Separator orientation="vertical" className="mx-1.5 data-[orientation=vertical]:h-4" />
         <Breadcrumb className="min-w-0">
-          <BreadcrumbList>
+          <BreadcrumbList className="flex-nowrap text-[13px]">
             {crumbs.flatMap((crumb, i) => {
               const last = i === crumbs.length - 1
               const nodes = []
               if (i > 0) {
-                nodes.push(<BreadcrumbSeparator key={`sep-${i}`} />)
+                nodes.push(<BreadcrumbSeparator key={`sep-${i}`} className="text-muted-foreground/50" />)
               }
               nodes.push(
                 <BreadcrumbItem key={`crumb-${i}`} className="min-w-0">
                   {last || !crumb.href ? (
-                    <BreadcrumbPage className="truncate">{crumb.label}</BreadcrumbPage>
+                    <BreadcrumbPage className="truncate font-medium">{crumb.label}</BreadcrumbPage>
                   ) : (
                     <BreadcrumbLink asChild>
                       <Link to={crumb.href}>{crumb.label}</Link>
@@ -89,7 +93,19 @@ export function SiteHeader() {
             })}
           </BreadcrumbList>
         </Breadcrumb>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={palette.open}
+            className="flex h-7 items-center gap-2 rounded-md border border-border bg-card px-2 text-xs text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground sm:w-56 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
+            aria-label="Open command palette"
+          >
+            <SearchIcon className="size-3.5" />
+            <span className="hidden sm:inline">Search…</span>
+            <kbd className="ml-auto hidden rounded border border-border bg-muted px-1 font-mono text-[10px] sm:inline">
+              {isMac ? '⌘' : 'Ctrl'} K
+            </kbd>
+          </button>
           <ThemeToggle />
         </div>
       </div>

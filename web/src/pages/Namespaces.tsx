@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { EllipsisVerticalIcon, FileCodeIcon, PlusIcon, Trash2Icon } from 'lucide-react'
+import { EllipsisVerticalIcon, FileCodeIcon, LayersIcon, PlusIcon, Trash2Icon } from 'lucide-react'
 import { toast } from 'sonner'
 import { createNamespace, deleteK8sResource, readAPIError } from '@/api'
 import DeleteConfirm from '@/components/DeleteConfirm'
@@ -96,7 +96,7 @@ function CreateNamespaceDialog({
     <Dialog open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
       <DialogContent className="sm:max-w-md">
         <form onSubmit={onSubmit} className="grid gap-4">
-          <DialogHeader>
+          <DialogHeader icon={LayersIcon}>
             <DialogTitle>New namespace</DialogTitle>
             <DialogDescription>Namespaces group resources and scope permissions.</DialogDescription>
           </DialogHeader>
@@ -192,7 +192,7 @@ export default function Namespaces() {
 
   return (
     <PageBody>
-      <PageHeader title="Namespaces" description={`${visible.length} item${visible.length === 1 ? '' : 's'}`}>
+      <PageHeader title="Namespaces" count={visible.length}>
         <FilterInput value={query} onChange={setQuery} />
         {canCreate ? (
           <Button size="sm" className="h-7" onClick={() => setCreateOpen(true)}>

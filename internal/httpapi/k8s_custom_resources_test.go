@@ -240,3 +240,37 @@ func TestListCustomResourcesOwnerCanListProd(t *testing.T) {
 		t.Fatalf("item=%v", items[0])
 	}
 }
+
+func TestListCustomResourcesAllNamespacesReturnsPlainObjects(t *testing.T) {
+	t.Parallel()
+
+	st := store.NewMemory()
+	createPermissionSetWithGrants(t, st, "ps1", map[string][]string{"custom_resources": {"view"}})
+	createK8sMember(t, st, "member", "pass", "ps1", []string{"dev", testInstallNS})
+	h := newK8sHandler(t, st, seedCustomResourceFakeClient())
+	session := login(t, h, "member", "pass")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, customResourceListURL(""), nil)
+	req.AddCookie(session)
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s want %d", rec.Code, rec.Body.String(), http.StatusOK)
+	}
+
+	var items []map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &items); err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, item := range items {
+		meta, ok := item["metadata"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("item has no top-level metadata (wrapped object?): %v", item)
+		}
+		names = append(names, meta["name"].(string))
+	}
+	if len(names) != 1 || names[0] != "w-dev" {
+		t.Fatalf("names=%v want [w-dev]", names)
+	}
+}

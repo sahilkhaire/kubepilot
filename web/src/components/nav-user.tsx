@@ -28,8 +28,10 @@ import { ChangePasswordDialog } from '@/components/change-password-dialog'
 
 export function NavUser({
   user,
+  version,
   onLogout,
 }: {
+  version?: string
   user: {
     name: string
     username: string
@@ -121,6 +123,14 @@ export function NavUser({
               <LogOutIcon />
               Log out
             </DropdownMenuItem>
+            {version ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="py-1 text-[11px] font-normal text-muted-foreground">
+                  KubePilot {/^\d/.test(version) ? `v${version}` : version}
+                </DropdownMenuLabel>
+              </>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
         {user.role === 'member' ? (

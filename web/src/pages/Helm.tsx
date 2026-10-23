@@ -162,7 +162,7 @@ export default function Helm() {
     <PageBody>
       <PageHeader
         title="Helm releases"
-        description={loaded ? `${visible.length} release${visible.length === 1 ? '' : 's'}` : undefined}
+        count={loaded ? visible.length : undefined}
       >
         <NamespaceSelect namespaces={namespaces} value={namespace} onChange={setNamespace} />
         <FilterInput value={query} onChange={setQuery} placeholder="Filter by name or chart…" />

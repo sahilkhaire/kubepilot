@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeftIcon, RotateCwIcon } from 'lucide-react'
-import { Terminal } from '@xterm/xterm'
+import { Terminal, type ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { ContainerSelect, usePodContainers } from '@/components/container-select'
@@ -9,6 +9,7 @@ import { PageBody, PageHeader } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useTheme, type ResolvedTheme } from '@/lib/theme'
 
 const wsStreamStdin = 0
 const wsStreamStdout = 1
@@ -22,6 +23,33 @@ const statusBadge: Record<Status, { label: string; className: string }> = {
   connected: { label: 'Connected', className: 'border-success/30 bg-success/10 text-success' },
   closed: { label: 'Session ended', className: 'text-muted-foreground' },
   error: { label: 'Connection failed', className: 'border-destructive/30 bg-destructive/10 text-destructive' },
+}
+
+// xterm needs hex colors; these mirror the --console tokens in index.css.
+const terminalThemes: Record<ResolvedTheme, ITheme> = {
+  dark: {
+    background: '#0e1016',
+    foreground: '#e2e4ea',
+    cursor: '#e2e4ea',
+    selectionBackground: '#3b4a7a',
+  },
+  light: {
+    background: '#fbfcfe',
+    foreground: '#262a35',
+    cursor: '#262a35',
+    selectionBackground: '#c9d6f5',
+    // Darker ANSI colors so output stays readable on a light background.
+    black: '#262a35',
+    red: '#c4302b',
+    green: '#1f7a3f',
+    yellow: '#8a6100',
+    blue: '#2453c7',
+    magenta: '#8a3fb8',
+    cyan: '#11707d',
+    white: '#6b7080',
+    brightBlack: '#4a4f5c',
+    brightWhite: '#262a35',
+  },
 }
 
 const encoder = new TextEncoder()
@@ -41,6 +69,15 @@ export default function PodExec() {
   const [status, setStatus] = useState<Status>('connecting')
   const [attempt, setAttempt] = useState(0)
   const termRef = useRef<HTMLDivElement>(null)
+  const termInstance = useRef<Terminal | null>(null)
+  const { resolved } = useTheme()
+  const resolvedRef = useRef(resolved)
+  resolvedRef.current = resolved
+
+  // Recolor the open terminal when the theme changes, without reconnecting.
+  useEffect(() => {
+    if (termInstance.current) termInstance.current.options.theme = terminalThemes[resolved]
+  }, [resolved])
 
   useEffect(() => {
     if (!ns || !pod || !containersReady || !termRef.current) return
@@ -52,11 +89,12 @@ export default function PodExec() {
       fontSize: 13,
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
       scrollback: 5000,
-      theme: { background: '#09090b', foreground: '#e4e4e7', cursor: '#e4e4e7' },
+      theme: terminalThemes[resolvedRef.current],
     })
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
     term.open(host)
+    termInstance.current = term
     fitAddon.fit()
     term.focus()
     term.writeln(`\x1b[2mConnecting to ${pod}${container ? ` (${container})` : ''}…\x1b[0m`)
@@ -125,6 +163,7 @@ export default function PodExec() {
       ws.onclose = null
       ws.close()
       term.dispose()
+      termInstance.current = null
     }
   }, [ns, pod, container, containersReady, attempt])
 
@@ -165,7 +204,7 @@ export default function PodExec() {
           Reconnect
         </Button>
       </PageHeader>
-      <div className="min-h-0 flex-1 bg-[#09090b] p-2">
+      <div className="min-h-0 flex-1 bg-console p-2">
         <div ref={termRef} className="h-full w-full" />
       </div>
     </PageBody>

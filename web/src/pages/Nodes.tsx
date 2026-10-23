@@ -188,7 +188,7 @@ export default function Nodes() {
   return (
     <PageBody className="relative flex-row gap-0 overflow-hidden p-0">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <PageHeader title="Nodes" description={`${visible.length} item${visible.length === 1 ? '' : 's'}`}>
+        <PageHeader title="Nodes" count={visible.length}>
           <FilterInput value={query} onChange={setQuery} placeholder="Filter by name or label…" />
         </PageHeader>
         <ErrorAlert message={error} />

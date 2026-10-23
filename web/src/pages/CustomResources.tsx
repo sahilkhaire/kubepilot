@@ -1,8 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { XIcon } from 'lucide-react'
+import { PuzzleIcon } from 'lucide-react'
 import { readAPIError } from '@/api'
 import { DetailPanel } from '@/components/detail-parts'
-import { IconActionButton } from '@/components/icon-action-button'
 import EmptyState from '@/components/EmptyState'
 import { SortableHead } from '@/components/sortable-head'
 import { ErrorAlert } from '@/components/error-alert'
@@ -267,13 +266,11 @@ export default function CustomResources() {
 
       {selected ? (
         <DetailPanel
-          kind={`${selected.spec?.names?.plural ?? 'Instances'} · ${selected.spec?.group ?? ''}`}
+          kind="Custom resource"
           name={selectedName}
-          actions={
-            <IconActionButton tooltip="Close" onClick={() => setSelected(null)}>
-              <XIcon />
-            </IconActionButton>
-          }
+          icon={PuzzleIcon}
+          subtitle={`${selected.spec?.group ?? ''} · ${crdVersion(selected)} · ${selected.spec?.scope ?? ''}`}
+          onClose={() => setSelected(null)}
         >
           {namespaced ? (
             <div className="flex items-center justify-between gap-2 border-b px-3 py-2">

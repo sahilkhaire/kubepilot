@@ -9,6 +9,7 @@ import (
 	"github.com/sahilkhaire/kubepilot/internal/auth"
 	"github.com/sahilkhaire/kubepilot/internal/password"
 	"github.com/sahilkhaire/kubepilot/internal/store"
+	"github.com/sahilkhaire/kubepilot/internal/version"
 )
 
 type loginRequest struct {
@@ -53,6 +54,14 @@ func registerAuthRoutes(mux *http.ServeMux, authSvc *auth.Service, auditor *audi
 	})
 	mux.HandleFunc("POST /api/auth/password", func(w http.ResponseWriter, r *http.Request) {
 		handlePassword(w, r, authSvc)
+	})
+	// Signed-in users only, so the build version is not advertised to anonymous visitors.
+	mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) {
+		if _, err := authenticateRequest(r, authSvc); err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"version": version.Version})
 	})
 }
 

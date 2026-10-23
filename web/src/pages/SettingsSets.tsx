@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
+import { PlusIcon, KeyRoundIcon } from 'lucide-react'
 import {
   createPermissionSet,
   deletePermissionSet,
@@ -19,7 +20,6 @@ import { PermissionGrantEditor } from '@/components/permission-grant-editor'
 import { PageLoading } from '@/components/page-loading'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -252,20 +252,21 @@ export default function SettingsSets() {
   if (loading) return <PageLoading compact />
 
   return (
-    <div className="space-y-6">
-      <ErrorAlert message={error} />
+    <div className="space-y-4">
+      <ErrorAlert message={error} className="mx-0 mt-0" />
 
-      <div className="flex justify-end">
-        <Button type="button" onClick={openCreate}>
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-medium">Permission sets</h2>
+          <p className="text-xs text-muted-foreground">Reusable bundles of module actions and namespaces.</p>
+        </div>
+        <Button type="button" size="sm" onClick={openCreate}>
+          <PlusIcon />
           New permission set
         </Button>
       </div>
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Permission sets</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
+      <div className="overflow-hidden rounded-xl border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -275,7 +276,9 @@ export default function SettingsSets() {
                 <SortableHead column="grants" label="Grants" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <SortableHead column="namespaces" label="Namespaces" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <SortableHead column="members" label="Members" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-right">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -322,12 +325,11 @@ export default function SettingsSets() {
             </TableBody>
           </Table>
           {sets.length === 0 ? <EmptyState>No permission sets yet. Clone Viewer, Operator, or Admin to start.</EmptyState> : null}
-        </CardContent>
-      </Card>
+      </div>
 
       <Dialog open={editor != null} onOpenChange={(open) => !open && !saving && setEditor(null)}>
         <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-4xl">
-          <DialogHeader className="shrink-0">
+          <DialogHeader className="shrink-0" icon={KeyRoundIcon}>
             <DialogTitle>{editor?.id ? 'Edit permission set' : 'New permission set'}</DialogTitle>
             <DialogDescription>
               Grants apply on the next API call. Owner-only settings cannot be granted to members.

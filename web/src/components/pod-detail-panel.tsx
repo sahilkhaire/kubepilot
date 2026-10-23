@@ -1,14 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  FileCodeIcon,
-  PencilIcon,
-  RefreshCwIcon,
-  ScrollTextIcon,
-  SquareTerminalIcon,
-  Trash2Icon,
-  XIcon,
-} from 'lucide-react'
+import { BoxIcon, RefreshCwIcon, ScrollTextIcon, SquareTerminalIcon, Trash2Icon } from 'lucide-react'
 import type { User } from '@/api'
 import WorkloadEnvEditor from '@/components/workload-env-editor'
 import ResourceYAMLEditor from '@/components/resource-yaml-editor'
@@ -17,6 +9,8 @@ import { StatusBadge } from '@/components/status-badge'
 import {
   ConditionBadges,
   DetailPanel,
+  PanelAction,
+  type DetailTab,
   DetailSection,
   EventList,
   MetaList,
@@ -125,6 +119,11 @@ export default function PodDetailPanel({
   }
 
   const navigate = useNavigate()
+  const tabs: DetailTab<PodPanelView>[] = [
+    { value: 'details', label: 'Overview' },
+    { value: 'yaml', label: 'YAML' },
+    ...(can(user, 'pods', 'yaml_edit') ? [{ value: 'edit' as const, label: 'Environment' }] : []),
+  ]
   const logsPath = `/workloads/${encodeURIComponent(ns)}/pods/${encodeURIComponent(name)}/logs`
   const execPath = `/workloads/${encodeURIComponent(ns)}/pods/${encodeURIComponent(name)}/exec`
 
@@ -132,47 +131,33 @@ export default function PodDetailPanel({
     <DetailPanel
       kind="Pod"
       name={name}
+      icon={BoxIcon}
+      status={<StatusBadge value={pod.metadata?.deletionTimestamp ? 'Terminating' : podStatus(pod)} />}
+      subtitle={`${ns} · ${podNode(pod) || 'unscheduled'} · ${formatAge(pod.metadata?.creationTimestamp)} old`}
+      onClose={onClose}
+      tabs={tabs}
+      tab={view}
+      onTabChange={onViewChange}
       actions={
         <>
           {can(user, 'pods', 'logs') ? (
-            <IconActionButton tooltip="Logs" onClick={() => navigate(logsPath)}>
-              <ScrollTextIcon />
-            </IconActionButton>
+            <PanelAction icon={ScrollTextIcon} label="Logs" onClick={() => navigate(logsPath)} />
           ) : null}
           {can(user, 'pods', 'exec') ? (
-            <IconActionButton tooltip="Shell" onClick={() => navigate(execPath)}>
-              <SquareTerminalIcon />
-            </IconActionButton>
+            <PanelAction icon={SquareTerminalIcon} label="Shell" onClick={() => navigate(execPath)} />
           ) : null}
-          {can(user, 'pods', 'yaml_edit') ? (
-            <IconActionButton
-              tooltip={view === 'edit' ? 'Back to details' : 'Edit env'}
-              variant={view === 'edit' ? 'secondary' : 'ghost'}
-              onClick={() => onViewChange(view === 'edit' ? 'details' : 'edit')}
-            >
-              <PencilIcon />
-            </IconActionButton>
-          ) : null}
-          <IconActionButton
-            tooltip={view === 'yaml' ? 'Back to details' : 'YAML'}
-            variant={view === 'yaml' ? 'secondary' : 'ghost'}
-            onClick={() => onViewChange(view === 'yaml' ? 'details' : 'yaml')}
-          >
-            <FileCodeIcon />
-          </IconActionButton>
-          {view === 'details' ? (
-            <IconActionButton tooltip="Refresh" onClick={() => void refresh()} disabled={refreshing}>
-              <RefreshCwIcon className={refreshing ? 'animate-spin' : undefined} />
-            </IconActionButton>
-          ) : null}
-          {can(user, 'pods', 'delete') ? (
-            <IconActionButton tooltip="Delete" onClick={onDelete}>
-              <Trash2Icon />
-            </IconActionButton>
-          ) : null}
-          <IconActionButton tooltip="Close" onClick={onClose}>
-            <XIcon />
-          </IconActionButton>
+          <span className="ml-auto flex items-center gap-1">
+            {view === 'details' ? (
+              <IconActionButton tooltip="Refresh" onClick={() => void refresh()} disabled={refreshing}>
+                <RefreshCwIcon className={refreshing ? 'animate-spin' : undefined} />
+              </IconActionButton>
+            ) : null}
+            {can(user, 'pods', 'delete') ? (
+              <IconActionButton tooltip="Delete" onClick={onDelete} className="hover:text-destructive">
+                <Trash2Icon />
+              </IconActionButton>
+            ) : null}
+          </span>
         </>
       }
     >
@@ -194,9 +179,6 @@ export default function PodDetailPanel({
         <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
           <DetailSection title="Properties">
             <dl>
-              <PropRow label="Status">
-                <StatusBadge value={pod.metadata?.deletionTimestamp ? 'Terminating' : podStatus(pod)} />
-              </PropRow>
               <PropRow label="Namespace">{ns || '—'}</PropRow>
               <PropRow label="Ready">{podReady(pod)}</PropRow>
               <PropRow label="Restarts">{podRestarts(pod)}</PropRow>

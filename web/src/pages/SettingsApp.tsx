@@ -6,7 +6,6 @@ import EmptyState from '@/components/EmptyState'
 import { PageLoading } from '@/components/page-loading'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
@@ -99,12 +98,12 @@ export default function SettingsApp() {
   }
 
   return (
-    <Card className="shadow-sm">
-      <CardHeader>
-        <CardTitle className="text-base">App settings</CardTitle>
-        <CardDescription>Configure Helm chart repositories. No public repos are added by default.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="max-w-3xl space-y-4">
+      <div>
+        <h2 className="text-sm font-medium">Helm repositories</h2>
+        <p className="text-xs text-muted-foreground">Chart sources for Helm installs. No public repositories are added by default.</p>
+      </div>
+      <div className="space-y-4 rounded-xl border bg-card p-4">
         <ErrorAlert message={error} className="mx-0 mt-0" />
         {message ? (
           <Alert>
@@ -153,7 +152,7 @@ export default function SettingsApp() {
             </Button>
           </div>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

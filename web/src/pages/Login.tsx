@@ -1,13 +1,11 @@
 import { useState } from 'react'
 import { login, me, type User } from '@/api'
-import { BrandMark } from '@/components/brand-mark'
+import { AuthLayout } from '@/components/auth-layout'
 import { ErrorAlert } from '@/components/error-alert'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ThemeToggle } from '@/components/theme-toggle'
 
 type Props = {
   notice?: string
@@ -40,64 +38,50 @@ export default function Login({ notice, onLogin }: Props) {
   }
 
   return (
-    <main className="relative flex min-h-svh items-center justify-center bg-muted/40 p-4 sm:p-6">
-      <div className="absolute top-3 right-3">
-        <ThemeToggle />
-      </div>
-      <div className="w-full max-w-sm space-y-4">
-        <div className="flex items-center gap-2.5 px-1">
-          <BrandMark className="size-9" />
-          <div className="leading-tight">
-            <p className="text-lg font-semibold tracking-tight">KubePilot</p>
-            <p className="text-xs text-muted-foreground">Kubernetes console</p>
-          </div>
+    <AuthLayout title="Sign in to KubePilot" subtitle="Use the account your administrator gave you.">
+      <form onSubmit={onSubmit} className="grid gap-4">
+        {notice && !error ? (
+          <Alert className="border-primary/30 bg-primary/5">
+            <AlertDescription>{notice}</AlertDescription>
+          </Alert>
+        ) : null}
+        <div className="grid gap-1.5">
+          <Label htmlFor="username" className="text-xs text-muted-foreground">
+            Username
+          </Label>
+          <Input
+            id="username"
+            name="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            autoFocus
+            required
+            className="h-9"
+          />
         </div>
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold tracking-tight">Sign in</CardTitle>
-            <CardDescription>Use the username and password your administrator gave you.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={onSubmit} className="grid gap-4">
-              {notice && !error ? (
-                <Alert>
-                  <AlertDescription>{notice}</AlertDescription>
-                </Alert>
-              ) : null}
-              <div className="grid gap-2">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  name="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  autoComplete="username"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  autoFocus
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  name="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  required
-                />
-              </div>
-              <ErrorAlert message={error} className="mx-0 mt-0" onDismiss={() => setError('')} />
-              <Button type="submit" disabled={pending}>
-                {pending ? 'Signing in…' : 'Sign in'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    </main>
+        <div className="grid gap-1.5">
+          <Label htmlFor="password" className="text-xs text-muted-foreground">
+            Password
+          </Label>
+          <Input
+            id="password"
+            type="password"
+            name="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            required
+            className="h-9"
+          />
+        </div>
+        <ErrorAlert message={error} className="mx-0 mt-0" onDismiss={() => setError('')} />
+        <Button type="submit" disabled={pending} className="h-9">
+          {pending ? 'Signing in…' : 'Continue'}
+        </Button>
+      </form>
+    </AuthLayout>
   )
 }

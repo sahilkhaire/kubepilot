@@ -1,13 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  ArrowDownToLineIcon,
-  FileCodeIcon,
-  PauseIcon,
-  PlayIcon,
-  RefreshCwIcon,
-  Trash2Icon,
-  XIcon,
-} from 'lucide-react'
+import { ArrowDownToLineIcon, PauseIcon, PlayIcon, RefreshCwIcon, ServerIcon, Trash2Icon } from 'lucide-react'
 import type { User } from '@/api'
 import MetricsPanel from '@/components/MetricsPanel'
 import ResourceYAMLEditor from '@/components/resource-yaml-editor'
@@ -18,6 +10,7 @@ import { IconActionButton } from '@/components/icon-action-button'
 import {
   ConditionBadges,
   DetailPanel,
+  PanelAction,
   DetailSection,
   EventList,
   MetaList,
@@ -171,38 +164,40 @@ export default function NodeDetailPanel({
     <DetailPanel
       kind="Node"
       name={name}
+      icon={ServerIcon}
+      status={
+        <ConditionBadges conditions={conditions.map((c) => ({ key: c.text, label: c.text, ok: c.ok }))} />
+      }
+      subtitle={`${info.kubeletVersion || 'unknown version'} · ${info.operatingSystem}/${info.architecture} · ${formatAge(node.metadata?.creationTimestamp)} old`}
+      onClose={onClose}
+      tabs={[
+        { value: 'details', label: 'Overview' },
+        { value: 'yaml', label: 'YAML' },
+      ]}
+      tab={view}
+      onTabChange={onViewChange}
       actions={
         <>
           {canNode(user, 'cordon') ? (
-            <IconActionButton tooltip={unschedulable ? 'Uncordon' : 'Cordon'} onClick={onCordon}>
-              {unschedulable ? <PlayIcon /> : <PauseIcon />}
-            </IconActionButton>
+            <PanelAction
+              icon={unschedulable ? PlayIcon : PauseIcon}
+              label={unschedulable ? 'Uncordon' : 'Cordon'}
+              onClick={onCordon}
+            />
           ) : null}
-          {canNode(user, 'drain') ? (
-            <IconActionButton tooltip="Drain" onClick={onDrain}>
-              <ArrowDownToLineIcon />
-            </IconActionButton>
-          ) : null}
-          <IconActionButton
-            tooltip={view === 'yaml' ? 'Back to details' : 'YAML'}
-            variant={view === 'yaml' ? 'secondary' : 'ghost'}
-            onClick={() => onViewChange(view === 'yaml' ? 'details' : 'yaml')}
-          >
-            <FileCodeIcon />
-          </IconActionButton>
-          {view === 'details' ? (
-            <IconActionButton tooltip="Refresh" onClick={() => void refresh()} disabled={refreshing}>
-              <RefreshCwIcon className={refreshing ? 'animate-spin' : undefined} />
-            </IconActionButton>
-          ) : null}
-          {canNode(user, 'delete') ? (
-            <IconActionButton tooltip="Delete" onClick={onDelete}>
-              <Trash2Icon />
-            </IconActionButton>
-          ) : null}
-          <IconActionButton tooltip="Close" onClick={onClose}>
-            <XIcon />
-          </IconActionButton>
+          {canNode(user, 'drain') ? <PanelAction icon={ArrowDownToLineIcon} label="Drain" onClick={onDrain} /> : null}
+          <span className="ml-auto flex items-center gap-1">
+            {view === 'details' ? (
+              <IconActionButton tooltip="Refresh" onClick={() => void refresh()} disabled={refreshing}>
+                <RefreshCwIcon className={refreshing ? 'animate-spin' : undefined} />
+              </IconActionButton>
+            ) : null}
+            {canNode(user, 'delete') ? (
+              <IconActionButton tooltip="Delete" onClick={onDelete} className="hover:text-destructive">
+                <Trash2Icon />
+              </IconActionButton>
+            ) : null}
+          </span>
         </>
       }
     >
@@ -225,9 +220,6 @@ export default function NodeDetailPanel({
 
           <DetailSection title="Properties">
             <dl>
-              <PropRow label="Status">
-                <ConditionBadges conditions={conditions.map((c) => ({ key: c.text, label: c.text, ok: c.ok }))} />
-              </PropRow>
               <PropRow label="Created">{formatAge(node.metadata?.creationTimestamp)} ago</PropRow>
               <PropRow label="Addresses">
                 {addresses.length === 0

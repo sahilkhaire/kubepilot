@@ -16,14 +16,14 @@ export default function SettingsLayout() {
 
   return (
     <PageBody>
-      <PageHeader title="Settings" description="Owner-only members, grants, audit, and app configuration." />
+      <PageHeader title="Settings" description="Only the owner can see this area." />
       <Tabs
         value={current}
         onValueChange={(value) => {
           const tab = tabs.find((t) => t.value === value)
           if (tab) navigate(tab.to)
         }}
-        className="px-3 pt-2 pb-1"
+        className="border-b px-4"
       >
         <TabsList variant="line">
           {tabs.map((tab) => (
@@ -33,7 +33,7 @@ export default function SettingsLayout() {
           ))}
         </TabsList>
       </Tabs>
-      <div className="min-h-0 flex-1 overflow-auto px-3 pt-4 pb-3">
+      <div className="min-h-0 flex-1 overflow-auto px-4 pt-5 pb-6">
         <Outlet />
       </div>
     </PageBody>

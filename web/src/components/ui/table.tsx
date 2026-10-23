@@ -10,7 +10,7 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
     >
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom text-xs", className)}
+        className={cn("w-full caption-bottom border-separate border-spacing-0 text-[13px]", className)}
         {...props}
       />
     </div>
@@ -21,7 +21,7 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b", className)}
+      className={cn("[&_tr]:hover:bg-transparent [&_th]:border-b", className)}
       {...props}
     />
   )
@@ -31,7 +31,7 @@ function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
   return (
     <tbody
       data-slot="table-body"
-      className={cn("[&_tr:last-child]:border-0", className)}
+      className={cn("[&_tr:last-child>td]:border-b-0", className)}
       {...props}
     />
   )
@@ -55,7 +55,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
+        "transition-colors hover:bg-foreground/[0.035] has-aria-expanded:bg-foreground/[0.035] data-[state=selected]:bg-primary/[0.09] data-[state=selected]:hover:bg-primary/[0.12] [&>td]:border-b [&>td]:border-border/70",
         className
       )}
       {...props}
@@ -68,7 +68,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "h-8 px-2 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground [&:has([role=checkbox])]:pr-0",
+        "h-8 px-3 text-left align-middle text-[11px] font-medium tracking-wide whitespace-nowrap text-muted-foreground uppercase first:pl-4 last:pr-4 [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}
@@ -81,7 +81,7 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
     <td
       data-slot="table-cell"
       className={cn(
-        "px-2 py-1 align-middle text-xs whitespace-nowrap [&:has([role=checkbox])]:pr-0",
+        "h-9 px-3 py-1 align-middle text-[13px] whitespace-nowrap first:pl-4 last:pr-4 [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}
@@ -104,7 +104,7 @@ function TableCaption({
 
 function SerialHead({ className, ...props }: React.ComponentProps<"th">) {
   return (
-    <TableHead className={cn("w-10 text-muted-foreground", className)} {...props}>
+    <TableHead className={cn("w-10 text-muted-foreground/70", className)} {...props}>
       #
     </TableHead>
   )
@@ -116,7 +116,7 @@ function SerialCell({
   ...props
 }: React.ComponentProps<"td"> & { index: number }) {
   return (
-    <TableCell className={cn("tabular-nums text-muted-foreground", className)} {...props}>
+    <TableCell className={cn("text-[11px] tabular-nums text-muted-foreground/70", className)} {...props}>
       {index + 1}
     </TableCell>
   )

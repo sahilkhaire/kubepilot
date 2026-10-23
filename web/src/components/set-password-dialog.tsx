@@ -1,3 +1,4 @@
+import { KeyRoundIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import {
   Dialog,
@@ -51,7 +52,7 @@ export function SetPasswordDialog({
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !pending && onCancel()}>
       <DialogContent>
-        <DialogHeader>
+        <DialogHeader icon={KeyRoundIcon}>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>

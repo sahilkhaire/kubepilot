@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  FileCodeIcon,
   HistoryIcon,
-  PencilIcon,
   RefreshCwIcon,
+  RocketIcon,
   RotateCcwIcon,
   ScalingIcon,
   ScrollTextIcon,
   Trash2Icon,
-  XIcon,
 } from 'lucide-react'
 import type { User } from '@/api'
 import ResourceYAMLEditor from '@/components/resource-yaml-editor'
@@ -17,6 +15,8 @@ import WorkloadEnvEditor from '@/components/workload-env-editor'
 import {
   ConditionBadges,
   DetailPanel,
+  PanelAction,
+  type DetailTab,
   DetailSection,
   EventList,
   MetaList,
@@ -169,63 +169,45 @@ export default function DeploymentDetailPanel({
   }
 
   const canLogs = can(user, 'pods', 'logs')
+  const tabs: DetailTab<DeploymentPanelView>[] = [
+    { value: 'details', label: 'Overview' },
+    { value: 'yaml', label: 'YAML' },
+    ...(can(user, 'deployments', 'yaml_edit') ? [{ value: 'edit' as const, label: 'Environment' }] : []),
+  ]
   const readyPercent = desired > 0 ? Math.round((counts.ready / desired) * 100) : counts.ready > 0 ? 100 : 0
 
   return (
     <DetailPanel
       kind="Deployment"
       name={name}
+      icon={RocketIcon}
+      subtitle={`${ns} · ${counts.ready}/${desired} ready · ${formatAge(deployment.metadata?.creationTimestamp)} old`}
+      onClose={onClose}
+      tabs={tabs}
+      tab={view}
+      onTabChange={onViewChange}
       actions={
         <>
-          {can(user, 'deployments', 'scale') ? (
-            <IconActionButton tooltip="Scale" onClick={onScale}>
-              <ScalingIcon />
-            </IconActionButton>
-          ) : null}
+          {can(user, 'deployments', 'scale') ? <PanelAction icon={ScalingIcon} label="Scale" onClick={onScale} /> : null}
           {can(user, 'deployments', 'restart') ? (
-            <IconActionButton tooltip="Restart" onClick={onRestart}>
-              <RotateCcwIcon />
-            </IconActionButton>
+            <PanelAction icon={RotateCcwIcon} label="Restart" onClick={onRestart} />
           ) : null}
           {can(user, 'deployments', 'rollback') ? (
-            <IconActionButton tooltip="Roll back" onClick={onRollback}>
-              <HistoryIcon />
-            </IconActionButton>
+            <PanelAction icon={HistoryIcon} label="Roll back" onClick={onRollback} />
           ) : null}
-          {canLogs ? (
-            <IconActionButton tooltip="Logs" onClick={onLogs}>
-              <ScrollTextIcon />
-            </IconActionButton>
-          ) : null}
-          {can(user, 'deployments', 'yaml_edit') ? (
-            <IconActionButton
-              tooltip={view === 'edit' ? 'Back to details' : 'Edit env'}
-              variant={view === 'edit' ? 'secondary' : 'ghost'}
-              onClick={() => onViewChange(view === 'edit' ? 'details' : 'edit')}
-            >
-              <PencilIcon />
-            </IconActionButton>
-          ) : null}
-          <IconActionButton
-            tooltip={view === 'yaml' ? 'Back to details' : 'YAML'}
-            variant={view === 'yaml' ? 'secondary' : 'ghost'}
-            onClick={() => onViewChange(view === 'yaml' ? 'details' : 'yaml')}
-          >
-            <FileCodeIcon />
-          </IconActionButton>
-          {view === 'details' ? (
-            <IconActionButton tooltip="Refresh" onClick={() => void refresh()} disabled={refreshing}>
-              <RefreshCwIcon className={refreshing ? 'animate-spin' : undefined} />
-            </IconActionButton>
-          ) : null}
-          {can(user, 'deployments', 'delete') ? (
-            <IconActionButton tooltip="Delete" onClick={onDelete}>
-              <Trash2Icon />
-            </IconActionButton>
-          ) : null}
-          <IconActionButton tooltip="Close" onClick={onClose}>
-            <XIcon />
-          </IconActionButton>
+          {canLogs ? <PanelAction icon={ScrollTextIcon} label="Logs" onClick={onLogs} /> : null}
+          <span className="ml-auto flex items-center gap-1">
+            {view === 'details' ? (
+              <IconActionButton tooltip="Refresh" onClick={() => void refresh()} disabled={refreshing}>
+                <RefreshCwIcon className={refreshing ? 'animate-spin' : undefined} />
+              </IconActionButton>
+            ) : null}
+            {can(user, 'deployments', 'delete') ? (
+              <IconActionButton tooltip="Delete" onClick={onDelete} className="hover:text-destructive">
+                <Trash2Icon />
+              </IconActionButton>
+            ) : null}
+          </span>
         </>
       }
     >

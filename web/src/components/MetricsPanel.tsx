@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -90,29 +89,38 @@ function MetricCard({
   usage,
   capacity,
   format,
+  tone,
 }: {
   label: string
   usage: number
   capacity?: number
   format: (n: number) => string
+  tone: 'cpu' | 'memory'
 }) {
   const pct = usagePercent(usage, capacity)
+  const bar =
+    pct != null && pct > 85
+      ? '*:data-[slot=progress-indicator]:bg-destructive'
+      : pct != null && pct > 70
+        ? '*:data-[slot=progress-indicator]:bg-warning'
+        : tone === 'cpu'
+          ? '*:data-[slot=progress-indicator]:bg-chart-1'
+          : '*:data-[slot=progress-indicator]:bg-chart-2'
   return (
-    <Card className="@container/card shadow-sm">
-      <CardHeader>
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-          {format(usage)}
-          {capacity ? <span className="text-base font-normal text-muted-foreground"> / {format(capacity)}</span> : null}
-        </CardTitle>
-      </CardHeader>
-      {pct != null ? (
-        <CardFooter className="flex-col items-stretch gap-2">
-          <Progress value={pct} className={pct > 85 ? '*:data-[slot=progress-indicator]:bg-destructive' : undefined} />
-          <p className="text-sm text-muted-foreground">{pct.toFixed(0)}% of capacity</p>
-        </CardFooter>
-      ) : null}
-    </Card>
+    <div className="rounded-xl border bg-card p-4">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <span className={tone === 'cpu' ? 'size-2 rounded-full bg-chart-1' : 'size-2 rounded-full bg-chart-2'} />
+          {label}
+        </span>
+        {pct != null ? <span className="tabular-nums">{pct.toFixed(0)}%</span> : null}
+      </div>
+      <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">
+        {format(usage)}
+        {capacity ? <span className="text-sm font-normal text-muted-foreground"> / {format(capacity)}</span> : null}
+      </p>
+      {pct != null ? <Progress value={pct} className={`mt-3 h-1.5 ${bar}`} /> : null}
+    </div>
   )
 }
 
@@ -177,18 +185,12 @@ export default function MetricsPanel({ scope, namespace, name, title, compact }:
 
   if (compact) {
     return (
-      <div className="min-w-40 space-y-2">
+      <div className="grid gap-2 sm:grid-cols-2">
         {data.cpu ? (
-          <p className="text-sm text-muted-foreground">
-            CPU {formatCores(data.cpu.usage)}
-            {data.cpu.capacity ? ` / ${formatCores(data.cpu.capacity)}` : ''}
-          </p>
+          <MetricCard label="CPU" tone="cpu" usage={data.cpu.usage} capacity={data.cpu.capacity} format={formatCores} />
         ) : null}
         {data.memory ? (
-          <p className="text-sm text-muted-foreground">
-            Memory {formatBytes(data.memory.usage)}
-            {data.memory.capacity ? ` / ${formatBytes(data.memory.capacity)}` : ''}
-          </p>
+          <MetricCard label="Memory" tone="memory" usage={data.memory.usage} capacity={data.memory.capacity} format={formatBytes} />
         ) : null}
       </div>
     )
@@ -196,16 +198,16 @@ export default function MetricsPanel({ scope, namespace, name, title, compact }:
 
   return (
     <section className="@container/main space-y-3">
-      {title ? <h2 className="text-sm font-medium text-muted-foreground">{title}</h2> : null}
-      <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2">
+      {title ? <h2 className="text-[13px] font-medium">{title}</h2> : null}
+      <div className="grid grid-cols-1 gap-3 @xl/main:grid-cols-2">
         {data.cpu ? (
-          <MetricCard label="CPU" usage={data.cpu.usage} capacity={data.cpu.capacity} format={formatCores} />
+          <MetricCard label="CPU" tone="cpu" usage={data.cpu.usage} capacity={data.cpu.capacity} format={formatCores} />
         ) : null}
         {data.memory ? (
-          <MetricCard label="Memory" usage={data.memory.usage} capacity={data.memory.capacity} format={formatBytes} />
+          <MetricCard label="Memory" tone="memory" usage={data.memory.usage} capacity={data.memory.capacity} format={formatBytes} />
         ) : null}
       </div>
-      {data.source ? <p className="text-xs text-muted-foreground">Source: {data.source}</p> : null}
+      {data.source ? <p className="text-[11px] text-muted-foreground/70">Source: {data.source}</p> : null}
     </section>
   )
 }
@@ -246,9 +248,9 @@ export function MetricsCell({ scope, namespace, name }: Pick<MetricsPanelProps, 
 }
 
 const barColors = {
-  cpu: '*:data-[slot=progress-indicator]:bg-sky-500',
-  memory: '*:data-[slot=progress-indicator]:bg-violet-500',
-  disk: '*:data-[slot=progress-indicator]:bg-zinc-400',
+  cpu: '*:data-[slot=progress-indicator]:bg-chart-1',
+  memory: '*:data-[slot=progress-indicator]:bg-chart-2',
+  disk: '*:data-[slot=progress-indicator]:bg-chart-3',
 }
 
 function UsageBar({
@@ -274,7 +276,7 @@ function UsageBar({
           {pct != null ? (
             <Progress
               value={pct}
-              className={`h-1.5 ${pct > 85 ? '*:data-[slot=progress-indicator]:bg-destructive' : barColors[kind]}`}
+              className={`h-1.5 ${pct > 85 ? '*:data-[slot=progress-indicator]:bg-destructive' : pct > 70 ? '*:data-[slot=progress-indicator]:bg-warning' : barColors[kind]}`}
             />
           ) : (
             <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{format(metric.usage)}</span>

@@ -224,3 +224,17 @@ stringData:
 		t.Fatalf("yaml=%s", s)
 	}
 }
+
+func TestSecretYAMLHasData(t *testing.T) {
+	t.Parallel()
+	cases := map[string]bool{
+		"apiVersion: v1\nkind: Secret\nmetadata:\n  name: a\n":                      false,
+		"apiVersion: v1\nkind: Secret\nmetadata:\n  name: a\ndata:\n  k: dg==\n":    true,
+		"apiVersion: v1\nkind: Secret\nmetadata:\n  name: a\nstringData:\n  k: v\n": true,
+	}
+	for doc, want := range cases {
+		if got := kube.SecretYAMLHasData([]byte(doc)); got != want {
+			t.Errorf("SecretYAMLHasData(%q)=%v want %v", doc, got, want)
+		}
+	}
+}

@@ -240,7 +240,7 @@ export default function PodLogs() {
           ref={preRef}
           onScroll={onScroll}
           className={cn(
-            'absolute inset-0 overflow-auto bg-zinc-950 px-4 py-3 font-mono text-xs leading-relaxed text-zinc-100',
+            'absolute inset-0 overflow-auto bg-console px-4 py-3 font-mono text-xs leading-relaxed text-console-foreground selection:bg-primary/25',
             wrap ? 'break-all whitespace-pre-wrap' : 'whitespace-pre',
           )}
         >

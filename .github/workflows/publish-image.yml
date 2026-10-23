@@ -36,6 +36,9 @@ jobs:
           echo "latest=${IMAGE}:latest" >> "$GITHUB_OUTPUT"
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "version=${IMAGE}:${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "app_version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "app_version=${GITHUB_REF_NAME}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: docker/build-push-action@v6
@@ -44,6 +47,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           provenance: false
+          build-args: |
+            VERSION=${{ steps.tags.outputs.app_version }}
           tags: |
             ${{ steps.tags.outputs.sha }}
             ${{ steps.tags.outputs.latest }}

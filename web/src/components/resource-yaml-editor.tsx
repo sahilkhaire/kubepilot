@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CopyIcon, RotateCcwIcon } from 'lucide-react'
+import { CopyIcon, EyeIcon, EyeOffIcon, RotateCcwIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { deleteK8sResource, readAPIError } from '@/api'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import DeleteConfirm from '@/components/DeleteConfirm'
 import { ErrorAlert } from '@/components/error-alert'
+import { IconActionButton } from '@/components/icon-action-button'
 import { PageLoading } from '@/components/page-loading'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { SecretDataView } from '@/components/secret-data-view'
 import { gvkForModule, isClusterScopedModule } from '@/lib/k8s-yaml'
 
 export default function ResourceYAMLEditor({
@@ -18,6 +20,7 @@ export default function ResourceYAMLEditor({
   clusterScoped,
   canEdit = true,
   canDelete = false,
+  canReveal = false,
   hint,
   onDeleted,
 }: {
@@ -27,18 +30,27 @@ export default function ResourceYAMLEditor({
   clusterScoped?: boolean
   canEdit?: boolean
   canDelete?: boolean
+  /** Secrets only: the user may load the stored values. */
+  canReveal?: boolean
   hint?: string
   onDeleted?: () => void
 }) {
   const scoped = clusterScoped ?? isClusterScopedModule(module)
-  const allowEdit = Boolean(canEdit) && module !== 'pods'
+  const isSecret = module === 'secrets'
+  const [revealed, setRevealed] = useState(false)
+  // Secret YAML without values must never be applied: it could remove the stored data.
+  const allowEdit = Boolean(canEdit) && module !== 'pods' && (!isSecret || revealed)
   const readOnlyHint =
     hint ??
     (module === 'pods'
       ? 'Pod YAML is read-only. Use Edit env to change environment variables.'
-      : !allowEdit
-        ? 'Read-only. You do not have permission to edit this resource.'
-        : undefined)
+      : isSecret && !revealed
+        ? canReveal
+          ? 'Values are hidden. Reveal them to view or edit this secret.'
+          : 'Values are hidden. You do not have permission to reveal them.'
+        : !allowEdit
+          ? 'Read-only. You do not have permission to edit this resource.'
+          : undefined)
   const [yaml, setYaml] = useState('')
   const [original, setOriginal] = useState('')
   const [loading, setLoading] = useState(true)
@@ -66,6 +78,7 @@ export default function ResourceYAMLEditor({
       try {
         const params = new URLSearchParams({ gvk, name })
         if (!scoped && namespace) params.set('namespace', namespace)
+        if (isSecret && revealed) params.set('reveal', '1')
         const res = await fetch(`/api/k8s/yaml?${params}`, { credentials: 'same-origin' })
         if (!res.ok) throw new Error(await readAPIError(res, 'Failed to load YAML'))
         const text = await res.text()
@@ -78,7 +91,7 @@ export default function ResourceYAMLEditor({
         if (!signal?.cancelled) setLoading(false)
       }
     },
-    [module, name, namespace, scoped],
+    [module, name, namespace, scoped, isSecret, revealed],
   )
 
   useEffect(() => {
@@ -154,22 +167,35 @@ export default function ResourceYAMLEditor({
             Unsaved changes
           </Badge>
         ) : null}
-        <div className="ml-auto flex items-center gap-1.5">
-          <Button type="button" size="sm" variant="ghost" onClick={() => void copyYAML()} disabled={!yaml}>
-            <CopyIcon />
-            Copy
-          </Button>
-          {allowEdit ? (
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+          {isSecret && canReveal ? (
             <Button
               type="button"
               size="sm"
-              variant="ghost"
+              variant={revealed ? 'secondary' : 'outline'}
+              disabled={applying || deleting || (revealed && dirty)}
+              title={revealed && dirty ? 'Apply or revert your changes first' : undefined}
+              onClick={() => {
+                setLoading(true)
+                setRevealed((v) => !v)
+              }}
+            >
+              {revealed ? <EyeOffIcon /> : <EyeIcon />}
+              {revealed ? 'Hide values' : 'Reveal values'}
+            </Button>
+          ) : null}
+          <IconActionButton tooltip="Copy YAML" size="icon-sm" onClick={() => void copyYAML()} disabled={!yaml}>
+            <CopyIcon />
+          </IconActionButton>
+          {allowEdit ? (
+            <IconActionButton
+              tooltip={dirty ? 'Revert changes' : 'Reload from cluster'}
+              size="icon-sm"
               onClick={() => (dirty ? setYaml(original) : void load())}
               disabled={applying || deleting}
             >
               <RotateCcwIcon />
-              {dirty ? 'Revert' : 'Reload'}
-            </Button>
+            </IconActionButton>
           ) : null}
           {canDelete ? (
             <Button
@@ -196,6 +222,7 @@ export default function ResourceYAMLEditor({
         </div>
       </div>
       <ErrorAlert message={error} className="mx-0 mt-0" />
+      {isSecret && revealed ? <SecretDataView yaml={yaml} /> : null}
       <Textarea
         value={yaml}
         onChange={(e) => setYaml(e.target.value)}

@@ -35,6 +35,22 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for ingress, TLS, Cloudflare Access
 
 ## Development
 
+### Run locally without a cluster
+
+```bash
+make dev-fake
+```
+
+Starts the real API on http://localhost:8080 with an in-memory store and a fake Kubernetes API seeded with sample workloads. Sign in as `owner` / `owner-pass-123`. Nothing touches a real cluster, and data resets on restart. The shell (exec) is not available in this mode.
+
+For live UI reload, keep `make dev-fake` running and start Vite in a second terminal (it proxies `/api` to port 8080):
+
+```bash
+cd web && npm run dev   # http://localhost:5173
+```
+
+### Tests
+
 ```bash
 go test -race ./...
 cd web && npm run build

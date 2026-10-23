@@ -14,7 +14,6 @@ import { ErrorAlert } from '@/components/error-alert'
 import { PageLoading } from '@/components/page-loading'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -180,19 +179,19 @@ export default function SettingsAudit() {
   if (loading && logs.length === 0) return <PageLoading compact />
 
   return (
-    <div className="space-y-6">
-      <ErrorAlert message={error} />
+    <div className="space-y-4">
+      <ErrorAlert message={error} className="mx-0 mt-0" />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="destructive" onClick={() => setConfirm('selected')} disabled={selected.size === 0}>
+          <Button type="button" size="sm" variant="destructive" onClick={() => setConfirm('selected')} disabled={selected.size === 0}>
             Delete selected ({selected.size})
           </Button>
-          <Button type="button" variant="outline" onClick={() => setConfirm('filter')}>
+          <Button type="button" size="sm" variant="outline" onClick={() => setConfirm('filter')}>
             Delete matching filter
           </Button>
         </div>
-        <Button type="button" variant="outline" onClick={() => setFiltersOpen(true)}>
+        <Button type="button" size="sm" variant="outline" onClick={() => setFiltersOpen(true)}>
           <ListFilterIcon />
           Filter
           {activeFilterCount > 0 ? (
@@ -203,8 +202,7 @@ export default function SettingsAudit() {
         </Button>
       </div>
 
-      <Card className="shadow-sm">
-        <CardContent className="p-0">
+      <div className="overflow-hidden rounded-xl border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -246,8 +244,7 @@ export default function SettingsAudit() {
             </TableBody>
           </Table>
           {logs.length === 0 ? <EmptyState>No audit entries.</EmptyState> : null}
-        </CardContent>
-      </Card>
+      </div>
 
       <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md">
@@ -256,52 +253,55 @@ export default function SettingsAudit() {
             <SheetDescription>Narrow the audit log by time, user, or resource.</SheetDescription>
           </SheetHeader>
           <form onSubmit={onFilterSubmit} className="flex min-h-0 flex-1 flex-col">
-            <div className="grid gap-4 overflow-auto px-4">
+            <div className="grid flex-1 content-start gap-4 overflow-auto px-5 py-5">
               <div className="grid gap-2">
-                <Label htmlFor="from">From</Label>
+                <Label className="text-xs text-muted-foreground" htmlFor="from">From</Label>
                 <Input id="from" type="datetime-local" value={fromLocal} onChange={(e) => setFromLocal(e.target.value)} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="to">To</Label>
+                <Label className="text-xs text-muted-foreground" htmlFor="to">To</Label>
                 <Input id="to" type="datetime-local" value={toLocal} onChange={(e) => setToLocal(e.target.value)} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="username">Username</Label>
+                <Label className="text-xs text-muted-foreground" htmlFor="username">Username</Label>
                 <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="module">Module</Label>
+                <Label className="text-xs text-muted-foreground" htmlFor="module">Module</Label>
                 <Input id="module" value={module} onChange={(e) => setModule(e.target.value)} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="action">Action</Label>
+                <Label className="text-xs text-muted-foreground" htmlFor="action">Action</Label>
                 <Input id="action" value={action} onChange={(e) => setAction(e.target.value)} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="result">Result</Label>
+                <Label className="text-xs text-muted-foreground" htmlFor="result">Result</Label>
                 <Input id="result" value={result} onChange={(e) => setResult(e.target.value)} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="namespace">Namespace</Label>
+                <Label className="text-xs text-muted-foreground" htmlFor="namespace">Namespace</Label>
                 <Input id="namespace" value={namespace} onChange={(e) => setNamespace(e.target.value)} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="kind">Kind</Label>
+                <Label className="text-xs text-muted-foreground" htmlFor="kind">Kind</Label>
                 <Input id="kind" value={kind} onChange={(e) => setKind(e.target.value)} />
               </div>
             </div>
-            <SheetFooter className="flex-row justify-end">
-              <Button type="button" variant="outline" onClick={onClearFilters}>
+            <SheetFooter>
+              <Button type="button" variant="ghost" className="mr-auto" onClick={onClearFilters}>
                 Clear
               </Button>
-              <Button type="submit">Apply</Button>
+              <Button type="button" variant="outline" onClick={() => setFiltersOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Apply filters</Button>
             </SheetFooter>
           </form>
         </SheetContent>
       </Sheet>
       <ConfirmDialog
         open={confirm != null}
-        title={confirm === 'selected' ? 'Delete selected entries' : 'Delete matching entries'}
+        title={confirm === 'selected' ? 'Delete selected entries?' : 'Delete matching entries?'}
         description={
           confirm === 'selected'
             ? `Delete ${selected.size} audit entries?`

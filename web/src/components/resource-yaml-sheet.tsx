@@ -1,3 +1,4 @@
+import { FileCodeIcon } from 'lucide-react'
 import ResourceYAMLEditor from '@/components/resource-yaml-editor'
 import {
   Sheet,
@@ -13,12 +14,14 @@ export default function ResourceYAMLSheet({
   target,
   canEdit,
   canDelete,
+  canReveal,
   onOpenChange,
   onDeleted,
 }: {
   target: YAMLTarget | null
   canEdit?: boolean
   canDelete?: boolean
+  canReveal?: boolean
   onOpenChange: (open: boolean) => void
   onDeleted?: () => void
 }) {
@@ -28,22 +31,32 @@ export default function ResourceYAMLSheet({
     <Sheet open={target != null} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="flex h-full min-h-0 w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
+        className="flex min-h-0 w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
         showCloseButton
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
         {target ? (
           <div className="flex h-full min-h-0 flex-col">
-            <SheetHeader className="border-b">
-              <SheetTitle className="truncate pr-6 text-sm" title={target.name}>
-                {target.name}
-              </SheetTitle>
-              <SheetDescription className="text-xs">
-                {gvkForModule[target.module]?.split('/').pop() ?? target.module}
-                {scoped ? ' · cluster-scoped' : ` · ${target.namespace ?? '—'}`}
-              </SheetDescription>
+            <SheetHeader className="flex-row items-center gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                <FileCodeIcon className="size-[18px]" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                  {gvkForModule[target.module]?.split('/').pop() ?? target.module}
+                </p>
+                <SheetTitle className="truncate" title={target.name}>
+                  {target.name}
+                </SheetTitle>
+                <SheetDescription className="text-xs">
+                  {scoped ? 'Cluster-scoped' : `Namespace ${target.namespace ?? '—'}`}
+                </SheetDescription>
+              </div>
             </SheetHeader>
-            <div className="flex min-h-0 flex-1 flex-col p-3">
+            <div className="flex min-h-0 flex-1 flex-col p-4">
               <ResourceYAMLEditor
+                key={`${target.module}/${target.namespace ?? ''}/${target.name}`}
+                canReveal={canReveal}
                 module={target.module}
                 name={target.name}
                 namespace={target.namespace}

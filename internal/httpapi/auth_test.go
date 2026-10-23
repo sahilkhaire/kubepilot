@@ -337,3 +337,14 @@ func TestPasswordChangeMember(t *testing.T) {
 		t.Fatalf("login with new password code=%d body=%s", loginRec.Code, loginRec.Body.String())
 	}
 }
+
+func TestVersionRequiresSession(t *testing.T) {
+	t.Parallel()
+	st := store.NewMemory()
+	h := httpapi.New(httpapi.Deps{Auth: auth.New(st, "secret"), Store: st})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/version", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d want 401", rec.Code)
+	}
+}

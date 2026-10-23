@@ -1,3 +1,4 @@
+import { KeyRoundIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { changePassword } from '@/api'
@@ -57,7 +58,7 @@ export function ChangePasswordDialog({
   return (
     <Dialog open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
       <DialogContent>
-        <DialogHeader>
+        <DialogHeader icon={KeyRoundIcon}>
           <DialogTitle>Change password</DialogTitle>
           <DialogDescription>Choose a new password for your account.</DialogDescription>
         </DialogHeader>

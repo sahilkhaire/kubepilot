@@ -129,9 +129,9 @@ func handleListCustomResources(w http.ResponseWriter, r *http.Request, deps Deps
 			return
 		}
 
-		out := make([]any, 0)
+		allowed := make(map[string]bool, len(searchNS))
 		for _, namespace := range searchNS {
-			if !rbac.Allow(rbac.Request{
+			if rbac.Allow(rbac.Request{
 				User:          *u,
 				InstallNS:     deps.InstallNS,
 				PermissionSet: ps,
@@ -139,16 +139,21 @@ func handleListCustomResources(w http.ResponseWriter, r *http.Request, deps Deps
 				Action:        "view",
 				Namespace:     namespace,
 			}) {
-				continue
+				allowed[namespace] = true
 			}
-			items, err := deps.Kube.ListCustomResources(r.Context(), group, version, resource, namespace, true)
-			if err != nil {
-				log.Printf("kube list custom resources: group=%s resource=%s ns=%s err=%v", group, resource, namespace, err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			for _, item := range items {
-				out = append(out, item)
+		}
+		// One cluster-wide list, filtered to the namespaces this user may view.
+		items, err := deps.Kube.ListCustomResources(r.Context(), group, version, resource, "", false)
+		if err != nil {
+			log.Printf("kube list custom resources: group=%s resource=%s all namespaces err=%v", group, resource, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		// Plain maps: an Unstructured stored in an interface value would encode as {"Object": ...}.
+		out := make([]map[string]any, 0, len(items))
+		for _, item := range items {
+			if allowed[item.GetNamespace()] {
+				out = append(out, item.Object)
 			}
 		}
 		writeJSON(w, http.StatusOK, out)

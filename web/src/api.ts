@@ -504,3 +504,9 @@ export async function getJSON<T>(path: string, fallback: string): Promise<T> {
   }
   return res.json() as Promise<T>
 }
+
+/** Build version of the running server, e.g. "v0.2.0" ("dev" for local builds). */
+export async function getVersion(): Promise<string> {
+  const data = await getJSON<{ version?: string }>('/api/version', 'Failed to load version')
+  return data.version || 'unknown'
+}

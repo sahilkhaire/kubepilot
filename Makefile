@@ -1,4 +1,4 @@
-.PHONY: test no-bake chart-check
+.PHONY: test no-bake chart-check dev-fake web-build
 
 test:
 	go test ./...
@@ -26,3 +26,11 @@ chart-check:
 	  --set mongodbUri=mongodb://mongo:27017/kubepilot \
 	  --set sessionSecret=testsecret --set ownerPassword=testpass \
 	  | grep -q 'kind: PodDisruptionBudget'
+
+web-build:
+	cd web && npm ci && npm run build
+
+# Local UI development without a cluster or MongoDB (fake Kubernetes, in-memory store).
+# Open http://localhost:8080 and sign in as owner / owner-pass-123.
+dev-fake: web-build
+	go run ./cmd/devfake

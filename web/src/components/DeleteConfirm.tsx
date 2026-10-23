@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Trash2Icon } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -6,6 +7,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
+  AlertDialogMedia,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
@@ -38,7 +40,13 @@ export default function DeleteConfirm({
 
   return (
     <AlertDialog open={open} onOpenChange={(next) => !next && !pending && onCancel()}>
-      <AlertDialogContent>
+      <AlertDialogContent
+        onOpenAutoFocus={(e) => {
+          // Start in the confirmation box rather than on Cancel.
+          e.preventDefault()
+          document.getElementById('confirm-name')?.focus()
+        }}
+      >
         <form
           className="grid gap-4"
           onSubmit={(e) => {
@@ -47,6 +55,9 @@ export default function DeleteConfirm({
           }}
         >
           <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive ring-1 ring-destructive/20">
+              <Trash2Icon />
+            </AlertDialogMedia>
             <AlertDialogTitle className="break-all">
               Delete {resourceLabel} {resourceName}?
             </AlertDialogTitle>
@@ -67,7 +78,6 @@ export default function DeleteConfirm({
               disabled={pending}
               autoComplete="off"
               spellCheck={false}
-              autoFocus
               className="font-mono"
             />
           </div>

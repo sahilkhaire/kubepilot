@@ -199,3 +199,16 @@ func StripSecretYAML(doc []byte) ([]byte, error) {
 	delete(obj, "stringData")
 	return yaml.Marshal(obj)
 }
+
+// SecretYAMLHasData reports whether a Secret manifest includes data or stringData.
+// Applying a Secret without them (for example, YAML that was shown with values hidden)
+// can remove the stored values, so callers reject it.
+func SecretYAMLHasData(doc []byte) bool {
+	var obj map[string]interface{}
+	if err := yaml.Unmarshal(doc, &obj); err != nil {
+		return true // let the apply path report the parse error
+	}
+	_, hasData := obj["data"]
+	_, hasStringData := obj["stringData"]
+	return hasData || hasStringData
+}

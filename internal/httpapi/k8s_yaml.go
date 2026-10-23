@@ -192,6 +192,11 @@ func handleApplyYAML(w http.ResponseWriter, r *http.Request, deps Deps) {
 		return
 	}
 
+	if module == "secrets" && !kube.SecretYAMLHasData(doc) {
+		writeError(w, http.StatusBadRequest, "secret values are hidden in this YAML; reveal them before applying so the stored data is not removed")
+		return
+	}
+
 	if err := deps.Kube.ApplyYAML(r.Context(), doc, nsOverride); err != nil {
 		writeKubeClientError(w, err, "kube apply yaml "+module+" ns="+ns)
 		return

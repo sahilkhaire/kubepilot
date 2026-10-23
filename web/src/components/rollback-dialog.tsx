@@ -1,3 +1,4 @@
+import { HistoryIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { getJSON, rollbackDeployment } from '@/api'
@@ -105,7 +106,7 @@ export function RollbackDialog({
   return (
     <Dialog open={deployment != null} onOpenChange={(open) => !open && !pending && onClose()}>
       <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+        <DialogHeader icon={HistoryIcon}>
           <DialogTitle className="break-all">Roll back {deployment?.name}</DialogTitle>
           <DialogDescription>
             Pick a previous revision. Its pod template replaces the current one

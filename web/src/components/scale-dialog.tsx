@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { MinusIcon, PlusIcon } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { MinusIcon, PlusIcon, ScalingIcon } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -39,6 +39,7 @@ export function ScaleDialog({
   onCancel: () => void
 }) {
   const [replicas, setReplicas] = useState(() => clampReplicas(current))
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (open) setReplicas(clampReplicas(current))
@@ -48,7 +49,14 @@ export function ScaleDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !pending && onCancel()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className="sm:max-w-md"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault()
+          inputRef.current?.focus()
+          inputRef.current?.select()
+        }}
+      >
         <form
           className="grid gap-4"
           onSubmit={(e) => {
@@ -56,7 +64,7 @@ export function ScaleDialog({
             if (!pending && !unchanged) void onConfirm(replicas)
           }}
         >
-          <DialogHeader>
+          <DialogHeader icon={ScalingIcon}>
             <DialogTitle className="break-all">Scale {name}</DialogTitle>
             <DialogDescription>
               Set the desired number of replicas{kindLabel ? ` for this ${kindLabel}` : ''}. Currently {current}.
@@ -78,6 +86,7 @@ export function ScaleDialog({
                   <MinusIcon />
                 </Button>
                 <Input
+                  ref={inputRef}
                   id="replicas"
                   type="number"
                   inputMode="numeric"
@@ -88,7 +97,6 @@ export function ScaleDialog({
                   onFocus={(e) => e.target.select()}
                   disabled={pending}
                   className="h-8 w-16 text-center tabular-nums"
-                  autoFocus
                 />
                 <Button
                   type="button"

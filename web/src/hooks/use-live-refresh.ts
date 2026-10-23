@@ -24,7 +24,7 @@ export function useSingleFlight<Args extends unknown[]>(
   }, [fn])
 }
 
-export function useLiveRefresh(fn: () => void | Promise<void>, enabled = true) {
+export function useLiveRefresh(fn: () => void | Promise<void>, enabled = true, intervalMs = LIVE_REFRESH_MS) {
   const fnRef = useRef(fn)
   fnRef.current = fn
 
@@ -39,7 +39,7 @@ export function useLiveRefresh(fn: () => void | Promise<void>, enabled = true) {
       window.clearTimeout(timer)
       timer = window.setTimeout(() => {
         void run()
-      }, LIVE_REFRESH_MS)
+      }, intervalMs)
     }
 
     async function run() {
@@ -72,5 +72,5 @@ export function useLiveRefresh(fn: () => void | Promise<void>, enabled = true) {
       window.clearTimeout(timer)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [enabled])
+  }, [enabled, intervalMs])
 }

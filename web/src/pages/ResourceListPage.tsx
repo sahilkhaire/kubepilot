@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   EllipsisVerticalIcon,
   FileCodeIcon,
@@ -313,6 +313,8 @@ export default function ResourceListPage({
   const [logPods, setLogPods] = useState<{ name: string; namespace: string; phase: string }[] | null>(null)
   const [pendingAction, setPendingAction] = useState(false)
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectParam = searchParams.get('select')
 
   const clusterScoped = Boolean(kind?.clusterScoped)
   const module = kind?.module ?? ''
@@ -370,7 +372,9 @@ export default function ResourceListPage({
   useEffect(() => {
     void loadItems(false)
   }, [loadItems])
-  useLiveRefresh(() => loadItems(true))
+  // Listing secrets makes the server read every secret's data from the API server
+  // (Helm release secrets are large), so poll them less often.
+  useLiveRefresh(() => loadItems(true), true, module === 'secrets' ? 10_000 : undefined)
 
   const visible = useMemo(() => items.filter((item) => matchesQuery(item, query)), [items, query])
   const { sort, sortKey, sortDir, onSort } = useTableSort(module ? `resource:${module}` : undefined)
@@ -393,6 +397,32 @@ export default function ResourceListPage({
     setPanelView('details')
     setQuery('')
   }, [module])
+
+  // Opened from the command palette with ?select=namespace/name: show that resource once the list has it.
+  const selectNs = selectParam?.split('/')[0] ?? ''
+  const namespaceMismatch = Boolean(selectParam) && !clusterScoped && !isAllNamespaces(namespace) && namespace !== selectNs
+  useEffect(() => {
+    if (namespaceMismatch && namespacesReady) setNamespace(selectNs)
+  }, [namespaceMismatch, namespacesReady, selectNs, setNamespace])
+
+  useEffect(() => {
+    if (!selectParam || !itemsLoaded || namespaceMismatch) return
+    const target = items.find((item) => `${objectNamespace(item)}/${objectName(item)}` === selectParam)
+    if (target) {
+      if (HAS_PANEL.has(module)) {
+        setSelectedKey(selectParam)
+        setPanelView('details')
+      } else {
+        const name = objectName(target)
+        setYamlTarget({ module, name, namespace: objectNamespace(target), clusterScoped: false })
+      }
+    }
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('select')
+      return next
+    }, { replace: true })
+  }, [selectParam, itemsLoaded, items, module, setSearchParams, namespaceMismatch])
 
   if (!kind || !section) {
     return (
@@ -532,7 +562,7 @@ export default function ResourceListPage({
       <div className={split ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden' : 'contents'}>
         <PageHeader
           title={kind.label}
-          description={itemsLoaded ? `${visible.length}${query ? ` of ${items.length}` : ''} item${visible.length === 1 ? '' : 's'}` : undefined}
+          count={itemsLoaded ? (query ? `${visible.length} / ${items.length}` : visible.length) : undefined}
         >
           {!clusterScoped ? (
             <NamespaceSelect namespaces={namespaces} value={namespace} onChange={setNamespace} />
@@ -747,6 +777,7 @@ export default function ResourceListPage({
         target={yamlTarget}
         canEdit={can(user, grantModule, 'yaml_edit')}
         canDelete={can(user, grantModule, 'delete') && module !== 'endpoints'}
+        canReveal={module === 'secrets' && can(user, 'secrets', 'reveal')}
         onOpenChange={(open) => {
           if (!open) setYamlTarget(null)
         }}
@@ -806,7 +837,7 @@ export default function ResourceListPage({
       />
       <Dialog open={logPods != null} onOpenChange={(open) => !open && setLogPods(null)}>
         <DialogContent>
-          <DialogHeader>
+          <DialogHeader icon={ScrollTextIcon}>
             <DialogTitle>Choose a pod</DialogTitle>
             <DialogDescription>This deployment runs {logPods?.length ?? 0} pods. Pick one to stream logs from.</DialogDescription>
           </DialogHeader>

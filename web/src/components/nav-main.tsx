@@ -11,6 +11,7 @@ import {
 import {
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -113,7 +114,7 @@ function NavSection({
           </SidebarMenuButton>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <SidebarMenuSub className="mx-2 gap-0 border-l py-0 pr-0">
+          <SidebarMenuSub className="mx-3.5 gap-px border-l border-sidebar-border py-0.5 pr-0">
             {kinds.map((kind) => {
               const url = kindUrl(section, kind)
               return (
@@ -135,18 +136,29 @@ function NavSection({
 
 export function NavMain({ user }: { user: User }) {
   const isOwner = user.role === 'owner'
-  const sections = (isOwner ? [...catalog, settingsSection] : catalog).filter((section) =>
-    sectionVisible(section, isOwner, user.grants),
-  )
+  const sections = catalog.filter((section) => sectionVisible(section, isOwner, user.grants))
   return (
-    <SidebarGroup className="py-1">
-      <SidebarGroupContent>
-        <SidebarMenu className="gap-0.5">
-          {sections.map((section) => (
-            <NavSection key={section.id} section={section} isOwner={isOwner} grants={user.grants} />
-          ))}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
+    <>
+      <SidebarGroup className="py-1">
+        <SidebarGroupLabel className="text-[11px] text-muted-foreground/80">Cluster</SidebarGroupLabel>
+        <SidebarGroupContent>
+          <SidebarMenu className="gap-px">
+            {sections.map((section) => (
+              <NavSection key={section.id} section={section} isOwner={isOwner} grants={user.grants} />
+            ))}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+      {isOwner ? (
+        <SidebarGroup className="py-1">
+          <SidebarGroupLabel className="text-[11px] text-muted-foreground/80">Admin</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu className="gap-px">
+              <NavSection section={settingsSection} isOwner={isOwner} grants={user.grants} />
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      ) : null}
+    </>
   )
 }

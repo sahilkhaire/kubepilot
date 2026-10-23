@@ -119,7 +119,7 @@ export default function Events() {
 
   return (
     <PageBody>
-      <PageHeader title="Events" description={`${visible.length} item${visible.length === 1 ? '' : 's'}`}>
+      <PageHeader title="Events" count={visible.length}>
         <Toggle
           size="sm"
           variant="outline"

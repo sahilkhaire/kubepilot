@@ -24,14 +24,19 @@ function readStoredTheme(): Theme {
   } catch {
     // ignore
   }
-  return 'system'
+  return 'dark'
 }
 
 export function applyTheme(theme: Theme): ResolvedTheme {
   const resolved = theme === 'system' ? getSystemTheme() : theme
   const root = document.documentElement
-  root.classList.toggle('dark', resolved === 'dark')
+  if (root.classList.contains('dark') !== (resolved === 'dark')) {
+    root.classList.add('theme-switching')
+    root.classList.toggle('dark', resolved === 'dark')
+    requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('theme-switching')))
+  }
   root.style.colorScheme = resolved
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolved === 'dark' ? '#1c1c21' : '#f5f5f7')
   return resolved
 }
 
