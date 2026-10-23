@@ -32,13 +32,23 @@ export function NavUser({
 }: {
   user: {
     name: string
+    username: string
     role: string
   }
   onLogout: () => void
 }) {
   const { isMobile } = useSidebar()
   const { theme, setTheme } = useTheme()
-  const initials = user.name.slice(0, 2).toUpperCase()
+  const initials =
+    user.name
+      .split(/[\s._-]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join('')
+      .toUpperCase() || user.name.slice(0, 2).toUpperCase()
+  const role = user.role.charAt(0).toUpperCase() + user.role.slice(1)
+  const subtitle = user.name.toLowerCase() !== user.username.toLowerCase() ? `${user.username} · ${role}` : role
   const [passwordOpen, setPasswordOpen] = useState(false)
 
   return (
@@ -55,7 +65,7 @@ export function NavUser({
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
-                <span className="truncate text-xs text-muted-foreground">{user.role}</span>
+                <span className="truncate text-xs text-muted-foreground">{subtitle}</span>
               </div>
               <EllipsisVerticalIcon className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -73,7 +83,7 @@ export function NavUser({
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
-                  <span className="truncate text-xs text-muted-foreground">{user.role}</span>
+                  <span className="truncate text-xs text-muted-foreground">{subtitle}</span>
                 </div>
               </div>
             </DropdownMenuLabel>
@@ -102,12 +112,12 @@ export function NavUser({
             </DropdownMenuSub>
             <DropdownMenuSeparator />
             {user.role === 'member' ? (
-              <DropdownMenuItem onClick={() => setPasswordOpen(true)}>
+              <DropdownMenuItem onSelect={() => setPasswordOpen(true)}>
                 <KeyRoundIcon />
                 Change password
               </DropdownMenuItem>
             ) : null}
-            <DropdownMenuItem onClick={onLogout}>
+            <DropdownMenuItem onSelect={onLogout}>
               <LogOutIcon />
               Log out
             </DropdownMenuItem>

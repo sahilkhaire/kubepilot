@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { EllipsisVerticalIcon, KeyRoundIcon, PauseCircleIcon, PlayCircleIcon, PlusIcon, Trash2Icon, UserPenIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   createMember,
@@ -16,7 +17,7 @@ import EmptyState from '@/components/EmptyState'
 import { ErrorAlert } from '@/components/error-alert'
 import { PageLoading } from '@/components/page-loading'
 import { SetPasswordDialog } from '@/components/set-password-dialog'
-import { Badge } from '@/components/ui/badge'
+import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -27,6 +28,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -70,6 +78,12 @@ export default function SettingsMembers() {
   const [resetTarget, setResetTarget] = useState<Member | null>(null)
   const [resetPending, setResetPending] = useState(false)
   const [resetError, setResetError] = useState('')
+  const [editTarget, setEditTarget] = useState<Member | null>(null)
+  const [editDisplayName, setEditDisplayName] = useState('')
+  const [editSetId, setEditSetId] = useState('')
+  const [editPending, setEditPending] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [deletePending, setDeletePending] = useState(false)
 
   async function load() {
     setError('')
@@ -80,8 +94,8 @@ export default function SettingsMembers() {
       if (!inviteSetId && s.length > 0) {
         setInviteSetId(s[0].id)
       }
-    } catch {
-      setError('Failed to load members')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load members')
     } finally {
       setLoading(false)
     }
@@ -139,11 +153,11 @@ export default function SettingsMembers() {
         permissionSetId: inviteSetId,
         password: invitePassword,
       })
-      toast.success(`Invited ${inviteUsername}. They can sign in with the password you set.`)
+      toast.success(`Added ${inviteUsername}. They can sign in with the password you set.`)
       setInviteOpen(false)
       await load()
-    } catch {
-      setInviteError('Failed to invite member')
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : 'Failed to add member')
     } finally {
       setInvitePending(false)
     }
@@ -157,8 +171,8 @@ export default function SettingsMembers() {
       await resetMemberPassword(resetTarget.id, password)
       toast.success(`Password updated for ${resetTarget.username}`)
       setResetTarget(null)
-    } catch {
-      setResetError('Failed to reset password')
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : 'Failed to reset password')
     } finally {
       setResetPending(false)
     }
@@ -174,8 +188,8 @@ export default function SettingsMembers() {
       toast.success(resume ? `Resumed access for ${accessTarget.username}` : `Suspended ${accessTarget.username}`)
       setAccessTarget(null)
       await load()
-    } catch {
-      setError(resume ? 'Failed to resume member' : 'Failed to suspend member')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : resume ? 'Failed to resume member' : 'Failed to suspend member')
     } finally {
       setAccessPending(false)
     }
@@ -183,13 +197,41 @@ export default function SettingsMembers() {
 
   async function onDelete() {
     if (!memberToDelete) return
-    setError('')
+    const target = memberToDelete
+    setDeletePending(true)
     try {
-      await deleteMember(memberToDelete.id)
+      await deleteMember(target.id)
+      toast.success(`Deleted ${target.username}`)
       setMemberToDelete(null)
       await load()
-    } catch {
-      setError('Failed to delete member')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete member')
+    } finally {
+      setDeletePending(false)
+    }
+  }
+
+  function openEdit(m: Member) {
+    setEditTarget(m)
+    setEditDisplayName(m.displayName)
+    setEditSetId(m.permissionSetId)
+    setEditError('')
+  }
+
+  async function onEditSave(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editTarget) return
+    setEditPending(true)
+    setEditError('')
+    try {
+      await updateMember(editTarget.id, { displayName: editDisplayName.trim(), permissionSetId: editSetId })
+      toast.success(`Updated ${editTarget.username}`)
+      setEditTarget(null)
+      await load()
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Failed to update member')
+    } finally {
+      setEditPending(false)
     }
   }
 
@@ -201,6 +243,7 @@ export default function SettingsMembers() {
 
       <div className="flex justify-end">
         <Button type="button" onClick={openInvite} disabled={sets.length === 0}>
+          <PlusIcon />
           Add member
         </Button>
       </div>
@@ -210,6 +253,7 @@ export default function SettingsMembers() {
           <CardTitle className="text-base">Members</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -219,7 +263,9 @@ export default function SettingsMembers() {
                 <SortableHead column="permissionSet" label="Permission set" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <SortableHead column="namespaces" label="Namespaces" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <SortableHead column="status" label="Status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="w-8">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -233,40 +279,59 @@ export default function SettingsMembers() {
                     {namespaceGrantLabel(sets.find((s) => s.id === m.permissionSetId) ?? {})}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={m.enabled ? 'outline' : 'destructive'}>{m.enabled ? 'Active' : 'Suspended'}</Badge>
+                    <StatusBadge value={m.enabled ? (m.mustChangePassword ? 'Pending' : 'Active') : 'Suspended'} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setResetError('')
-                          setResetTarget(m)
-                        }}
-                      >
-                        Reset password
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={m.enabled ? 'ghost' : 'outline'}
-                        size="sm"
-                        disabled={accessPending && accessTarget?.id === m.id}
-                        onClick={() => setAccessTarget(m)}
-                      >
-                        {m.enabled ? 'Suspend' : 'Resume'}
-                      </Button>
-                      <Button type="button" variant="destructive" size="sm" onClick={() => setMemberToDelete(m)}>
-                        Delete
-                      </Button>
-                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label={`Actions for ${m.username}`}
+                          disabled={accessPending && accessTarget?.id === m.id}
+                        >
+                          <EllipsisVerticalIcon />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-44">
+                        <DropdownMenuItem onSelect={() => openEdit(m)}>
+                          <UserPenIcon />
+                          Edit…
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setResetError('')
+                            setResetTarget(m)
+                          }}
+                        >
+                          <KeyRoundIcon />
+                          Reset password…
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setAccessTarget(m)}>
+                          {m.enabled ? <PauseCircleIcon /> : <PlayCircleIcon />}
+                          {m.enabled ? 'Suspend…' : 'Resume…'}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem variant="destructive" onSelect={() => setMemberToDelete(m)}>
+                          <Trash2Icon />
+                          Delete…
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-          {members.length === 0 ? <EmptyState>No members yet.</EmptyState> : null}
+          </div>
+          {members.length === 0 ? (
+            <EmptyState>
+              {sets.length === 0
+                ? 'Create a permission set first, then add members.'
+                : 'No members yet. Add one to give a teammate access.'}
+            </EmptyState>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -367,6 +432,55 @@ export default function SettingsMembers() {
           </form>
         </DialogContent>
       </Dialog>
+      <Dialog open={editTarget != null} onOpenChange={(open) => !open && !editPending && setEditTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={onEditSave} className="grid gap-4">
+            <DialogHeader>
+              <DialogTitle>Edit {editTarget?.username}</DialogTitle>
+              <DialogDescription>Permission changes apply on their next request.</DialogDescription>
+            </DialogHeader>
+            <ErrorAlert message={editError} className="mx-0 mt-0" onDismiss={() => setEditError('')} />
+            <div className="grid gap-2">
+              <Label htmlFor="edit-display">Display name</Label>
+              <Input
+                id="edit-display"
+                value={editDisplayName}
+                onChange={(e) => setEditDisplayName(e.target.value)}
+                required
+                disabled={editPending}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-set">Permission set</Label>
+              <Select value={editSetId} onValueChange={setEditSetId} disabled={editPending}>
+                <SelectTrigger id="edit-set" className="w-full">
+                  <SelectValue placeholder="Select a set" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sets.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {editSetId ? (
+                <p className="text-xs text-muted-foreground">
+                  Namespaces: {namespaceGrantLabel(sets.find((s) => s.id === editSetId) ?? {})}
+                </p>
+              ) : null}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled={editPending} onClick={() => setEditTarget(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={editPending || !editDisplayName.trim() || !editSetId}>
+                {editPending ? 'Saving…' : 'Save'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
       <SetPasswordDialog
         open={resetTarget != null}
         title={`Set password for ${resetTarget?.username ?? ''}`}
@@ -393,12 +507,18 @@ export default function SettingsMembers() {
       />
       <ConfirmDialog
         open={memberToDelete != null}
-        title="Delete member"
-        description={memberToDelete ? `Delete member "${memberToDelete.username}"? This cannot be undone.` : ''}
+        title={`Delete ${memberToDelete?.username ?? 'member'}?`}
+        description={
+          memberToDelete
+            ? `${memberToDelete.username} is signed out and loses access immediately. This cannot be undone.`
+            : ''
+        }
         confirmLabel="Delete"
+        pendingLabel="Deleting…"
         destructive
+        pending={deletePending}
         onConfirm={onDelete}
-        onCancel={() => setMemberToDelete(null)}
+        onCancel={() => !deletePending && setMemberToDelete(null)}
       />
     </div>
   )

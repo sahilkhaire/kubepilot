@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -147,6 +148,9 @@ func (c *Client) RollbackDeployment(ctx context.Context, ns, name string, revisi
 	var target *appsv1.ReplicaSet
 	for i := range rsList.Items {
 		rs := &rsList.Items[i]
+		if owner := metav1.GetControllerOf(rs); owner != nil && (owner.Kind != "Deployment" || owner.Name != dep.Name) {
+			continue
+		}
 		revStr := rs.Annotations["deployment.kubernetes.io/revision"]
 		if revStr == "" {
 			continue
@@ -164,7 +168,10 @@ func (c *Client) RollbackDeployment(ctx context.Context, ns, name string, revisi
 		return apierrors.NewNotFound(appsv1.Resource("replicaset"), fmt.Sprintf("revision %d for deployment %s", revision, name))
 	}
 
-	dep.Spec.Template = target.Spec.Template
+	template := *target.Spec.Template.DeepCopy()
+	// The ReplicaSet controller adds this label; the deployment template must not carry it.
+	delete(template.Labels, appsv1.DefaultDeploymentUniqueLabelKey)
+	dep.Spec.Template = template
 	_, err = c.Inner.AppsV1().Deployments(ns).Update(ctx, dep, metav1.UpdateOptions{})
 	return err
 }
@@ -174,13 +181,20 @@ func (c *Client) TriggerCronJob(ctx context.Context, ns, name string) (string, e
 	if err != nil {
 		return "", err
 	}
-	jobName := name + "-manual-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	jobName := manualJobName(name, time.Now())
+	annotations := map[string]string{"cronjob.kubernetes.io/instantiate": "manual"}
+	for k, v := range cj.Spec.JobTemplate.ObjectMeta.Annotations {
+		annotations[k] = v
+	}
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        jobName,
 			Namespace:   ns,
 			Labels:      cj.Spec.JobTemplate.ObjectMeta.Labels,
-			Annotations: cj.Spec.JobTemplate.ObjectMeta.Annotations,
+			Annotations: annotations,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(cj, batchv1.SchemeGroupVersion.WithKind("CronJob")),
+			},
 		},
 		Spec: cj.Spec.JobTemplate.Spec,
 	}
@@ -189,6 +203,16 @@ func (c *Client) TriggerCronJob(ctx context.Context, ns, name string) (string, e
 		return "", err
 	}
 	return created.Name, nil
+}
+
+// manualJobName builds a job name that stays within the 63-character label limit.
+func manualJobName(cronJob string, now time.Time) string {
+	suffix := "-manual-" + strconv.FormatInt(now.UnixMilli(), 36)
+	const maxLen = 63
+	if len(cronJob)+len(suffix) > maxLen {
+		cronJob = strings.TrimRight(cronJob[:maxLen-len(suffix)], "-.")
+	}
+	return cronJob + suffix
 }
 
 // DeleteResource deletes a catalog resource by module path segment.

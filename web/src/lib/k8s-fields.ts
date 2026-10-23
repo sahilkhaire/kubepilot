@@ -6,7 +6,7 @@ export type K8sObject = {
     deletionTimestamp?: string
     labels?: Record<string, string>
     annotations?: Record<string, string>
-    ownerReferences?: { kind?: string; name?: string }[]
+    ownerReferences?: { kind?: string; name?: string; controller?: boolean }[]
   }
   spec?: Record<string, unknown>
   status?: Record<string, unknown>

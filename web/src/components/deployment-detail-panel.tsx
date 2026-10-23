@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  ChevronDownIcon,
   FileCodeIcon,
+  HistoryIcon,
   PencilIcon,
   RefreshCwIcon,
   RotateCcwIcon,
@@ -14,12 +14,19 @@ import {
 import type { User } from '@/api'
 import ResourceYAMLEditor from '@/components/resource-yaml-editor'
 import WorkloadEnvEditor from '@/components/workload-env-editor'
+import {
+  ConditionBadges,
+  DetailPanel,
+  DetailSection,
+  EventList,
+  MetaList,
+  PropRow,
+  type EventItem,
+} from '@/components/detail-parts'
 import { IconActionButton } from '@/components/icon-action-button'
 import { PodContainersCell } from '@/components/pod-containers'
-import { statusTextClass } from '@/components/status-badge'
-import { Badge } from '@/components/ui/badge'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Separator } from '@/components/ui/separator'
+import { StatusBadge } from '@/components/status-badge'
+import { Progress } from '@/components/ui/progress'
 import {
   Table,
   TableBody,
@@ -51,50 +58,6 @@ import {
 } from '@/lib/k8s-fields'
 import { ratioSortValue, sortBy, useTableSort } from '@/lib/table-sort'
 
-type EventItem = {
-  metadata?: { name?: string; namespace?: string; creationTimestamp?: string }
-  reason?: string
-  message?: string
-  type?: string
-  lastTimestamp?: string
-  eventTime?: string
-}
-
-function PropRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-[7.5rem_1fr] gap-2 py-1 text-xs">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 break-all">{children}</dd>
-    </div>
-  )
-}
-
-function MetaList({ title, entries }: { title: string; entries: Record<string, string> }) {
-  const keys = Object.keys(entries)
-  return (
-    <Collapsible>
-      <CollapsibleTrigger className="flex w-full items-center gap-1 py-1 text-xs text-muted-foreground hover:text-foreground">
-        <ChevronDownIcon className="size-3.5" />
-        {title} ({keys.length})
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        {keys.length === 0 ? (
-          <p className="text-xs text-muted-foreground">None</p>
-        ) : (
-          <ul className="space-y-1">
-            {keys.map((key) => (
-              <li key={key} className="break-all font-mono text-[11px]">
-                <span className="text-muted-foreground">{key}: </span>
-                {entries[key]}
-              </li>
-            ))}
-          </ul>
-        )}
-      </CollapsibleContent>
-    </Collapsible>
-  )
-}
-
 export type DeploymentPanelView = 'details' | 'yaml' | 'edit'
 
 export default function DeploymentDetailPanel({
@@ -105,6 +68,7 @@ export default function DeploymentDetailPanel({
   onClose,
   onScale,
   onRestart,
+  onRollback,
   onDelete,
   onLogs,
   onRefreshed,
@@ -116,6 +80,7 @@ export default function DeploymentDetailPanel({
   onClose: () => void
   onScale: () => void
   onRestart: () => void
+  onRollback: () => void
   onDelete: () => void
   onLogs: () => void
   onRefreshed: (next: K8sObject) => void
@@ -134,39 +99,41 @@ export default function DeploymentDetailPanel({
   const deploymentRef = useRef(deployment)
   deploymentRef.current = deployment
 
+  // Clear the previous deployment's pods and events when switching selection.
+  useEffect(() => {
+    setPods([])
+    setEvents([])
+  }, [name, ns])
+
   const loadLive = useSingleFlight(
     useCallback(async () => {
-    if (!ns || !name) return
-    try {
-      let current = deploymentRef.current
-      const res = await fetch(`/api/k8s/namespaces/${encodeURIComponent(ns)}/deployments/${encodeURIComponent(name)}`, {
-        credentials: 'same-origin',
-      })
-      if (res.ok) {
-        const next: K8sObject = await res.json()
-        onRefreshedRef.current(next)
-        current = next
-      }
-      const labels = selectorMatchLabels(current)
-      if (can(user, 'pods', 'view')) {
-        const podsRes = await fetch(`/api/k8s/namespaces/${encodeURIComponent(ns)}/pods`, { credentials: 'same-origin' })
-        if (podsRes.ok) {
+      if (!ns || !name) return
+      const base = `/api/k8s/namespaces/${encodeURIComponent(ns)}`
+      try {
+        let current = deploymentRef.current
+        const res = await fetch(`${base}/deployments/${encodeURIComponent(name)}`, { credentials: 'same-origin' })
+        if (res.ok) {
+          const next: K8sObject = await res.json()
+          onRefreshedRef.current(next)
+          current = next
+        }
+        const labels = selectorMatchLabels(current)
+        const [podsRes, evRes] = await Promise.all([
+          can(user, 'pods', 'view') ? fetch(`${base}/pods`, { credentials: 'same-origin' }) : Promise.resolve(null),
+          fetch(`${base}/deployments/${encodeURIComponent(name)}/events`, { credentials: 'same-origin' }),
+        ])
+        if (podsRes?.ok) {
           const data: K8sObject[] = await podsRes.json()
           setPods((Array.isArray(data) ? data : []).filter((pod) => podMatchesLabels(pod, labels)))
         }
+        if (evRes.ok) {
+          const data: EventItem[] = await evRes.json()
+          setEvents(Array.isArray(data) ? data : [])
+        }
+      } catch {
+        // keep last values
       }
-      const evRes = await fetch(
-        `/api/k8s/namespaces/${encodeURIComponent(ns)}/deployments/${encodeURIComponent(name)}/events`,
-        { credentials: 'same-origin' },
-      )
-      if (evRes.ok) {
-        const data: EventItem[] = await evRes.json()
-        setEvents(Array.isArray(data) ? data : [])
-      }
-    } catch {
-      // keep last values
-    }
-  }, [name, ns, user]),
+    }, [name, ns, user]),
   )
 
   useEffect(() => {
@@ -202,53 +169,66 @@ export default function DeploymentDetailPanel({
   }
 
   const canLogs = can(user, 'pods', 'logs')
+  const readyPercent = desired > 0 ? Math.round((counts.ready / desired) * 100) : counts.ready > 0 ? 100 : 0
 
   return (
-    <aside className="flex min-h-0 w-full shrink-0 flex-col overflow-hidden border-l bg-background sm:w-md lg:w-lg xl:w-xl">
-      <header className="flex items-center gap-2 border-b px-3 py-2">
-        <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">Deployment: {name}</h2>
-        {can(user, 'deployments', 'scale') ? (
-          <IconActionButton tooltip="Scale" onClick={onScale}>
-            <ScalingIcon />
-          </IconActionButton>
-        ) : null}
-        {can(user, 'deployments', 'restart') ? (
-          <IconActionButton tooltip="Restart" onClick={onRestart}>
-            <RotateCcwIcon />
-          </IconActionButton>
-        ) : null}
-        {can(user, 'pods', 'logs') ? (
-          <IconActionButton tooltip="Logs" onClick={onLogs}>
-            <ScrollTextIcon />
-          </IconActionButton>
-        ) : null}
-        <IconActionButton tooltip="Refresh" onClick={() => void refresh()} disabled={refreshing}>
-          <RefreshCwIcon className={refreshing ? 'animate-spin' : undefined} />
-        </IconActionButton>
-        {can(user, 'deployments', 'yaml_edit') ? (
+    <DetailPanel
+      kind="Deployment"
+      name={name}
+      actions={
+        <>
+          {can(user, 'deployments', 'scale') ? (
+            <IconActionButton tooltip="Scale" onClick={onScale}>
+              <ScalingIcon />
+            </IconActionButton>
+          ) : null}
+          {can(user, 'deployments', 'restart') ? (
+            <IconActionButton tooltip="Restart" onClick={onRestart}>
+              <RotateCcwIcon />
+            </IconActionButton>
+          ) : null}
+          {can(user, 'deployments', 'rollback') ? (
+            <IconActionButton tooltip="Roll back" onClick={onRollback}>
+              <HistoryIcon />
+            </IconActionButton>
+          ) : null}
+          {canLogs ? (
+            <IconActionButton tooltip="Logs" onClick={onLogs}>
+              <ScrollTextIcon />
+            </IconActionButton>
+          ) : null}
+          {can(user, 'deployments', 'yaml_edit') ? (
+            <IconActionButton
+              tooltip={view === 'edit' ? 'Back to details' : 'Edit env'}
+              variant={view === 'edit' ? 'secondary' : 'ghost'}
+              onClick={() => onViewChange(view === 'edit' ? 'details' : 'edit')}
+            >
+              <PencilIcon />
+            </IconActionButton>
+          ) : null}
           <IconActionButton
-            tooltip={view === 'edit' ? 'Details' : 'Edit env'}
-            onClick={() => onViewChange(view === 'edit' ? 'details' : 'edit')}
+            tooltip={view === 'yaml' ? 'Back to details' : 'YAML'}
+            variant={view === 'yaml' ? 'secondary' : 'ghost'}
+            onClick={() => onViewChange(view === 'yaml' ? 'details' : 'yaml')}
           >
-            <PencilIcon />
+            <FileCodeIcon />
           </IconActionButton>
-        ) : null}
-        <IconActionButton
-          tooltip={view === 'yaml' ? 'Details' : 'YAML'}
-          onClick={() => onViewChange(view === 'yaml' ? 'details' : 'yaml')}
-        >
-          <FileCodeIcon />
-        </IconActionButton>
-        {can(user, 'deployments', 'delete') ? (
-          <IconActionButton tooltip="Delete" onClick={onDelete}>
-            <Trash2Icon />
+          {view === 'details' ? (
+            <IconActionButton tooltip="Refresh" onClick={() => void refresh()} disabled={refreshing}>
+              <RefreshCwIcon className={refreshing ? 'animate-spin' : undefined} />
+            </IconActionButton>
+          ) : null}
+          {can(user, 'deployments', 'delete') ? (
+            <IconActionButton tooltip="Delete" onClick={onDelete}>
+              <Trash2Icon />
+            </IconActionButton>
+          ) : null}
+          <IconActionButton tooltip="Close" onClick={onClose}>
+            <XIcon />
           </IconActionButton>
-        ) : null}
-        <IconActionButton tooltip="Close" onClick={onClose}>
-          <XIcon />
-        </IconActionButton>
-      </header>
-
+        </>
+      }
+    >
       {view === 'yaml' ? (
         <div className="flex min-h-0 flex-1 flex-col p-3">
           <ResourceYAMLEditor
@@ -265,55 +245,55 @@ export default function DeploymentDetailPanel({
           <WorkloadEnvEditor resource={deployment} module="deployments" />
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto overscroll-contain px-3 py-3">
-          <section>
-            <h3 className="mb-1 text-xs font-medium text-muted-foreground">Properties</h3>
+        <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
+          <DetailSection title="Replicas">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl font-semibold tabular-nums">
+                {counts.ready}
+                <span className="text-base text-muted-foreground">/{desired}</span>
+              </span>
+              <div className="min-w-0 flex-1 space-y-1">
+                <Progress value={readyPercent} className="h-1.5" aria-label="Ready replicas" />
+                <p className="text-[11px] text-muted-foreground">
+                  {counts.updated} updated · {counts.available} available
+                </p>
+              </div>
+            </div>
+          </DetailSection>
+
+          <DetailSection title="Properties">
             <dl>
               <PropRow label="Namespace">{ns || '—'}</PropRow>
-              <PropRow label="Created">{formatAge(deployment.metadata?.creationTimestamp)}</PropRow>
-              <PropRow label="Replicas">
-                {counts.ready}/{desired} ready · {counts.updated} updated · {counts.available} available
-              </PropRow>
+              <PropRow label="Created">{formatAge(deployment.metadata?.creationTimestamp)} ago</PropRow>
               <PropRow label="Strategy">{workloadStrategy(deployment)}</PropRow>
               <PropRow label="Selector">
-                {Object.keys(selector).length === 0
-                  ? '—'
-                  : Object.entries(selector)
-                      .map(([k, v]) => `${k}=${v}`)
-                      .join(', ')}
-              </PropRow>
-              <PropRow label="Labels">
-                <MetaList title="Labels" entries={objectLabels(deployment)} />
-              </PropRow>
-              <PropRow label="Annotations">
-                <MetaList title="Annotations" entries={objectAnnotations(deployment)} />
-              </PropRow>
-              <PropRow label="Conditions">
-                {conditions.length === 0 ? (
+                {Object.keys(selector).length === 0 ? (
                   '—'
                 ) : (
-                  <div className="flex flex-wrap gap-1">
-                    {conditions.map((c) => (
-                      <Badge
-                        key={c.type}
-                        variant={c.ok ? 'outline' : 'destructive'}
-                        className={c.ok ? 'h-5 border-emerald-500/40 text-[10px] text-emerald-500' : 'h-5 text-[10px]'}
-                      >
-                        {c.type}
-                      </Badge>
-                    ))}
-                  </div>
+                  <span className="font-mono text-[11px]">
+                    {Object.entries(selector)
+                      .map(([k, v]) => `${k}=${v}`)
+                      .join(', ')}
+                  </span>
                 )}
               </PropRow>
+              <PropRow label="Labels">
+                <MetaList entries={objectLabels(deployment)} />
+              </PropRow>
+              <PropRow label="Annotations">
+                <MetaList entries={objectAnnotations(deployment)} />
+              </PropRow>
+              <PropRow label="Conditions">
+                <ConditionBadges conditions={conditions.map((c) => ({ key: c.type, label: c.type, ok: c.ok }))} />
+              </PropRow>
             </dl>
-          </section>
+          </DetailSection>
 
-          <Separator className="my-3" />
-
-          <section>
-            <h3 className="mb-2 text-xs font-medium text-muted-foreground">Pods · {pods.length}</h3>
+          <DetailSection title="Pods" count={pods.length}>
             {pods.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No pods match this deployment (or none you can view).</p>
+              <p className="text-xs text-muted-foreground">
+                {can(user, 'pods', 'view') ? 'No pods are running for this deployment.' : 'You cannot view pods.'}
+              </p>
             ) : (
               <div className="overflow-x-auto rounded-md border">
                 <Table>
@@ -329,15 +309,15 @@ export default function DeploymentDetailPanel({
                   <TableBody>
                     {sortedPods.map((pod, index) => {
                       const podName = objectName(pod)
-                      const status = podStatus(pod)
                       return (
                         <TableRow key={podName}>
                           <SerialCell index={index} />
-                          <TableCell className="font-medium">
+                          <TableCell className="max-w-48 truncate font-medium" title={podName}>
                             {canLogs ? (
                               <Link
                                 to={`/workloads/${encodeURIComponent(ns)}/pods/${encodeURIComponent(podName)}/logs`}
-                                className="hover:underline"
+                                className="underline-offset-2 hover:underline"
+                                title="Open logs"
                               >
                                 {podName}
                               </Link>
@@ -345,11 +325,13 @@ export default function DeploymentDetailPanel({
                               podName
                             )}
                           </TableCell>
-                          <TableCell>{podReady(pod)}</TableCell>
+                          <TableCell className="tabular-nums">{podReady(pod)}</TableCell>
                           <TableCell>
                             <PodContainersCell obj={pod} />
                           </TableCell>
-                          <TableCell className={statusTextClass(status)}>{status}</TableCell>
+                          <TableCell>
+                            <StatusBadge value={pod.metadata?.deletionTimestamp ? 'Terminating' : podStatus(pod)} />
+                          </TableCell>
                         </TableRow>
                       )
                     })}
@@ -357,34 +339,13 @@ export default function DeploymentDetailPanel({
                 </Table>
               </div>
             )}
-          </section>
+          </DetailSection>
 
-          <Separator className="my-3" />
-
-          <section>
-            <h3 className="mb-2 text-xs font-medium text-muted-foreground">Events</h3>
-            {events.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No events found.</p>
-            ) : (
-              <ul className="space-y-2">
-                {events.map((ev) => (
-                  <li key={`${ev.metadata?.namespace}/${ev.metadata?.name}`} className="text-xs">
-                    <div className="flex gap-2">
-                      <span className="text-muted-foreground">
-                        {formatAge(ev.lastTimestamp || ev.eventTime || ev.metadata?.creationTimestamp)}
-                      </span>
-                      <span className={ev.type === 'Warning' ? 'text-destructive' : 'text-emerald-500'}>
-                        {ev.reason}
-                      </span>
-                    </div>
-                    <p className="text-muted-foreground">{ev.message}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <DetailSection title="Events" count={events.length}>
+            <EventList events={events} />
+          </DetailSection>
         </div>
       )}
-    </aside>
+    </DetailPanel>
   )
 }

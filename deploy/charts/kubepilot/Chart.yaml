@@ -2,5 +2,5 @@ apiVersion: v2
 name: kubepilot
 description: KubePilot — in-cluster Kubernetes dashboard with owner auth and RBAC
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.2.0
+appVersion: "0.2.0"

@@ -251,7 +251,7 @@ func handleRollbackHelmRelease(w http.ResponseWriter, r *http.Request, deps Deps
 	})
 	if err != nil {
 		log.Printf("helm rollback name=%s ns=%s: err=%v", name, body.Namespace, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	details := map[string]any{}
@@ -303,7 +303,7 @@ func handleUninstallHelmRelease(w http.ResponseWriter, r *http.Request, deps Dep
 
 	if err := deps.Helm.Uninstall(r.Context(), body.Namespace, name); err != nil {
 		log.Printf("helm uninstall name=%s ns=%s: err=%v", name, body.Namespace, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeHelmMutationAudit(r, deps, u, "uninstall", body.Namespace, name, http.StatusNoContent, nil)

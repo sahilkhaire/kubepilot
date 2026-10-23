@@ -85,20 +85,75 @@ export type AuditFilters = {
   kind?: string
 }
 
-async function readAPIError(res: Response, fallback: string): Promise<string> {
+const statusMessages: Record<number, string> = {
+  400: 'The request was invalid.',
+  401: 'Your session has expired. Sign in again.',
+  403: "You don't have permission to do that.",
+  404: 'Not found. It may have been deleted.',
+  409: 'It already exists or was changed by someone else.',
+  429: 'Too many attempts. Wait a moment and try again.',
+  503: 'The cluster connection is unavailable.',
+}
+
+/** Builds a readable error from an API response: the server message if any, else a status-based fallback. */
+export async function readAPIError(res: Response, fallback: string): Promise<string> {
   try {
-    const body = (await res.json()) as { error?: string }
+    const body = (await res.clone().json()) as { error?: string }
     if (typeof body.error === 'string' && body.error) {
-      return body.error
+      return capitalize(body.error)
     }
   } catch {
     // ignore non-JSON error bodies
   }
-  return fallback
+  return statusMessages[res.status] ?? `${capitalize(fallback)} (HTTP ${res.status}).`
+}
+
+function capitalize(text: string): string {
+  return text ? text[0].toUpperCase() + text.slice(1) : text
 }
 
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(path, { ...init, credentials: 'same-origin' })
+}
+
+/** POSTs JSON (or nothing) and throws a readable error on failure. */
+async function postJSON(path: string, body: unknown, fallback: string): Promise<Response> {
+  const res = await apiFetch(path, {
+    method: 'POST',
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (!res.ok) {
+    throw new Error(await readAPIError(res, fallback))
+  }
+  return res
+}
+
+let sessionWatcherInstalled = false
+
+/**
+ * Calls `onExpired` when any API request (other than the auth endpoints) returns 401,
+ * so an expired session sends the user back to the login screen instead of failing silently.
+ */
+export function installSessionWatcher(onExpired: () => void): void {
+  if (sessionWatcherInstalled) return
+  sessionWatcherInstalled = true
+  const originalFetch = window.fetch.bind(window)
+  window.fetch = async (input, init) => {
+    const res = await originalFetch(input, init)
+    if (res.status === 401) {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      const path = new URL(url, window.location.origin).pathname
+      if (path.startsWith('/api/') && !path.startsWith('/api/auth/')) {
+        onExpired()
+      }
+    }
+    return res
+  }
+}
+
+function nsPath(namespace: string, module: string, name: string, action: string): string {
+  return `/api/k8s/namespaces/${encodeURIComponent(namespace)}/${encodeURIComponent(module)}/${encodeURIComponent(name)}/${action}`
 }
 
 export async function login(username: string, password: string): Promise<User> {
@@ -108,7 +163,10 @@ export async function login(username: string, password: string): Promise<User> {
     body: JSON.stringify({ username, password }),
   })
   if (!res.ok) {
-    throw new Error('invalid credentials')
+    if (res.status === 401 || res.status === 400) {
+      throw new Error('Incorrect username or password.')
+    }
+    throw new Error(await readAPIError(res, 'Sign-in failed'))
   }
   return res.json()
 }
@@ -135,14 +193,17 @@ export async function changePassword(
     body: JSON.stringify({ currentPassword, newPassword }),
   })
   if (!res.ok) {
-    throw new Error('password change failed')
+    if (res.status === 401) {
+      throw new Error('Current password is incorrect.')
+    }
+    throw new Error(await readAPIError(res, 'Password change failed'))
   }
 }
 
 export async function listMembers(): Promise<Member[]> {
   const res = await apiFetch('/api/settings/members')
   if (!res.ok) {
-    throw new Error('failed to list members')
+    throw new Error(await readAPIError(res, 'failed to list members'))
   }
   return res.json()
 }
@@ -159,7 +220,7 @@ export async function createMember(data: {
     body: JSON.stringify(data),
   })
   if (!res.ok) {
-    throw new Error('failed to create member')
+    throw new Error(await readAPIError(res, 'failed to create member'))
   }
   return res.json()
 }
@@ -178,7 +239,7 @@ export async function updateMember(
     body: JSON.stringify(data),
   })
   if (!res.ok) {
-    throw new Error('failed to update member')
+    throw new Error(await readAPIError(res, 'failed to update member'))
   }
   return res.json()
 }
@@ -186,7 +247,7 @@ export async function updateMember(
 export async function deleteMember(id: string): Promise<void> {
   const res = await apiFetch(`/api/settings/members/${id}`, { method: 'DELETE' })
   if (!res.ok) {
-    throw new Error('failed to delete member')
+    throw new Error(await readAPIError(res, 'failed to delete member'))
   }
 }
 
@@ -197,7 +258,7 @@ export async function resetMemberPassword(id: string, password: string): Promise
     body: JSON.stringify({ password }),
   })
   if (!res.ok) {
-    throw new Error('failed to reset password')
+    throw new Error(await readAPIError(res, 'failed to reset password'))
   }
   return res.json()
 }
@@ -293,7 +354,7 @@ export async function queryAudit(filters: AuditFilters): Promise<AuditLog[]> {
   const qs = params.toString()
   const res = await apiFetch(`/api/settings/audit${qs ? `?${qs}` : ''}`)
   if (!res.ok) {
-    throw new Error('failed to query audit')
+    throw new Error(await readAPIError(res, 'failed to query audit'))
   }
   return res.json()
 }
@@ -305,7 +366,7 @@ export async function deleteAuditIds(ids: string[]): Promise<void> {
     body: JSON.stringify({ ids }),
   })
   if (!res.ok) {
-    throw new Error('failed to delete audit entries')
+    throw new Error(await readAPIError(res, 'failed to delete audit entries'))
   }
 }
 
@@ -321,7 +382,7 @@ export async function deleteAuditFilter(filters: AuditFilters): Promise<void> {
     headers: { 'X-Confirm': 'delete' },
   })
   if (!res.ok) {
-    throw new Error('failed to delete audit entries')
+    throw new Error(await readAPIError(res, 'failed to delete audit entries'))
   }
 }
 
@@ -352,17 +413,7 @@ export async function scaleK8sResource(
   namespace: string,
   replicas: number,
 ): Promise<void> {
-  const res = await apiFetch(
-    `/api/k8s/namespaces/${encodeURIComponent(namespace)}/${encodeURIComponent(module)}/${encodeURIComponent(name)}/scale`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ replicas }),
-    },
-  )
-  if (!res.ok) {
-    throw new Error(await readAPIError(res, 'failed to scale resource'))
-  }
+  await postJSON(nsPath(namespace, module, name, 'scale'), { replicas }, 'Failed to scale resource')
 }
 
 export type PodEnvOwner = {
@@ -407,13 +458,7 @@ export async function updatePodEnv(
 }
 
 export async function restartK8sResource(module: string, name: string, namespace: string): Promise<void> {
-  const res = await apiFetch(
-    `/api/k8s/namespaces/${encodeURIComponent(namespace)}/${encodeURIComponent(module)}/${encodeURIComponent(name)}/restart`,
-    { method: 'POST' },
-  )
-  if (!res.ok) {
-    throw new Error(await readAPIError(res, 'failed to restart resource'))
-  }
+  await postJSON(nsPath(namespace, module, name, 'restart'), undefined, 'Failed to restart resource')
 }
 
 export async function deleteK8sResource(
@@ -421,17 +466,41 @@ export async function deleteK8sResource(
   name: string,
   options?: { namespace?: string; clusterScoped?: boolean },
 ): Promise<void> {
-  const clusterScoped = options?.clusterScoped ?? false
-  const ns = options?.namespace
-  const path = clusterScoped
+  const path = options?.clusterScoped
     ? `/api/k8s/${encodeURIComponent(module)}/${encodeURIComponent(name)}/delete`
-    : `/api/k8s/namespaces/${encodeURIComponent(ns!)}/${encodeURIComponent(module)}/${encodeURIComponent(name)}/delete`
-  const res = await apiFetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ confirm: name }),
-  })
+    : nsPath(options?.namespace ?? '', module, name, 'delete')
+  await postJSON(path, { confirm: name }, 'Failed to delete resource')
+}
+
+export async function rollbackDeployment(namespace: string, name: string, revision: number): Promise<void> {
+  await postJSON(nsPath(namespace, 'deployments', name, 'rollback'), { revision }, 'Failed to roll back deployment')
+}
+
+export async function triggerCronJob(namespace: string, name: string): Promise<void> {
+  await postJSON(nsPath(namespace, 'cronjobs', name, 'trigger'), undefined, 'Failed to start job')
+}
+
+export async function createNamespace(name: string): Promise<void> {
+  await postJSON('/api/k8s/namespaces', { name }, 'Failed to create namespace')
+}
+
+export async function rollbackHelmRelease(name: string, namespace: string, revision?: number): Promise<void> {
+  await postJSON(
+    `/api/helm/releases/${encodeURIComponent(name)}/rollback`,
+    revision ? { namespace, revision } : { namespace },
+    'Failed to roll back release',
+  )
+}
+
+export async function uninstallHelmRelease(name: string, namespace: string): Promise<void> {
+  await postJSON(`/api/helm/releases/${encodeURIComponent(name)}/uninstall`, { namespace }, 'Failed to uninstall release')
+}
+
+/** GETs JSON and throws a readable error on failure. */
+export async function getJSON<T>(path: string, fallback: string): Promise<T> {
+  const res = await apiFetch(path)
   if (!res.ok) {
-    throw new Error('failed to delete resource')
+    throw new Error(await readAPIError(res, fallback))
   }
+  return res.json() as Promise<T>
 }

@@ -6,13 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Label } from '@/components/ui/label'
-import { passwordError } from '@/lib/password'
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, passwordError } from '@/lib/password'
 
 type Props = {
   onChanged: () => void
+  onLogout: () => void
 }
 
-export default function ChangePassword({ onChanged }: Props) {
+export default function ChangePassword({ onChanged, onLogout }: Props) {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -34,8 +35,8 @@ export default function ChangePassword({ onChanged }: Props) {
       setNewPassword('')
       setConfirm('')
       onChanged()
-    } catch {
-      setError('Password change failed')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Password change failed.')
     } finally {
       setPending(false)
     }
@@ -49,7 +50,10 @@ export default function ChangePassword({ onChanged }: Props) {
       <Card className="w-full max-w-sm shadow-sm">
         <CardHeader>
           <CardTitle className="text-2xl font-semibold tracking-tight">Change password</CardTitle>
-          <CardDescription>You must change your password before continuing.</CardDescription>
+          <CardDescription>
+            Your administrator set a temporary password. Choose a new one ({PASSWORD_MIN_LENGTH}–{PASSWORD_MAX_LENGTH}{' '}
+            characters) to continue.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="grid gap-4">
@@ -88,9 +92,13 @@ export default function ChangePassword({ onChanged }: Props) {
                 required
               />
             </div>
+            {mismatch && newPassword && confirm ? <p className="text-xs text-destructive">{mismatch}</p> : null}
             <ErrorAlert message={error} className="mx-0 mt-0" onDismiss={() => setError('')} />
             <Button type="submit" disabled={pending || Boolean(mismatch && newPassword && confirm)}>
               {pending ? 'Saving…' : 'Change password'}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={onLogout} disabled={pending}>
+              Sign out instead
             </Button>
           </form>
         </CardContent>

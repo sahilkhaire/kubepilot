@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { EllipsisVerticalIcon } from 'lucide-react'
+import {
+  ArrowDownToLineIcon,
+  EllipsisVerticalIcon,
+  FileCodeIcon,
+  InfoIcon,
+  PauseIcon,
+  PlayIcon,
+  Trash2Icon,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { cordonNode, deleteK8sResource, drainNode, uncordonNode, type User } from '@/api'
 import DeleteConfirm from '@/components/DeleteConfirm'
@@ -20,7 +28,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Input } from '@/components/ui/input'
+import { FilterInput } from '@/components/namespace-select'
 import {
   Table,
   TableBody,
@@ -149,7 +157,7 @@ export default function Nodes() {
       else if (action === 'uncordon') await uncordonNode(name)
       else await drainNode(name)
       toast.success(
-        action === 'cordon' ? `Cordoned ${name}` : action === 'uncordon' ? `Uncordoned ${name}` : `Draining ${name}`,
+        action === 'cordon' ? `Cordoned ${name}` : action === 'uncordon' ? `Uncordoned ${name}` : `Drained ${name}`,
       )
       await load()
     } catch (e) {
@@ -178,15 +186,10 @@ export default function Nodes() {
   if (loading) return <PageLoading />
 
   return (
-    <PageBody className="flex-row gap-0 overflow-hidden p-0">
+    <PageBody className="relative flex-row gap-0 overflow-hidden p-0">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <PageHeader title="Nodes" description={`${visible.length} item${visible.length === 1 ? '' : 's'}`}>
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter name, labels…"
-            className="h-7 w-48 text-xs"
-          />
+          <FilterInput value={query} onChange={setQuery} placeholder="Filter by name or label…" />
         </PageHeader>
         <ErrorAlert message={error} />
         <div className="min-h-0 flex-1 overflow-auto">
@@ -230,7 +233,7 @@ export default function Nodes() {
             </TableBody>
           </Table>
           {sorted.length === 0 ? (
-            <EmptyState>No nodes{query ? ' match this filter' : ''}.</EmptyState>
+            <EmptyState>{query ? `No nodes match “${query}”.` : 'No nodes found.'}</EmptyState>
           ) : null}
         </div>
       </div>
@@ -266,7 +269,7 @@ export default function Nodes() {
         }
         description={
           confirm?.action === 'drain'
-            ? 'This cordons the node and evicts its pods. Workloads without disruption budgets may be interrupted.'
+            ? 'Cordons the node and evicts its pods. Pod disruption budgets are respected; DaemonSet pods stay on the node.'
             : confirm?.action === 'uncordon'
               ? 'The node will accept new pods again.'
               : 'The node will stop accepting new pods until it is uncordoned.'
@@ -276,6 +279,7 @@ export default function Nodes() {
         }
         destructive={confirm?.action === 'drain'}
         pending={pending != null}
+        pendingLabel={confirm?.action === 'drain' ? 'Draining…' : 'Working…'}
         onConfirm={() => {
           if (!confirm) return
           return runAction(confirm.name, confirm.action)
@@ -349,7 +353,7 @@ function NodeRow({
       <TableCell>
         <div className="flex flex-wrap gap-x-2 gap-y-0.5">
           {conditions.map((c) => (
-            <span key={c.text} className={c.ok ? 'text-emerald-500' : 'text-destructive'}>
+            <span key={c.text} className={c.ok ? 'text-success' : 'text-destructive'}>
               {c.text}
             </span>
           ))}
@@ -365,20 +369,33 @@ function NodeRow({
             </DropdownMenuTrigger>
           </ActionTooltip>
           <DropdownMenuContent align="end" className="min-w-40">
-            <DropdownMenuItem onClick={onYaml}>YAML</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onOpen}>
+              <InfoIcon />
+              Details
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onYaml}>
+              <FileCodeIcon />
+              {can(user, 'nodes', 'yaml_edit') ? 'Edit YAML' : 'View YAML'}
+            </DropdownMenuItem>
+            {can(user, 'nodes', 'cordon') || can(user, 'nodes', 'drain') ? <DropdownMenuSeparator /> : null}
             {can(user, 'nodes', 'cordon') ? (
-              <DropdownMenuItem onClick={onCordon}>{unschedulable ? 'Uncordon' : 'Cordon'}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={onCordon}>
+                {unschedulable ? <PlayIcon /> : <PauseIcon />}
+                {unschedulable ? 'Uncordon…' : 'Cordon…'}
+              </DropdownMenuItem>
             ) : null}
             {can(user, 'nodes', 'drain') ? (
-              <DropdownMenuItem variant="destructive" onClick={onDrain}>
-                Drain
+              <DropdownMenuItem onSelect={onDrain}>
+                <ArrowDownToLineIcon />
+                Drain…
               </DropdownMenuItem>
             ) : null}
             {can(user, 'nodes', 'delete') ? (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onClick={onDelete}>
-                  Delete
+                <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+                  <Trash2Icon />
+                  Delete…
                 </DropdownMenuItem>
               </>
             ) : null}

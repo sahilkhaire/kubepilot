@@ -1,14 +1,17 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { XIcon } from 'lucide-react'
+import { readAPIError } from '@/api'
+import { DetailPanel } from '@/components/detail-parts'
+import { IconActionButton } from '@/components/icon-action-button'
 import EmptyState from '@/components/EmptyState'
 import { SortableHead } from '@/components/sortable-head'
 import { ErrorAlert } from '@/components/error-alert'
-import { ALL_NAMESPACES, isAllNamespaces, NamespaceSelect, resolveNamespaceValue } from '@/components/namespace-select'
+import { FilterInput, isAllNamespaces, NamespaceSelect, useNamespaces } from '@/components/namespace-select'
 import { PageBody, PageHeader } from '@/components/page-header'
 import { PageLoading } from '@/components/page-loading'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { useUser } from '@/lib/auth-context'
+import { formatAge } from '@/lib/k8s-fields'
 import { can } from '@/lib/grants'
 import {
   Table,
@@ -34,7 +37,7 @@ type CRDItem = {
 }
 
 type ResourceItem = {
-  metadata?: { name?: string; namespace?: string }
+  metadata?: { name?: string; namespace?: string; creationTimestamp?: string }
 }
 
 function crdVersion(crd: CRDItem): string {
@@ -49,10 +52,11 @@ export default function CustomResources() {
   const user = useUser()
   const canViewInstances = can(user, 'custom_resources', 'view')
   const [crds, setCrds] = useState<CRDItem[]>([])
-  const [namespaces, setNamespaces] = useState<string[]>([])
-  const [namespace, setNamespace] = useState(ALL_NAMESPACES)
+  const { namespaces, namespace, setNamespace } = useNamespaces()
   const [selected, setSelected] = useState<CRDItem | null>(null)
   const [instances, setInstances] = useState<ResourceItem[]>([])
+  const [instancesLoaded, setInstancesLoaded] = useState(false)
+  const [instancesError, setInstancesError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
@@ -64,23 +68,12 @@ export default function CustomResources() {
       setError('')
     }
     try {
-      const [crdRes, nsRes] = await Promise.all([
-        fetch('/api/k8s/crds', { credentials: 'same-origin' }),
-        fetch('/api/k8s/namespaces', { credentials: 'same-origin' }),
-      ])
+      const crdRes = await fetch('/api/k8s/crds', { credentials: 'same-origin' })
       if (!crdRes.ok) {
-        throw new Error('failed to load CRDs')
-      }
-      if (!nsRes.ok) {
-        throw new Error('failed to load namespaces')
+        throw new Error(await readAPIError(crdRes, 'Failed to load custom resource definitions'))
       }
       const crdData: CRDItem[] = await crdRes.json()
-      const nsData: string[] = await nsRes.json()
-      setCrds(crdData)
-      setNamespaces(nsData)
-      if (nsData.length > 0) {
-        setNamespace((prev) => resolveNamespaceValue(prev, nsData))
-      }
+      setCrds(Array.isArray(crdData) ? crdData : [])
       setError('')
     } catch (e) {
       if (initial) {
@@ -97,8 +90,19 @@ export default function CustomResources() {
   }, [loadCatalog])
   useLiveRefresh(() => loadCatalog(false))
 
+  const selectionKey = `${selected?.metadata?.name ?? ''}@${namespace}`
+  const selectionKeyRef = useRef(selectionKey)
+  selectionKeyRef.current = selectionKey
+
+  useEffect(() => {
+    setInstances([])
+    setInstancesLoaded(false)
+    setInstancesError('')
+  }, [selectionKey])
+
   const loadInstances = useSingleFlight(
     useCallback(async (quiet = false) => {
+    const requestKey = selectionKey
     if (!selected) {
       setInstances([])
       return
@@ -117,22 +121,22 @@ export default function CustomResources() {
         params.set('namespace', namespace)
       }
       const res = await fetch(`/api/k8s/custom-resources?${params}`, { credentials: 'same-origin' })
-      if (res.status === 403 || res.status === 404) {
-        setInstances([])
-        return
-      }
+      if (selectionKeyRef.current !== requestKey) return
       if (!res.ok) {
-        throw new Error('failed to load custom resources')
+        throw new Error(await readAPIError(res, 'Failed to load instances'))
       }
       const data: ResourceItem[] = await res.json()
-      setInstances(data)
-      setError('')
+      if (selectionKeyRef.current !== requestKey) return
+      setInstances(Array.isArray(data) ? data : [])
+      setInstancesError('')
     } catch (e) {
-      if (!quiet) {
-        setError(e instanceof Error ? e.message : 'load failed')
+      if (!quiet && selectionKeyRef.current === requestKey) {
+        setInstancesError(e instanceof Error ? e.message : 'Load failed')
       }
+    } finally {
+      if (selectionKeyRef.current === requestKey) setInstancesLoaded(true)
     }
-  }, [selected, namespace]),
+  }, [selected, namespace, selectionKey]),
   )
 
   useEffect(() => {
@@ -188,90 +192,117 @@ export default function CustomResources() {
   }
 
   const namespaced = selected?.spec?.scope === 'Namespaced'
+  const selectedName = selected?.metadata?.name ?? ''
+  const crdCount = grouped.reduce((n, [, items]) => n + items.length, 0)
 
   return (
-    <PageBody>
-      <PageHeader title="Definitions" description={`${crds.length} CRDs in ${grouped.length} groups`}>
-        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter…" className="h-7 w-48 text-xs" />
-      </PageHeader>
-      <ErrorAlert message={error} />
-      <div className="min-h-0 flex-1 space-y-0 overflow-auto">
-        <div>
-        <Table>
-          <TableHeader className="sticky top-0 bg-background">
-            <TableRow>
-              <SerialHead />
-              <SortableHead column="name" label="Name" sortKey={crdSort.sortKey} sortDir={crdSort.sortDir} onSort={crdSort.onSort} />
-              <SortableHead column="resource" label="Resource" sortKey={crdSort.sortKey} sortDir={crdSort.sortDir} onSort={crdSort.onSort} />
-              <SortableHead column="scope" label="Scope" sortKey={crdSort.sortKey} sortDir={crdSort.sortDir} onSort={crdSort.onSort} />
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {grouped.map(([group, items], groupIndex) => {
-              const start = grouped.slice(0, groupIndex).reduce((n, [, its]) => n + its.length, 0)
-              return (
-              <Fragment key={group}>
-                <TableRow key={`g-${group}`} className="hover:bg-transparent">
-                  <TableCell colSpan={5} className="bg-muted/50 py-1 font-medium text-muted-foreground">
-                    {group}
-                  </TableCell>
-                </TableRow>
-                {items.map((crd, index) => {
-                  const name = crd.metadata?.name ?? ''
-                  const resource = crd.spec?.names?.plural ?? ''
-                  const scope = crd.spec?.scope ?? ''
-                  const isSelected = selected?.metadata?.name === name
-                  return (
-                    <TableRow key={name}>
-                      <SerialCell index={start + index} />
-                      <TableCell className="font-medium">{name}</TableCell>
-                      <TableCell>{resource}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-                          {scope}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {canViewInstances ? (
-                          <Button
-                            type="button"
-                            variant={isSelected ? 'secondary' : 'ghost'}
-                            size="xs"
-                            onClick={() => setSelected(isSelected ? null : crd)}
-                          >
-                            {isSelected ? 'Hide instances' : 'View instances'}
-                          </Button>
-                        ) : null}
+    <PageBody className="relative flex-row gap-0 overflow-hidden p-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <PageHeader
+          title="Custom resource definitions"
+          description={`${crdCount}${query ? ` of ${crds.length}` : ''} CRDs in ${grouped.length} group${grouped.length === 1 ? '' : 's'}`}
+        >
+          <FilterInput value={query} onChange={setQuery} placeholder="Filter by name or group…" />
+        </PageHeader>
+        <ErrorAlert message={error} />
+        <div className="min-h-0 flex-1 overflow-auto">
+          <Table>
+            <TableHeader className="sticky top-0 z-10 bg-background">
+              <TableRow>
+                <SerialHead />
+                <SortableHead column="name" label="Name" sortKey={crdSort.sortKey} sortDir={crdSort.sortDir} onSort={crdSort.onSort} />
+                <SortableHead column="resource" label="Resource" sortKey={crdSort.sortKey} sortDir={crdSort.sortDir} onSort={crdSort.onSort} />
+                <TableHead>Version</TableHead>
+                <SortableHead column="scope" label="Scope" sortKey={crdSort.sortKey} sortDir={crdSort.sortDir} onSort={crdSort.onSort} />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {grouped.map(([group, items], groupIndex) => {
+                const start = grouped.slice(0, groupIndex).reduce((n, [, its]) => n + its.length, 0)
+                return (
+                  <Fragment key={group}>
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={5} className="bg-muted/50 py-1 text-xs font-medium text-muted-foreground">
+                        {group}
+                        <span className="ml-1.5 tabular-nums opacity-70">{items.length}</span>
                       </TableCell>
                     </TableRow>
-                  )
-                })}
-              </Fragment>
-              )
-            })}
-          </TableBody>
-        </Table>
-        {grouped.length === 0 ? <EmptyState>No custom resource definitions.</EmptyState> : null}
+                    {items.map((crd, index) => {
+                      const name = crd.metadata?.name ?? ''
+                      const isSelected = selectedName === name
+                      return (
+                        <TableRow
+                          key={name}
+                          data-state={isSelected ? 'selected' : undefined}
+                          className={canViewInstances ? 'cursor-pointer' : undefined}
+                          onClick={canViewInstances ? () => setSelected(isSelected ? null : crd) : undefined}
+                          title={canViewInstances ? 'Show instances' : undefined}
+                        >
+                          <SerialCell index={start + index} />
+                          <TableCell className="max-w-96 truncate font-medium" title={name}>
+                            {name}
+                          </TableCell>
+                          <TableCell>{crd.spec?.names?.plural ?? ''}</TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground">{crdVersion(crd)}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="h-5 px-1.5 text-[11px]">
+                              {crd.spec?.scope ?? ''}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </Fragment>
+                )
+              })}
+            </TableBody>
+          </Table>
+          {grouped.length === 0 && !error ? (
+            <EmptyState>
+              {query ? `No definitions match “${query}”.` : 'No custom resource definitions are installed.'}
+            </EmptyState>
+          ) : null}
         </div>
+      </div>
 
-        {selected ? (
-          <div className="border-t">
+      {selected ? (
+        <DetailPanel
+          kind={`${selected.spec?.names?.plural ?? 'Instances'} · ${selected.spec?.group ?? ''}`}
+          name={selectedName}
+          actions={
+            <IconActionButton tooltip="Close" onClick={() => setSelected(null)}>
+              <XIcon />
+            </IconActionButton>
+          }
+        >
+          {namespaced ? (
             <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
-              <p className="text-sm font-medium">Instances — {selected.metadata?.name}</p>
-              {namespaced ? (
-                <NamespaceSelect namespaces={namespaces} value={namespace} onChange={setNamespace} />
-              ) : null}
+              <span className="text-xs text-muted-foreground">Instances</span>
+              <NamespaceSelect namespaces={namespaces} value={namespace} onChange={setNamespace} />
             </div>
-            {instances.length === 0 ? (
-              <EmptyState>No instances.</EmptyState>
+          ) : null}
+          <ErrorAlert message={instancesError} />
+          <div className="min-h-0 flex-1 overflow-auto">
+            {!instancesLoaded ? (
+              <div className="p-3">
+                <PageLoading compact />
+              </div>
+            ) : instances.length === 0 ? (
+              instancesError ? null : (
+                <EmptyState>
+                  No instances{namespaced && !isAllNamespaces(namespace) ? ` in ${namespace}` : ''}.
+                </EmptyState>
+              )
             ) : (
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <SerialHead />
                     <SortableHead column="name" label="Name" sortKey={instanceSort.sortKey} sortDir={instanceSort.sortDir} onSort={instanceSort.onSort} />
-                    <SortableHead column="namespace" label="Namespace" sortKey={instanceSort.sortKey} sortDir={instanceSort.sortDir} onSort={instanceSort.onSort} />
+                    {namespaced ? (
+                      <SortableHead column="namespace" label="Namespace" sortKey={instanceSort.sortKey} sortDir={instanceSort.sortDir} onSort={instanceSort.onSort} />
+                    ) : null}
+                    <TableHead>Age</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -281,8 +312,13 @@ export default function CustomResources() {
                     return (
                       <TableRow key={ns ? `${ns}/${name}` : name}>
                         <SerialCell index={index} />
-                        <TableCell className="font-medium">{name}</TableCell>
-                        <TableCell>{ns || '—'}</TableCell>
+                        <TableCell className="max-w-64 truncate font-medium" title={name}>
+                          {name}
+                        </TableCell>
+                        {namespaced ? <TableCell className="text-muted-foreground">{ns || '—'}</TableCell> : null}
+                        <TableCell className="text-muted-foreground tabular-nums">
+                          {formatAge(item.metadata?.creationTimestamp)}
+                        </TableCell>
                       </TableRow>
                     )
                   })}
@@ -290,8 +326,8 @@ export default function CustomResources() {
               </Table>
             )}
           </div>
-        ) : null}
-      </div>
+        </DetailPanel>
+      ) : null}
     </PageBody>
   )
 }

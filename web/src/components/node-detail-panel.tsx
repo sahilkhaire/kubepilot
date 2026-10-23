@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ChevronDownIcon,
+  ArrowDownToLineIcon,
+  FileCodeIcon,
   PauseIcon,
-  PencilIcon,
   PlayIcon,
   RefreshCwIcon,
   Trash2Icon,
@@ -13,12 +13,17 @@ import MetricsPanel from '@/components/MetricsPanel'
 import ResourceYAMLEditor from '@/components/resource-yaml-editor'
 import { SortableHead } from '@/components/sortable-head'
 import { PodContainersCell } from '@/components/pod-containers'
-import { statusTextClass } from '@/components/status-badge'
+import { StatusBadge } from '@/components/status-badge'
 import { IconActionButton } from '@/components/icon-action-button'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Separator } from '@/components/ui/separator'
+import {
+  ConditionBadges,
+  DetailPanel,
+  DetailSection,
+  EventList,
+  MetaList,
+  PropRow,
+  type EventItem,
+} from '@/components/detail-parts'
 import {
   Table,
   TableBody,
@@ -50,57 +55,12 @@ import {
 import { ratioSortValue, sortBy, useTableSort } from '@/lib/table-sort'
 import { useLiveRefresh, useSingleFlight } from '@/hooks/use-live-refresh'
 
-type EventItem = {
-  metadata?: { name?: string; namespace?: string; creationTimestamp?: string }
-  involvedObject?: { kind?: string; name?: string }
-  reason?: string
-  message?: string
-  type?: string
-  lastTimestamp?: string
-  eventTime?: string
-}
-
 function canNode(user: User, action: string): boolean {
   return can(user, 'nodes', action)
 }
 
 function canEvents(user: User): boolean {
   return can(user, 'events', 'view')
-}
-
-function PropRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-[7.5rem_1fr] gap-2 py-1 text-xs">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 break-all">{children}</dd>
-    </div>
-  )
-}
-
-function MetaList({ title, entries }: { title: string; entries: Record<string, string> }) {
-  const keys = Object.keys(entries)
-  return (
-    <Collapsible>
-      <CollapsibleTrigger className="flex w-full items-center gap-1 py-1 text-xs text-muted-foreground hover:text-foreground">
-        <ChevronDownIcon className="size-3.5" />
-        {keys.length} {title}
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        {keys.length === 0 ? (
-          <p className="py-1 text-xs text-muted-foreground">None</p>
-        ) : (
-          <ul className="space-y-0.5 pb-2 font-mono text-[11px]">
-            {keys.sort().map((key) => (
-              <li key={key} className="break-all">
-                <span className="text-muted-foreground">{key}=</span>
-                {entries[key]}
-              </li>
-            ))}
-          </ul>
-        )}
-      </CollapsibleContent>
-    </Collapsible>
-  )
 }
 
 export default function NodeDetailPanel({
@@ -136,6 +96,11 @@ export default function NodeDetailPanel({
   const [refreshing, setRefreshing] = useState(false)
   const onRefreshedRef = useRef(onRefreshed)
   onRefreshedRef.current = onRefreshed
+
+  useEffect(() => {
+    setPods([])
+    setEvents([])
+  }, [name])
 
   const loadLive = useSingleFlight(
     useCallback(async () => {
@@ -203,33 +168,44 @@ export default function NodeDetailPanel({
   }
 
   return (
-    <aside className="flex min-h-0 w-full shrink-0 flex-col overflow-hidden border-l bg-background sm:w-md lg:w-lg xl:w-xl">
-      <header className="flex items-center gap-2 border-b px-3 py-2">
-        <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">Node: {name}</h2>
-        {canNode(user, 'cordon') ? (
-          <IconActionButton tooltip={unschedulable ? 'Uncordon' : 'Cordon'} onClick={onCordon}>
-            {unschedulable ? <PlayIcon /> : <PauseIcon />}
+    <DetailPanel
+      kind="Node"
+      name={name}
+      actions={
+        <>
+          {canNode(user, 'cordon') ? (
+            <IconActionButton tooltip={unschedulable ? 'Uncordon' : 'Cordon'} onClick={onCordon}>
+              {unschedulable ? <PlayIcon /> : <PauseIcon />}
+            </IconActionButton>
+          ) : null}
+          {canNode(user, 'drain') ? (
+            <IconActionButton tooltip="Drain" onClick={onDrain}>
+              <ArrowDownToLineIcon />
+            </IconActionButton>
+          ) : null}
+          <IconActionButton
+            tooltip={view === 'yaml' ? 'Back to details' : 'YAML'}
+            variant={view === 'yaml' ? 'secondary' : 'ghost'}
+            onClick={() => onViewChange(view === 'yaml' ? 'details' : 'yaml')}
+          >
+            <FileCodeIcon />
           </IconActionButton>
-        ) : null}
-        <IconActionButton tooltip="Refresh" onClick={() => void refresh()} disabled={refreshing}>
-          <RefreshCwIcon className={refreshing ? 'animate-spin' : undefined} />
-        </IconActionButton>
-        <IconActionButton
-          tooltip={view === 'yaml' ? 'Details' : 'Edit'}
-          onClick={() => onViewChange(view === 'yaml' ? 'details' : 'yaml')}
-        >
-          <PencilIcon />
-        </IconActionButton>
-        {canNode(user, 'delete') ? (
-          <IconActionButton tooltip="Delete" onClick={onDelete}>
-            <Trash2Icon />
+          {view === 'details' ? (
+            <IconActionButton tooltip="Refresh" onClick={() => void refresh()} disabled={refreshing}>
+              <RefreshCwIcon className={refreshing ? 'animate-spin' : undefined} />
+            </IconActionButton>
+          ) : null}
+          {canNode(user, 'delete') ? (
+            <IconActionButton tooltip="Delete" onClick={onDelete}>
+              <Trash2Icon />
+            </IconActionButton>
+          ) : null}
+          <IconActionButton tooltip="Close" onClick={onClose}>
+            <XIcon />
           </IconActionButton>
-        ) : null}
-        <IconActionButton tooltip="Close" onClick={onClose}>
-          <XIcon />
-        </IconActionButton>
-      </header>
-
+        </>
+      }
+    >
       {view === 'yaml' ? (
         <div className="flex min-h-0 flex-1 flex-col p-3">
           <ResourceYAMLEditor
@@ -237,71 +213,56 @@ export default function NodeDetailPanel({
             name={name}
             clusterScoped
             canEdit={canNode(user, 'yaml_edit')}
+            canDelete={canNode(user, 'delete')}
+            onDeleted={onClose}
           />
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto overscroll-contain px-3 py-3">
-          <section className="space-y-2">
-            <h3 className="text-xs font-medium text-muted-foreground">Metrics</h3>
+        <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
+          <DetailSection title="Metrics">
             <MetricsPanel scope="node" name={name} compact />
-          </section>
+          </DetailSection>
 
-          <Separator className="my-3" />
-
-          <section>
-            <h3 className="mb-1 text-xs font-medium text-muted-foreground">Properties</h3>
+          <DetailSection title="Properties">
             <dl>
-              <PropRow label="Created">{formatAge(node.metadata?.creationTimestamp)}</PropRow>
-              <PropRow label="Labels">
-                <MetaList title="Labels" entries={objectLabels(node)} />
+              <PropRow label="Status">
+                <ConditionBadges conditions={conditions.map((c) => ({ key: c.text, label: c.text, ok: c.ok }))} />
               </PropRow>
-              <PropRow label="Annotations">
-                <MetaList title="Annotations" entries={objectAnnotations(node)} />
-              </PropRow>
+              <PropRow label="Created">{formatAge(node.metadata?.creationTimestamp)} ago</PropRow>
               <PropRow label="Addresses">
                 {addresses.length === 0
                   ? '—'
                   : addresses.map((a) => (
                       <div key={`${a.type}:${a.address}`}>
                         <span className="text-muted-foreground">{a.type}: </span>
-                        {a.address}
+                        <span className="font-mono">{a.address}</span>
                       </div>
                     ))}
               </PropRow>
               <PropRow label="OS">
                 {info.operatingSystem} {info.architecture}
               </PropRow>
-              <PropRow label="OS Image">{info.osImage}</PropRow>
+              <PropRow label="OS image">{info.osImage}</PropRow>
               <PropRow label="Kernel">{info.kernelVersion}</PropRow>
               <PropRow label="Runtime">{info.containerRuntimeVersion}</PropRow>
               <PropRow label="Kubelet">{info.kubeletVersion}</PropRow>
-              <PropRow label="Conditions">
-                <div className="flex flex-wrap gap-1">
-                  {conditions.map((c) => (
-                    <Badge
-                      key={c.text}
-                      variant={c.ok ? 'outline' : 'destructive'}
-                      className={c.ok ? 'h-5 border-emerald-500/40 text-[10px] text-emerald-500' : 'h-5 text-[10px]'}
-                    >
-                      {c.text}
-                    </Badge>
-                  ))}
-                </div>
+              <PropRow label="Labels">
+                <MetaList entries={objectLabels(node)} />
+              </PropRow>
+              <PropRow label="Annotations">
+                <MetaList entries={objectAnnotations(node)} />
               </PropRow>
             </dl>
-          </section>
+          </DetailSection>
 
-          <Separator className="my-3" />
+          <DetailSection title="Resources">
+            <div className="space-y-3">
+              <ResourceTable title="Capacity" values={capacity} />
+              <ResourceTable title="Allocatable" values={allocatable} />
+            </div>
+          </DetailSection>
 
-          <section className="space-y-2">
-            <ResourceTable title="Capacity" values={capacity} />
-            <ResourceTable title="Allocatable" values={allocatable} />
-          </section>
-
-          <Separator className="my-3" />
-
-          <section>
-            <h3 className="mb-2 text-xs font-medium text-muted-foreground">Pods · {pods.length}</h3>
+          <DetailSection title="Pods" count={pods.length}>
             {pods.length === 0 ? (
               <p className="text-xs text-muted-foreground">No pods on this node (or none you can view).</p>
             ) : (
@@ -320,17 +281,20 @@ export default function NodeDetailPanel({
                   <TableBody>
                     {sortedPods.map((pod, index) => {
                       const podName = objectName(pod)
-                      const status = podStatus(pod)
                       return (
                         <TableRow key={`${objectNamespace(pod)}/${podName}`}>
                           <SerialCell index={index} />
-                          <TableCell className="font-medium">{podName}</TableCell>
+                          <TableCell className="max-w-48 truncate font-medium" title={podName}>
+                            {podName}
+                          </TableCell>
                           <TableCell className="text-muted-foreground">{objectNamespace(pod)}</TableCell>
-                          <TableCell>{podReady(pod)}</TableCell>
+                          <TableCell className="tabular-nums">{podReady(pod)}</TableCell>
                           <TableCell>
                             <PodContainersCell obj={pod} />
                           </TableCell>
-                          <TableCell className={statusTextClass(status)}>{status}</TableCell>
+                          <TableCell>
+                            <StatusBadge value={podStatus(pod)} />
+                          </TableCell>
                         </TableRow>
                       )
                     })}
@@ -338,50 +302,23 @@ export default function NodeDetailPanel({
                 </Table>
               </div>
             )}
-          </section>
+          </DetailSection>
 
-          <Separator className="my-3" />
-
-          <section>
-            <h3 className="mb-2 text-xs font-medium text-muted-foreground">Events</h3>
-            {events.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No events found.</p>
-            ) : (
-              <ul className="space-y-2">
-                {events.map((ev) => (
-                  <li key={`${ev.metadata?.namespace}/${ev.metadata?.name}`} className="text-xs">
-                    <div className="flex gap-2">
-                      <span className="text-muted-foreground">
-                        {formatAge(ev.lastTimestamp || ev.eventTime || ev.metadata?.creationTimestamp)}
-                      </span>
-                      <span className={ev.type === 'Warning' ? 'text-destructive' : 'text-emerald-500'}>
-                        {ev.reason}
-                      </span>
-                    </div>
-                    <p className="text-muted-foreground">{ev.message}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          {canNode(user, 'drain') ? (
-            <div className="pt-4">
-              <Button variant="outline" size="sm" onClick={onDrain}>
-                Drain node
-              </Button>
-            </div>
+          {canEvents(user) ? (
+            <DetailSection title="Events" count={events.length}>
+              <EventList events={events} />
+            </DetailSection>
           ) : null}
         </div>
       )}
-    </aside>
+    </DetailPanel>
   )
 }
 
 function ResourceTable({ title, values }: { title: string; values: Record<string, string> }) {
   return (
     <div>
-      <h3 className="mb-1 text-xs font-medium text-muted-foreground">{title}</h3>
+      <h4 className="mb-1 text-[11px] font-medium text-muted-foreground">{title}</h4>
       <div className="overflow-x-auto rounded-md border">
         <Table>
           <TableHeader>

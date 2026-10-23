@@ -81,8 +81,8 @@ export default function SettingsAudit() {
       const data = await queryAudit(buildFilters())
       setLogs(data)
       setSelected(new Set())
-    } catch {
-      setError('Failed to load audit log')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load audit log')
     } finally {
       setLoading(false)
     }
@@ -172,8 +172,8 @@ export default function SettingsAudit() {
       }
       setConfirm(null)
       await load()
-    } catch {
-      setError('Failed to delete audit entries')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete audit entries')
     }
   }
 

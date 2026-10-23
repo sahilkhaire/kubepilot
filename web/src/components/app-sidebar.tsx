@@ -12,7 +12,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { LayoutDashboardIcon } from 'lucide-react'
+import { BrandMark } from '@/components/brand-mark'
 
 export function AppSidebar({
   user,
@@ -29,8 +29,8 @@ export function AppSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton asChild className="data-[slot=sidebar-menu-button]:p-1.5!">
               <Link to="/">
-                <LayoutDashboardIcon className="size-5!" />
-                <span className="text-sm font-semibold">KubePilot</span>
+                <BrandMark className="size-6 rounded-md" />
+                <span className="text-sm font-semibold tracking-tight">KubePilot</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -40,7 +40,10 @@ export function AppSidebar({
         <NavMain user={user} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={{ name: user.username, role: user.role }} onLogout={onLogout} />
+        <NavUser
+          user={{ name: user.displayName || user.username, username: user.username, role: user.role }}
+          onLogout={onLogout}
+        />
       </SidebarFooter>
     </Sidebar>
   )

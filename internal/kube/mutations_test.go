@@ -157,3 +157,118 @@ func TestTriggerCronJobCreatesJob(t *testing.T) {
 }
 
 func int32Ptr(v int32) *int32 { return &v }
+
+func TestTriggerCronJobLongNameFitsLabelLimit(t *testing.T) {
+	t.Parallel()
+	longName := "a-very-long-cronjob-name-that-is-fifty-two-chars-xx"
+	cj := &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{Name: longName, Namespace: "dev"},
+		Spec: batchv1.CronJobSpec{
+			JobTemplate: batchv1.JobTemplateSpec{
+				Spec: batchv1.JobSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "busybox"}}},
+					},
+				},
+			},
+		},
+	}
+	client := kube.ForTest(fake.NewSimpleClientset(cj))
+	jobName, err := client.TriggerCronJob(context.Background(), "dev", longName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobName) > 63 {
+		t.Fatalf("job name %q is %d chars, want <= 63", jobName, len(jobName))
+	}
+	job, err := client.Inner.BatchV1().Jobs("dev").Get(context.Background(), jobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if owner := metav1.GetControllerOf(job); owner == nil || owner.Name != longName {
+		t.Fatalf("job owner = %v, want cronjob %s", owner, longName)
+	}
+}
+
+func TestRollbackDeploymentStripsTemplateHash(t *testing.T) {
+	t.Parallel()
+	dep := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "dev"},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "web"}},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "web"}},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "nginx:2"}}},
+			},
+		},
+	}
+	rs := &appsv1.ReplicaSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "web-abc",
+			Namespace:   "dev",
+			Labels:      map[string]string{"app": "web"},
+			Annotations: map[string]string{"deployment.kubernetes.io/revision": "1"},
+		},
+		Spec: appsv1.ReplicaSetSpec{
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "web", "pod-template-hash": "abc"}},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "nginx:1"}}},
+			},
+		},
+	}
+	client := kube.ForTest(fake.NewSimpleClientset(dep, rs))
+	if err := client.RollbackDeployment(context.Background(), "dev", "web", 1); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := client.Inner.AppsV1().Deployments("dev").Get(context.Background(), "web", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := updated.Spec.Template.Labels["pod-template-hash"]; ok {
+		t.Fatal("pod-template-hash label should be removed from deployment template")
+	}
+}
+
+func TestDrainNodeEvictsAndSkipsDaemonSetPods(t *testing.T) {
+	t.Parallel()
+	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "n1"}}
+	app := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "app", Namespace: "dev"},
+		Spec:       corev1.PodSpec{NodeName: "n1"},
+		Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+	ds := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ds",
+			Namespace: "kube-system",
+			OwnerReferences: []metav1.OwnerReference{
+				{Kind: "DaemonSet", Name: "agent", Controller: ptrBool(true)},
+			},
+		},
+		Spec:   corev1.PodSpec{NodeName: "n1"},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+	cs := fake.NewSimpleClientset(node, app, ds)
+	client := kube.ForTest(cs)
+	if err := client.DrainNode(context.Background(), "n1"); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := cs.CoreV1().Nodes().Get(context.Background(), "n1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !updated.Spec.Unschedulable {
+		t.Fatal("node should be cordoned")
+	}
+	var evicted []string
+	for _, action := range cs.Actions() {
+		if action.GetSubresource() == "eviction" {
+			evicted = append(evicted, action.GetNamespace())
+		}
+	}
+	if len(evicted) != 1 || evicted[0] != "dev" {
+		t.Fatalf("evictions in namespaces %v, want only [dev]", evicted)
+	}
+}
+
+func ptrBool(v bool) *bool { return &v }

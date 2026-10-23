@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PlusIcon, Trash2Icon } from 'lucide-react'
 import { toast } from 'sonner'
 import { updateResourceEnv } from '@/api'
@@ -26,12 +26,17 @@ export default function WorkloadEnvEditor({
   const ns = resource.metadata?.namespace ?? ''
   const owner = module === 'pods' ? podControlledBy(resource) : `Deployment/${name}`
   const [containers, setContainers] = useState<PodEnvContainer[]>(() => workloadEnvContainers(resource))
+  const [baseline, setBaseline] = useState(() => JSON.stringify(workloadEnvContainers(resource)))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const dirty = useMemo(() => JSON.stringify(containers) !== baseline, [containers, baseline])
 
   useEffect(() => {
-    setContainers(workloadEnvContainers(resource))
+    const initial = workloadEnvContainers(resource)
+    setContainers(initial)
+    setBaseline(JSON.stringify(initial))
     setError('')
+    // Reset only when switching to another resource, not on every live refresh.
   }, [name, ns])
 
   function setEnv(ci: number, ei: number, patch: Partial<PodEnvContainer['env'][number]>) {
@@ -80,6 +85,7 @@ export default function WorkloadEnvEditor({
         })),
       )
       toast.success(`Updated ${ownerInfo.kind} ${ownerInfo.name}. New pods will roll out.`)
+      setBaseline(JSON.stringify(containers))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'failed to update environment')
     } finally {
@@ -143,7 +149,7 @@ export default function WorkloadEnvEditor({
                       />
                     )}
                     {ev.valueFrom ? (
-                      <span className="w-7" />
+                      <span className="w-7 shrink-0" title="References a Secret or ConfigMap; edit it in YAML." />
                     ) : (
                       <Button
                         type="button"
@@ -166,9 +172,20 @@ export default function WorkloadEnvEditor({
           </section>
         ))}
       </div>
-      <div className="flex justify-end">
-        <Button type="button" size="sm" disabled={Boolean(validation) || saving} onClick={() => void onSave()}>
-          {saving ? 'Saving…' : 'Save'}
+      <div className="flex items-center justify-end gap-2 border-t pt-3">
+        {dirty ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={saving}
+            onClick={() => setContainers(JSON.parse(baseline) as PodEnvContainer[])}
+          >
+            Discard changes
+          </Button>
+        ) : null}
+        <Button type="button" size="sm" disabled={Boolean(validation) || saving || !dirty} onClick={() => void onSave()}>
+          {saving ? 'Saving…' : 'Save and roll out'}
         </Button>
       </div>
     </div>

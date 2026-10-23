@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ChevronDownIcon,
   FileCodeIcon,
   PencilIcon,
   RefreshCwIcon,
@@ -11,14 +10,19 @@ import {
   XIcon,
 } from 'lucide-react'
 import type { User } from '@/api'
-import { PodContainersCell } from '@/components/pod-containers'
 import WorkloadEnvEditor from '@/components/workload-env-editor'
 import ResourceYAMLEditor from '@/components/resource-yaml-editor'
 import { IconActionButton } from '@/components/icon-action-button'
 import { StatusBadge } from '@/components/status-badge'
-import { Badge } from '@/components/ui/badge'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Separator } from '@/components/ui/separator'
+import {
+  ConditionBadges,
+  DetailPanel,
+  DetailSection,
+  EventList,
+  MetaList,
+  PropRow,
+  type EventItem,
+} from '@/components/detail-parts'
 import {
   Table,
   TableBody,
@@ -49,50 +53,6 @@ import {
   type K8sObject,
 } from '@/lib/k8s-fields'
 
-type EventItem = {
-  metadata?: { name?: string; namespace?: string; creationTimestamp?: string }
-  reason?: string
-  message?: string
-  type?: string
-  lastTimestamp?: string
-  eventTime?: string
-}
-
-function PropRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-[7.5rem_1fr] gap-2 py-1 text-xs">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 break-all">{children}</dd>
-    </div>
-  )
-}
-
-function MetaList({ title, entries }: { title: string; entries: Record<string, string> }) {
-  const keys = Object.keys(entries)
-  return (
-    <Collapsible>
-      <CollapsibleTrigger className="flex w-full items-center gap-1 py-1 text-xs text-muted-foreground hover:text-foreground">
-        <ChevronDownIcon className="size-3.5" />
-        {title} ({keys.length})
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        {keys.length === 0 ? (
-          <p className="text-xs text-muted-foreground">None</p>
-        ) : (
-          <ul className="space-y-1">
-            {keys.map((key) => (
-              <li key={key} className="break-all font-mono text-[11px]">
-                <span className="text-muted-foreground">{key}: </span>
-                {entries[key]}
-              </li>
-            ))}
-          </ul>
-        )}
-      </CollapsibleContent>
-    </Collapsible>
-  )
-}
-
 export type PodPanelView = 'details' | 'yaml' | 'edit'
 
 export default function PodDetailPanel({
@@ -120,6 +80,10 @@ export default function PodDetailPanel({
   const [refreshing, setRefreshing] = useState(false)
   const onRefreshedRef = useRef(onRefreshed)
   onRefreshedRef.current = onRefreshed
+
+  useEffect(() => {
+    setEvents([])
+  }, [name, ns])
 
   const loadLive = useSingleFlight(
     useCallback(async () => {
@@ -165,46 +129,53 @@ export default function PodDetailPanel({
   const execPath = `/workloads/${encodeURIComponent(ns)}/pods/${encodeURIComponent(name)}/exec`
 
   return (
-    <aside className="flex min-h-0 w-full shrink-0 flex-col overflow-hidden border-l bg-background sm:w-md lg:w-lg xl:w-xl">
-      <header className="flex items-center gap-2 border-b px-3 py-2">
-        <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">Pod: {name}</h2>
-        {can(user, 'pods', 'logs') ? (
-          <IconActionButton tooltip="Logs" onClick={() => navigate(logsPath)}>
-            <ScrollTextIcon />
-          </IconActionButton>
-        ) : null}
-        {can(user, 'pods', 'exec') ? (
-          <IconActionButton tooltip="Shell" onClick={() => navigate(execPath)}>
-            <SquareTerminalIcon />
-          </IconActionButton>
-        ) : null}
-        <IconActionButton tooltip="Refresh" onClick={() => void refresh()} disabled={refreshing}>
-          <RefreshCwIcon className={refreshing ? 'animate-spin' : undefined} />
-        </IconActionButton>
-        {can(user, 'pods', 'yaml_edit') ? (
+    <DetailPanel
+      kind="Pod"
+      name={name}
+      actions={
+        <>
+          {can(user, 'pods', 'logs') ? (
+            <IconActionButton tooltip="Logs" onClick={() => navigate(logsPath)}>
+              <ScrollTextIcon />
+            </IconActionButton>
+          ) : null}
+          {can(user, 'pods', 'exec') ? (
+            <IconActionButton tooltip="Shell" onClick={() => navigate(execPath)}>
+              <SquareTerminalIcon />
+            </IconActionButton>
+          ) : null}
+          {can(user, 'pods', 'yaml_edit') ? (
+            <IconActionButton
+              tooltip={view === 'edit' ? 'Back to details' : 'Edit env'}
+              variant={view === 'edit' ? 'secondary' : 'ghost'}
+              onClick={() => onViewChange(view === 'edit' ? 'details' : 'edit')}
+            >
+              <PencilIcon />
+            </IconActionButton>
+          ) : null}
           <IconActionButton
-            tooltip={view === 'edit' ? 'Details' : 'Edit env'}
-            onClick={() => onViewChange(view === 'edit' ? 'details' : 'edit')}
+            tooltip={view === 'yaml' ? 'Back to details' : 'YAML'}
+            variant={view === 'yaml' ? 'secondary' : 'ghost'}
+            onClick={() => onViewChange(view === 'yaml' ? 'details' : 'yaml')}
           >
-            <PencilIcon />
+            <FileCodeIcon />
           </IconActionButton>
-        ) : null}
-        <IconActionButton
-          tooltip={view === 'yaml' ? 'Details' : 'YAML'}
-          onClick={() => onViewChange(view === 'yaml' ? 'details' : 'yaml')}
-        >
-          <FileCodeIcon />
-        </IconActionButton>
-        {can(user, 'pods', 'delete') ? (
-          <IconActionButton tooltip="Delete" onClick={onDelete}>
-            <Trash2Icon />
+          {view === 'details' ? (
+            <IconActionButton tooltip="Refresh" onClick={() => void refresh()} disabled={refreshing}>
+              <RefreshCwIcon className={refreshing ? 'animate-spin' : undefined} />
+            </IconActionButton>
+          ) : null}
+          {can(user, 'pods', 'delete') ? (
+            <IconActionButton tooltip="Delete" onClick={onDelete}>
+              <Trash2Icon />
+            </IconActionButton>
+          ) : null}
+          <IconActionButton tooltip="Close" onClick={onClose}>
+            <XIcon />
           </IconActionButton>
-        ) : null}
-        <IconActionButton tooltip="Close" onClick={onClose}>
-          <XIcon />
-        </IconActionButton>
-      </header>
-
+        </>
+      }
+    >
       {view === 'yaml' ? (
         <div className="flex min-h-0 flex-1 flex-col p-3">
           <ResourceYAMLEditor
@@ -220,54 +191,35 @@ export default function PodDetailPanel({
           <WorkloadEnvEditor resource={pod} module="pods" />
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto overscroll-contain px-3 py-3">
-          <section>
-            <h3 className="mb-1 text-xs font-medium text-muted-foreground">Properties</h3>
+        <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
+          <DetailSection title="Properties">
             <dl>
-              <PropRow label="Namespace">{ns || '—'}</PropRow>
               <PropRow label="Status">
-                <StatusBadge value={podStatus(pod)} />
+                <StatusBadge value={pod.metadata?.deletionTimestamp ? 'Terminating' : podStatus(pod)} />
               </PropRow>
+              <PropRow label="Namespace">{ns || '—'}</PropRow>
               <PropRow label="Ready">{podReady(pod)}</PropRow>
               <PropRow label="Restarts">{podRestarts(pod)}</PropRow>
               <PropRow label="Node">{podNode(pod) || '—'}</PropRow>
-              <PropRow label="Pod IP">{podIP(pod) || '—'}</PropRow>
-              <PropRow label="QoS">{podQOS(pod)}</PropRow>
-              <PropRow label="Controlled by">{podControlledBy(pod) || '—'}</PropRow>
-              <PropRow label="Created">{formatAge(pod.metadata?.creationTimestamp)}</PropRow>
-              <PropRow label="Containers">
-                <PodContainersCell obj={pod} />
+              <PropRow label="Pod IP">
+                <span className="font-mono">{podIP(pod) || '—'}</span>
               </PropRow>
+              <PropRow label="QoS class">{podQOS(pod)}</PropRow>
+              <PropRow label="Controlled by">{podControlledBy(pod) || '—'}</PropRow>
+              <PropRow label="Created">{formatAge(pod.metadata?.creationTimestamp)} ago</PropRow>
               <PropRow label="Labels">
-                <MetaList title="Labels" entries={objectLabels(pod)} />
+                <MetaList entries={objectLabels(pod)} />
               </PropRow>
               <PropRow label="Annotations">
-                <MetaList title="Annotations" entries={objectAnnotations(pod)} />
+                <MetaList entries={objectAnnotations(pod)} />
               </PropRow>
               <PropRow label="Conditions">
-                {conditions.length === 0 ? (
-                  '—'
-                ) : (
-                  <div className="flex flex-wrap gap-1">
-                    {conditions.map((c) => (
-                      <Badge
-                        key={c.type}
-                        variant={c.ok ? 'outline' : 'destructive'}
-                        className={c.ok ? 'h-5 border-emerald-500/40 text-[10px] text-emerald-500' : 'h-5 text-[10px]'}
-                      >
-                        {c.type}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
+                <ConditionBadges conditions={conditions.map((c) => ({ key: c.type, label: c.type, ok: c.ok }))} />
               </PropRow>
             </dl>
-          </section>
+          </DetailSection>
 
-          <Separator className="my-3" />
-
-          <section>
-            <h3 className="mb-2 text-xs font-medium text-muted-foreground">Containers · {containers.length}</h3>
+          <DetailSection title="Containers" count={containers.length}>
             {containers.length === 0 ? (
               <p className="text-xs text-muted-foreground">No containers reported yet.</p>
             ) : (
@@ -277,10 +229,10 @@ export default function PodDetailPanel({
                     <TableRow>
                       <SerialHead />
                       <TableHead>Name</TableHead>
-                      <TableHead>Kind</TableHead>
+                      <TableHead>Type</TableHead>
                       <TableHead>State</TableHead>
                       <TableHead>Ready</TableHead>
-                      <TableHead>Restarts</TableHead>
+                      <TableHead className="text-right">Restarts</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -292,42 +244,23 @@ export default function PodDetailPanel({
                         <TableCell>
                           <StatusBadge value={container.reason} />
                         </TableCell>
-                        <TableCell>{container.ready ? 'Yes' : 'No'}</TableCell>
-                        <TableCell>{container.restartCount}</TableCell>
+                        <TableCell className={container.ready ? 'text-success' : 'text-muted-foreground'}>
+                          {container.ready ? 'Yes' : 'No'}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{container.restartCount}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
             )}
-          </section>
+          </DetailSection>
 
-          <Separator className="my-3" />
-
-          <section>
-            <h3 className="mb-2 text-xs font-medium text-muted-foreground">Events</h3>
-            {events.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No events found.</p>
-            ) : (
-              <ul className="space-y-2">
-                {events.map((ev) => (
-                  <li key={`${ev.metadata?.namespace}/${ev.metadata?.name}`} className="text-xs">
-                    <div className="flex gap-2">
-                      <span className="text-muted-foreground">
-                        {formatAge(ev.lastTimestamp || ev.eventTime || ev.metadata?.creationTimestamp)}
-                      </span>
-                      <span className={ev.type === 'Warning' ? 'text-destructive' : 'text-emerald-500'}>
-                        {ev.reason}
-                      </span>
-                    </div>
-                    <p className="text-muted-foreground">{ev.message}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <DetailSection title="Events" count={events.length}>
+            <EventList events={events} />
+          </DetailSection>
         </div>
       )}
-    </aside>
+    </DetailPanel>
   )
 }

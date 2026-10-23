@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { logout, me, type User } from '@/api'
+import { installSessionWatcher, logout, me, type User } from '@/api'
 import { AppShell } from '@/components/app-shell'
 import { GrantGuard } from '@/components/grant-guard'
 import { UserProvider } from '@/lib/auth-context'
@@ -12,7 +12,6 @@ import Home from '@/pages/Home'
 import Login from '@/pages/Login'
 import Namespaces from '@/pages/Namespaces'
 import Nodes from '@/pages/Nodes'
-import PodExec from '@/pages/PodExec'
 import PodLogs from '@/pages/PodLogs'
 import ResourceListPage from '@/pages/ResourceListPage'
 import ResourceYAML from '@/pages/ResourceYAML'
@@ -23,7 +22,11 @@ import SettingsLayout from '@/pages/SettingsLayout'
 import SettingsMembers from '@/pages/SettingsMembers'
 import SettingsSets from '@/pages/SettingsSets'
 import Workloads from '@/pages/Workloads'
+import { BrandMark } from '@/components/brand-mark'
 import { PageLoading } from '@/components/page-loading'
+
+// The terminal pulls in xterm.js; load it only when a shell is opened.
+const PodExec = lazy(() => import('@/pages/PodExec'))
 
 function OwnerGuard({ user }: { user: User }) {
   if (user.role !== 'owner') {
@@ -47,6 +50,16 @@ function yamlRoutes(base: string, label: string) {
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [sessionNotice, setSessionNotice] = useState('')
+
+  useEffect(() => {
+    installSessionWatcher(() => {
+      setUser((current) => {
+        if (current) setSessionNotice('Your session has expired. Sign in again to continue.')
+        return null
+      })
+    })
+  }, [])
 
   useEffect(() => {
     me()
@@ -62,8 +75,12 @@ export default function App() {
   }, [])
 
   async function onLogout() {
-    await logout()
-    setUser(null)
+    try {
+      await logout()
+    } finally {
+      setSessionNotice('')
+      setUser(null)
+    }
   }
 
   async function refreshUser() {
@@ -73,18 +90,27 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="flex min-h-svh items-center justify-center bg-muted/40">
-        <PageLoading />
+      <div className="flex min-h-svh flex-col items-center justify-center gap-3 bg-muted/40" aria-busy="true">
+        <BrandMark className="size-10 animate-pulse" />
+        <p className="text-sm text-muted-foreground">Loading KubePilot…</p>
       </div>
     )
   }
 
   if (!user) {
-    return <Login onLogin={setUser} />
+    return (
+      <Login
+        notice={sessionNotice}
+        onLogin={(u) => {
+          setSessionNotice('')
+          setUser(u)
+        }}
+      />
+    )
   }
 
   if (user.role === 'member' && user.mustChangePassword) {
-    return <ChangePassword onChanged={refreshUser} />
+    return <ChangePassword onChanged={refreshUser} onLogout={onLogout} />
   }
 
   return (
@@ -116,7 +142,9 @@ export default function App() {
               path="/workloads/:ns/pods/:pod/exec"
               element={
                 <GrantGuard module="pods" action="exec">
-                  <PodExec />
+                  <Suspense fallback={<PageLoading />}>
+                    <PodExec />
+                  </Suspense>
                 </GrantGuard>
               }
             />

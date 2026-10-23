@@ -17,6 +17,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  useSidebar,
 } from '@/components/ui/sidebar'
 import { ChevronRightIcon } from 'lucide-react'
 
@@ -59,9 +60,13 @@ function NavSection({
   grants?: Record<string, string[]>
 }) {
   const { pathname } = useLocation()
+  const { isMobile, setOpenMobile, state } = useSidebar()
   const active = sectionActive(pathname, section)
   const Icon = section.icon
   const kinds = visibleKinds(section, isOwner, grants)
+  const closeMobile = () => {
+    if (isMobile) setOpenMobile(false)
+  }
 
   const [open, setOpen] = useState(active)
   useEffect(() => {
@@ -72,7 +77,7 @@ function NavSection({
     return (
       <SidebarMenuItem>
         <SidebarMenuButton asChild isActive={active} tooltip={section.title} className="h-7 text-[13px]">
-          <NavLink to={section.url ?? '/'}>
+          <NavLink to={section.url ?? '/'} onClick={closeMobile}>
             <Icon />
             <span>{section.title}</span>
           </NavLink>
@@ -83,11 +88,25 @@ function NavSection({
 
   if (kinds.length === 0) return null
 
+  // In icon-only mode the sub-menu is hidden, so the icon goes straight to the first page.
+  if (state === 'collapsed' && !isMobile) {
+    return (
+      <SidebarMenuItem>
+        <SidebarMenuButton asChild isActive={active} tooltip={section.title} className="h-7 text-[13px]">
+          <NavLink to={kindUrl(section, kinds[0])}>
+            <Icon />
+            <span>{section.title}</span>
+          </NavLink>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    )
+  }
+
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="group/collapsible">
       <SidebarMenuItem>
         <CollapsibleTrigger asChild>
-          <SidebarMenuButton tooltip={section.title} className="h-7 text-[13px]">
+          <SidebarMenuButton tooltip={section.title} isActive={active && !open} className="h-7 text-[13px]">
             <Icon />
             <span>{section.title}</span>
             <ChevronRightIcon className="ml-auto size-3.5 transition-transform group-data-[state=open]/collapsible:rotate-90" />
@@ -100,7 +119,7 @@ function NavSection({
               return (
                 <SidebarMenuSubItem key={url}>
                   <SidebarMenuSubButton asChild size="sm" isActive={leafActive(pathname, url)}>
-                    <NavLink to={url}>
+                    <NavLink to={url} onClick={closeMobile}>
                       <span>{kind.label}</span>
                     </NavLink>
                   </SidebarMenuSubButton>

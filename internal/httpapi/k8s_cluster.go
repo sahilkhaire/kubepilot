@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/sahilkhaire/kubepilot/internal/kube"
 	"github.com/sahilkhaire/kubepilot/internal/rbac"
 	"github.com/sahilkhaire/kubepilot/internal/store"
 )
@@ -150,11 +152,11 @@ func handleCreateNamespace(w http.ResponseWriter, r *http.Request, deps Deps) {
 	created, err := deps.Kube.CreateNamespace(r.Context(), name, req.Labels)
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) {
-			w.WriteHeader(http.StatusConflict)
+			writeError(w, http.StatusConflict, "namespace "+name+" already exists")
 			return
 		}
 		log.Printf("kube create namespace: name=%s err=%v", name, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		writeKubeError(w, err)
 		return
 	}
 	if len(req.Annotations) > 0 {
@@ -373,8 +375,13 @@ func handleNodeDrain(w http.ResponseWriter, r *http.Request, deps Deps) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
+		var incomplete *kube.DrainIncompleteError
+		if errors.As(err, &incomplete) {
+			writeError(w, http.StatusConflict, incomplete.Message)
+			return
+		}
 		log.Printf("kube drain node: name=%s err=%v", name, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		writeKubeError(w, err)
 		return
 	}
 

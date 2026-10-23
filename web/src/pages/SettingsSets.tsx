@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import {
   createPermissionSet,
   deletePermissionSet,
@@ -91,6 +92,8 @@ export default function SettingsSets() {
   const [editor, setEditor] = useState<EditorState | null>(null)
   const [startFrom, setStartFrom] = useState('')
   const [setToDelete, setSetToDelete] = useState<PermissionSet | null>(null)
+  const [editorError, setEditorError] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   async function load() {
     setError('')
@@ -146,6 +149,7 @@ export default function SettingsSets() {
   }, [templates])
 
   function openCreate() {
+    setEditorError('')
     setStartFrom('')
     setEditor({
       ...emptyEditor,
@@ -156,11 +160,13 @@ export default function SettingsSets() {
   }
 
   function openEdit(ps: PermissionSet) {
+    setEditorError('')
     setStartFrom('')
     setEditor(editorFromSet(ps))
   }
 
   function openClone(ps: PermissionSet) {
+    setEditorError('')
     setStartFrom('')
     const next = editorFromSet(ps, `${ps.name} copy`)
     delete next.id
@@ -187,7 +193,7 @@ export default function SettingsSets() {
   async function onSave(e: React.FormEvent) {
     e.preventDefault()
     if (!editor) return
-    setError('')
+    setEditorError('')
     setSaving(true)
     try {
       if (editor.id) {
@@ -209,10 +215,12 @@ export default function SettingsSets() {
           namespaceRegex: editor.namespaceRegex,
         })
       }
+      toast.success(editor.id ? `Saved ${editor.name}` : `Created ${editor.name}`)
       setEditor(null)
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save permission set')
+      // Shown inside the dialog so it isn't hidden behind it.
+      setEditorError(err instanceof Error ? err.message : 'Failed to save permission set')
     } finally {
       setSaving(false)
     }
@@ -221,8 +229,10 @@ export default function SettingsSets() {
   async function onDelete() {
     if (!setToDelete) return
     setError('')
+    setDeleting(true)
     try {
       await deletePermissionSet(setToDelete.id)
+      toast.success(`Deleted ${setToDelete.name}`)
       setSetToDelete(null)
       await load()
     } catch (err) {
@@ -234,6 +244,8 @@ export default function SettingsSets() {
           : 'Failed to delete permission set',
       )
       setSetToDelete(null)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -313,7 +325,7 @@ export default function SettingsSets() {
         </CardContent>
       </Card>
 
-      <Dialog open={editor != null} onOpenChange={(open) => !open && setEditor(null)}>
+      <Dialog open={editor != null} onOpenChange={(open) => !open && !saving && setEditor(null)}>
         <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-4xl">
           <DialogHeader className="shrink-0">
             <DialogTitle>{editor?.id ? 'Edit permission set' : 'New permission set'}</DialogTitle>
@@ -323,6 +335,11 @@ export default function SettingsSets() {
           </DialogHeader>
           {editor ? (
             <form onSubmit={onSave} className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+              <ErrorAlert
+                message={editorError}
+                className="mx-0 mt-0 shrink-0"
+                onDismiss={() => setEditorError('')}
+              />
               <div className="grid shrink-0 gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <Label htmlFor="ps-name">Name</Label>
@@ -411,9 +428,11 @@ export default function SettingsSets() {
             : ''
         }
         confirmLabel="Delete"
+        pendingLabel="Deleting…"
         destructive
+        pending={deleting}
         onConfirm={onDelete}
-        onCancel={() => setSetToDelete(null)}
+        onCancel={() => !deleting && setSetToDelete(null)}
       />
     </div>
   )

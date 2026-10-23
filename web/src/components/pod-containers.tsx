@@ -8,8 +8,8 @@ import {
 import { cn } from '@/lib/utils'
 
 function squareClass(container: PodContainerInfo): string {
-  if (container.state === 'running') return 'bg-emerald-500'
-  if (container.state === 'waiting' || container.state === 'unknown') return 'bg-amber-500'
+  if (container.state === 'running') return 'bg-success'
+  if (container.state === 'waiting' || container.state === 'unknown') return 'bg-warning'
   if (container.state === 'terminated' && container.exitCode === 0) return 'bg-muted-foreground/45'
   return 'bg-destructive'
 }

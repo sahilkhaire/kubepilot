@@ -2,8 +2,12 @@ package kube
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -23,7 +27,10 @@ func (c *Client) CordonNode(ctx context.Context, name string, unschedulable bool
 	return err
 }
 
-// DrainNode cordons the node and evicts pods (best-effort).
+// DrainNode cordons the node and evicts its pods through the Eviction API, so
+// PodDisruptionBudgets are respected. DaemonSet pods, static (mirror) pods and
+// finished pods are skipped, matching `kubectl drain --ignore-daemonsets`.
+// Pods blocked by a disruption budget are reported in the returned error.
 func (c *Client) DrainNode(ctx context.Context, name string) error {
 	if c.Drainer != nil {
 		return c.Drainer.DrainNode(ctx, name)
@@ -35,13 +42,54 @@ func (c *Client) DrainNode(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
+	var blocked, failed []string
 	for _, pod := range pods {
-		if pod.Namespace == "" {
+		if !shouldEvict(pod) {
 			continue
 		}
-		_ = c.Inner.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{})
+		err := c.Inner.CoreV1().Pods(pod.Namespace).EvictV1(ctx, &policyv1.Eviction{
+			ObjectMeta: metav1.ObjectMeta{Name: pod.Name, Namespace: pod.Namespace},
+		})
+		switch {
+		case err == nil, apierrors.IsNotFound(err):
+		case apierrors.IsTooManyRequests(err):
+			blocked = append(blocked, pod.Namespace+"/"+pod.Name)
+		default:
+			failed = append(failed, pod.Namespace+"/"+pod.Name)
+		}
+	}
+	if len(blocked) > 0 || len(failed) > 0 {
+		var parts []string
+		if len(blocked) > 0 {
+			parts = append(parts, fmt.Sprintf("blocked by a disruption budget: %s", strings.Join(blocked, ", ")))
+		}
+		if len(failed) > 0 {
+			parts = append(parts, fmt.Sprintf("could not evict: %s", strings.Join(failed, ", ")))
+		}
+		return &DrainIncompleteError{Message: "node cordoned, but some pods were not evicted (" + strings.Join(parts, "; ") + ")"}
 	}
 	return nil
+}
+
+// DrainIncompleteError means the node was cordoned but some pods remain.
+type DrainIncompleteError struct{ Message string }
+
+func (e *DrainIncompleteError) Error() string { return e.Message }
+
+func shouldEvict(pod corev1.Pod) bool {
+	if pod.Namespace == "" || pod.DeletionTimestamp != nil {
+		return false
+	}
+	if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+		return false
+	}
+	if _, mirror := pod.Annotations[corev1.MirrorPodAnnotationKey]; mirror {
+		return false
+	}
+	if owner := metav1.GetControllerOf(&pod); owner != nil && owner.Kind == "DaemonSet" {
+		return false
+	}
+	return true
 }
 
 // ListPodsOnNode returns pods scheduled on the named node.

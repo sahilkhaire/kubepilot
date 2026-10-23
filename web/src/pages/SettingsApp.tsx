@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
+import { readAPIError } from '@/api'
 import { ErrorAlert } from '@/components/error-alert'
+import EmptyState from '@/components/EmptyState'
 import { PageLoading } from '@/components/page-loading'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -31,7 +34,7 @@ export default function SettingsApp() {
       try {
         const res = await fetch('/api/settings/app', { credentials: 'same-origin' })
         if (!res.ok) {
-          throw new Error('failed to load settings')
+          throw new Error(await readAPIError(res, 'Failed to load settings'))
         }
         const data: AppSettings = await res.json()
         if (!cancelled) {
@@ -78,11 +81,12 @@ export default function SettingsApp() {
         body: JSON.stringify({ helmRepositories: repos }),
       })
       if (!res.ok) {
-        throw new Error('failed to save settings')
+        throw new Error(await readAPIError(res, 'Failed to save settings'))
       }
       const data: AppSettings = await res.json()
       setRepos(data.helmRepositories ?? [])
-      setMessage('Saved.')
+      setMessage('')
+      toast.success('Settings saved')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'save failed')
     } finally {
@@ -101,13 +105,16 @@ export default function SettingsApp() {
         <CardDescription>Configure Helm chart repositories. No public repos are added by default.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <ErrorAlert message={error} />
+        <ErrorAlert message={error} className="mx-0 mt-0" />
         {message ? (
           <Alert>
             <AlertDescription>{message}</AlertDescription>
           </Alert>
         ) : null}
         <form onSubmit={onSave} className="space-y-4">
+          {repos.length === 0 ? (
+            <EmptyState className="py-6">No Helm repositories configured.</EmptyState>
+          ) : null}
           {repos.map((repo, index) => (
             <div key={index} className="flex flex-col gap-2 sm:flex-row sm:items-end">
               <div className="grid flex-1 gap-2">
@@ -132,7 +139,7 @@ export default function SettingsApp() {
                   required
                 />
               </div>
-              <Button type="button" variant="outline" onClick={() => removeRepo(index)}>
+              <Button type="button" variant="ghost" className="text-muted-foreground" onClick={() => removeRepo(index)}>
                 Remove
               </Button>
             </div>

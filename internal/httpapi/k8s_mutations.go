@@ -124,7 +124,7 @@ func handleResourceDelete(w http.ResponseWriter, r *http.Request, deps Deps, mod
 			return
 		}
 		log.Printf("kube delete %s: ns=%s name=%s err=%v", module, ns, name, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		writeKubeError(w, err)
 		return
 	}
 
@@ -169,7 +169,7 @@ func handleWorkloadScale(w http.ResponseWriter, r *http.Request, deps Deps, modu
 			return
 		}
 		log.Printf("kube scale %s: ns=%s name=%s err=%v", module, ns, name, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		writeKubeError(w, err)
 		return
 	}
 
@@ -210,7 +210,7 @@ func handleWorkloadRestart(w http.ResponseWriter, r *http.Request, deps Deps, mo
 			return
 		}
 		log.Printf("kube restart %s: ns=%s name=%s err=%v", module, ns, name, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		writeKubeError(w, err)
 		return
 	}
 
@@ -256,7 +256,7 @@ func handleDeploymentRollback(w http.ResponseWriter, r *http.Request, deps Deps)
 			return
 		}
 		log.Printf("kube rollback deployment: ns=%s name=%s err=%v", ns, name, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		writeKubeError(w, err)
 		return
 	}
 
@@ -299,7 +299,7 @@ func handleCronJobTrigger(w http.ResponseWriter, r *http.Request, deps Deps) {
 			return
 		}
 		log.Printf("kube trigger cronjob: ns=%s name=%s err=%v", ns, name, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		writeKubeError(w, err)
 		return
 	}
 

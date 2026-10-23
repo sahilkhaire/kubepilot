@@ -7,7 +7,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import type { YAMLTarget } from '@/lib/k8s-yaml'
-import { isClusterScopedModule } from '@/lib/k8s-yaml'
+import { gvkForModule, isClusterScopedModule } from '@/lib/k8s-yaml'
 
 export default function ResourceYAMLSheet({
   target,
@@ -34,14 +34,15 @@ export default function ResourceYAMLSheet({
         {target ? (
           <div className="flex h-full min-h-0 flex-col">
             <SheetHeader className="border-b">
-              <SheetTitle className="font-mono text-sm">
-                YAML: {target.module}/{target.name}
+              <SheetTitle className="truncate pr-6 text-sm" title={target.name}>
+                {target.name}
               </SheetTitle>
-              <SheetDescription>
-                {scoped ? 'Cluster-scoped resource' : `Namespace ${target.namespace ?? '—'}`}
+              <SheetDescription className="text-xs">
+                {gvkForModule[target.module]?.split('/').pop() ?? target.module}
+                {scoped ? ' · cluster-scoped' : ` · ${target.namespace ?? '—'}`}
               </SheetDescription>
             </SheetHeader>
-            <div className="flex min-h-0 flex-1 flex-col p-4">
+            <div className="flex min-h-0 flex-1 flex-col p-3">
               <ResourceYAMLEditor
                 module={target.module}
                 name={target.name}

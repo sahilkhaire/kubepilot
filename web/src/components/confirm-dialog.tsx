@@ -14,17 +14,21 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = 'Confirm',
+  pendingLabel = 'Working…',
   pending = false,
   destructive = false,
+  children,
   onConfirm,
   onCancel,
 }: {
   open: boolean
   title: string
-  description: string
+  description: React.ReactNode
   confirmLabel?: string
+  pendingLabel?: string
   pending?: boolean
   destructive?: boolean
+  children?: React.ReactNode
   onConfirm: () => void | Promise<void>
   onCancel: () => void
 }) {
@@ -32,9 +36,10 @@ export function ConfirmDialog({
     <AlertDialog open={open} onOpenChange={(next) => !next && !pending && onCancel()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogTitle className="break-words">{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
+        {children}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
           <Button
@@ -42,7 +47,7 @@ export function ConfirmDialog({
             disabled={pending}
             onClick={() => void onConfirm()}
           >
-            {pending ? 'Working…' : confirmLabel}
+            {pending ? pendingLabel : confirmLabel}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

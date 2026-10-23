@@ -118,10 +118,12 @@ func (k *kubeExecUpgrader) Handle(w http.ResponseWriter, r *http.Request, ns, po
 		return err
 	}
 
+	// stdout and stderr share one websocket, which allows only one writer at a time.
+	writeMu := &sync.Mutex{}
 	streamErr := executor.StreamWithContext(ctx, remotecommand.StreamOptions{
 		Stdin:             stdinReader,
-		Stdout:            &wsStreamWriter{conn: conn, stream: wsStreamStdout},
-		Stderr:            &wsStreamWriter{conn: conn, stream: wsStreamStderr},
+		Stdout:            &wsStreamWriter{conn: conn, stream: wsStreamStdout, mu: writeMu},
+		Stderr:            &wsStreamWriter{conn: conn, stream: wsStreamStderr, mu: writeMu},
 		Tty:               true,
 		TerminalSizeQueue: &chanTerminalSizeQueue{ch: sizeQueue},
 	})
@@ -145,7 +147,7 @@ func waitExecReader(conn *websocket.Conn, stdinReader *io.PipeReader, wg *sync.W
 type wsStreamWriter struct {
 	conn   *websocket.Conn
 	stream byte
-	mu     sync.Mutex
+	mu     *sync.Mutex
 }
 
 func (w *wsStreamWriter) Write(p []byte) (int, error) {

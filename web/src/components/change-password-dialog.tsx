@@ -47,8 +47,8 @@ export function ChangePasswordDialog({
       await changePassword(currentPassword, newPassword)
       toast.success('Password updated')
       onOpenChange(false)
-    } catch {
-      setError('Password change failed. Check your current password.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Password change failed.')
     } finally {
       setPending(false)
     }

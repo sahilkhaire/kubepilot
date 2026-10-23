@@ -15,8 +15,15 @@ import { catalog, kindUrl, settingsSection } from '@/lib/catalog'
 type Crumb = { label: string; href?: string }
 
 function crumbsFor(pathname: string): Crumb[] {
-  if (pathname.includes('/logs')) return [{ label: 'Workloads', href: '/workloads/overview' }, { label: 'Pods', href: '/workloads/pods' }, { label: 'Logs' }]
-  if (pathname.includes('/exec')) return [{ label: 'Workloads', href: '/workloads/overview' }, { label: 'Pods', href: '/workloads/pods' }, { label: 'Terminal' }]
+  const podView = pathname.match(/^\/workloads\/[^/]+\/pods\/([^/]+)\/(logs|exec)$/)
+  if (podView) {
+    return [
+      { label: 'Workloads', href: '/workloads/overview' },
+      { label: 'Pods', href: '/workloads/pods' },
+      { label: decodeURIComponent(podView[1]) },
+      { label: podView[2] === 'logs' ? 'Logs' : 'Shell' },
+    ]
+  }
   if (pathname.endsWith('/yaml')) {
     const parts = pathname.split('/').filter(Boolean)
     const group = parts[0]
@@ -59,18 +66,18 @@ export function SiteHeader() {
       <div className="flex w-full items-center gap-1 px-3">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
-        <Breadcrumb>
+        <Breadcrumb className="min-w-0">
           <BreadcrumbList>
             {crumbs.flatMap((crumb, i) => {
               const last = i === crumbs.length - 1
               const nodes = []
               if (i > 0) {
-                nodes.push(<BreadcrumbSeparator key={`sep-${crumb.label}`} />)
+                nodes.push(<BreadcrumbSeparator key={`sep-${i}`} />)
               }
               nodes.push(
-                <BreadcrumbItem key={crumb.label}>
+                <BreadcrumbItem key={`crumb-${i}`} className="min-w-0">
                   {last || !crumb.href ? (
-                    <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                    <BreadcrumbPage className="truncate">{crumb.label}</BreadcrumbPage>
                   ) : (
                     <BreadcrumbLink asChild>
                       <Link to={crumb.href}>{crumb.label}</Link>

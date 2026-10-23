@@ -76,7 +76,7 @@ func handlePodLogs(w http.ResponseWriter, r *http.Request, deps Deps) {
 	rc, err := streamer.Stream(r.Context(), ns, pod, container, opts)
 	if err != nil {
 		log.Printf("pod logs stream: ns=%s pod=%s err=%v", ns, pod, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		writeKubeError(w, err)
 		return
 	}
 	defer rc.Close()

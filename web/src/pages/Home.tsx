@@ -1,23 +1,32 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Badge } from '@/components/ui/badge'
+import { ArrowRightIcon, CompassIcon } from 'lucide-react'
+import { readAPIError } from '@/api'
+import EmptyState from '@/components/EmptyState'
 import { PageBody, PageHeader } from '@/components/page-header'
-import { PageLoading } from '@/components/page-loading'
 import { ErrorAlert } from '@/components/error-alert'
 import MetricsPanel from '@/components/MetricsPanel'
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useLiveRefresh, useSingleFlight } from '@/hooks/use-live-refresh'
 import { useUser } from '@/lib/auth-context'
-import { can } from '@/lib/grants'
+import { catalog, kindUrl } from '@/lib/catalog'
+import { can, hasView } from '@/lib/grants'
+import { workloadKinds } from '@/lib/workload-kinds'
 
-const labels: Record<string, { label: string; href: string }> = {
-  pods: { label: 'Pods', href: '/workloads/pods' },
-  deployments: { label: 'Deployments', href: '/workloads/deployments' },
-  statefulsets: { label: 'Stateful Sets', href: '/workloads/statefulsets' },
-  daemonsets: { label: 'Daemon Sets', href: '/workloads/daemonsets' },
-  replicasets: { label: 'Replica Sets', href: '/workloads/replicasets' },
-  jobs: { label: 'Jobs', href: '/workloads/jobs' },
-  cronjobs: { label: 'Cron Jobs', href: '/workloads/cronjobs' },
+/** First page the user may open, used when they cannot see the overview. */
+function firstAllowedPage(user: ReturnType<typeof useUser>): { title: string; url: string } | null {
+  for (const section of catalog) {
+    if (section.id === 'overview') continue
+    if (section.url && section.grantModule && hasView(user.grants, section.grantModule)) {
+      return { title: section.title, url: section.url }
+    }
+    for (const kind of section.kinds ?? []) {
+      if (hasView(user.grants, kind.grantModule ?? kind.module)) {
+        return { title: `${section.title} · ${kind.label}`, url: kindUrl(section, kind) }
+      }
+    }
+  }
+  return null
 }
 
 export default function Home() {
@@ -27,32 +36,30 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const canOverview = can(user, 'cluster.overview', 'view')
   const canMetrics = can(user, 'metrics', 'view')
-  const visibleCards = Object.entries(labels).filter(([key]) => can(user, key, 'view'))
+  const visibleCards = workloadKinds.filter((kind) => can(user, kind.module, 'view'))
+  const greeting = user.displayName || user.username
 
   const load = useSingleFlight(
-    useCallback(async (initial = false) => {
-    if (!canOverview) {
-      setLoading(false)
-      setCounts({})
-      return
-    }
-    if (initial) setLoading(true)
-    try {
-      const res = await fetch('/api/k8s/cluster/overview', { credentials: 'same-origin' })
-      if (!res.ok) {
-        throw new Error('failed to load cluster overview')
-      }
-      const data: Record<string, number> = await res.json()
-      setCounts(data)
-      setError('')
-    } catch (e) {
-      if (initial) {
-        setError(e instanceof Error ? e.message : 'load failed')
-      }
-    } finally {
-      if (initial) setLoading(false)
-    }
-  }, [canOverview]),
+    useCallback(
+      async (initial = false) => {
+        if (!canOverview) {
+          setLoading(false)
+          return
+        }
+        try {
+          const res = await fetch('/api/k8s/cluster/overview', { credentials: 'same-origin' })
+          if (!res.ok) throw new Error(await readAPIError(res, 'Failed to load the cluster overview'))
+          const data: Record<string, number> = await res.json()
+          setCounts(data)
+          setError('')
+        } catch (e) {
+          if (initial) setError(e instanceof Error ? e.message : 'Load failed')
+        } finally {
+          if (initial) setLoading(false)
+        }
+      },
+      [canOverview],
+    ),
   )
 
   useEffect(() => {
@@ -60,32 +67,64 @@ export default function Home() {
   }, [load])
   useLiveRefresh(() => load(false), canOverview)
 
+  if (!canOverview && !canMetrics) {
+    const next = firstAllowedPage(user)
+    return (
+      <PageBody>
+        <PageHeader title={`Welcome, ${greeting}`} />
+        <EmptyState
+          icon={CompassIcon}
+          action={
+            next ? (
+              <Link
+                to={next.url}
+                className="inline-flex items-center gap-1 text-sm font-medium underline-offset-4 hover:underline"
+              >
+                Go to {next.title}
+                <ArrowRightIcon className="size-3.5" />
+              </Link>
+            ) : null
+          }
+        >
+          {next
+            ? 'The cluster overview is not part of your permissions. Use the sidebar to open the areas you can access.'
+            : 'Your account has no permissions yet. Ask the owner to assign you a permission set.'}
+        </EmptyState>
+      </PageBody>
+    )
+  }
+
   return (
     <PageBody className="overflow-auto">
-      <PageHeader title="Overview" description="Workload counts across granted namespaces.">
-        <Badge variant="outline" className="h-5 capitalize">
-          {user.username} · {user.role}
-        </Badge>
-      </PageHeader>
+      <PageHeader title="Overview" description="Workloads across the namespaces you can access" />
       <ErrorAlert message={error} />
-      {loading ? (
-        <div className="p-3">
-          <PageLoading compact />
+      {canOverview && visibleCards.length > 0 ? (
+        <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7">
+          {visibleCards.map((kind) => {
+            const Icon = kind.icon
+            return (
+              <Link
+                key={kind.module}
+                to={kind.href}
+                className="group flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-3 transition-colors hover:border-foreground/20 hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+              >
+                <span className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Icon className="size-3.5" />
+                    {kind.label}
+                  </span>
+                  <ArrowRightIcon className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+                </span>
+                {loading ? (
+                  <Skeleton className="h-7 w-12" />
+                ) : (
+                  <span className="text-2xl font-semibold tabular-nums">{counts[kind.module] ?? '—'}</span>
+                )}
+              </Link>
+            )
+          })}
         </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
-          {visibleCards.map(([key, meta]) => (
-            <Link key={key} to={meta.href} className="min-w-0">
-              <Card className="shadow-none ring-foreground/8 transition-colors hover:bg-muted/40">
-                <CardHeader className="gap-1 py-3">
-                  <CardDescription className="text-[11px]">{meta.label}</CardDescription>
-                  <CardTitle className="text-xl tabular-nums">{canOverview ? (counts[key] ?? '—') : '—'}</CardTitle>
-                </CardHeader>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
+      ) : null}
       {canMetrics ? (
         <div className="px-3 pb-3">
           <MetricsPanel scope="cluster" title="Cluster metrics" />

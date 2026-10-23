@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { CopyIcon, RotateCcwIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { deleteK8sResource } from '@/api'
+import { deleteK8sResource, readAPIError } from '@/api'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import DeleteConfirm from '@/components/DeleteConfirm'
 import { ErrorAlert } from '@/components/error-alert'
 import { PageLoading } from '@/components/page-loading'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { gvkForModule, isClusterScopedModule } from '@/lib/k8s-yaml'
@@ -32,49 +34,61 @@ export default function ResourceYAMLEditor({
   const allowEdit = Boolean(canEdit) && module !== 'pods'
   const readOnlyHint =
     hint ??
-    (module === 'pods' ? 'YAML is read-only. Use Edit env to change environment variables.' : undefined)
+    (module === 'pods'
+      ? 'Pod YAML is read-only. Use Edit env to change environment variables.'
+      : !allowEdit
+        ? 'Read-only. You do not have permission to edit this resource.'
+        : undefined)
   const [yaml, setYaml] = useState('')
+  const [original, setOriginal] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [applying, setApplying] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const dirty = yaml !== original
 
-  useEffect(() => {
-    const gvk = gvkForModule[module]
-    if (!gvk || !name) {
-      setError('unsupported resource type')
-      setLoading(false)
-      return
-    }
-    if (!scoped && !namespace) {
-      setError('namespace required')
-      setLoading(false)
-      return
-    }
-    let cancelled = false
-    async function load() {
-      setLoading(true)
+  const load = useCallback(
+    async (signal?: { cancelled: boolean }) => {
+      const gvk = gvkForModule[module]
+      if (!gvk || !name) {
+        setError('This resource type does not support YAML.')
+        setLoading(false)
+        return
+      }
+      if (!scoped && !namespace) {
+        setError('A namespace is required to load this resource.')
+        setLoading(false)
+        return
+      }
       setError('')
       try {
         const params = new URLSearchParams({ gvk, name })
         if (!scoped && namespace) params.set('namespace', namespace)
         const res = await fetch(`/api/k8s/yaml?${params}`, { credentials: 'same-origin' })
-        if (!res.ok) throw new Error(`failed to load yaml (${res.status})`)
+        if (!res.ok) throw new Error(await readAPIError(res, 'Failed to load YAML'))
         const text = await res.text()
-        if (!cancelled) setYaml(text)
+        if (signal?.cancelled) return
+        setYaml(text)
+        setOriginal(text)
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'load failed')
+        if (!signal?.cancelled) setError(e instanceof Error ? e.message : 'Failed to load YAML')
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!signal?.cancelled) setLoading(false)
       }
-    }
-    load()
+    },
+    [module, name, namespace, scoped],
+  )
+
+  useEffect(() => {
+    const signal = { cancelled: false }
+    setLoading(true)
+    void load(signal)
     return () => {
-      cancelled = true
+      signal.cancelled = true
     }
-  }, [module, name, namespace, scoped])
+  }, [load])
 
   async function applyYAML() {
     setApplying(true)
@@ -87,19 +101,15 @@ export default function ResourceYAMLEditor({
         body: JSON.stringify({ yaml }),
       })
       if (!res.ok) {
-        let message = `apply failed (${res.status})`
-        try {
-          const data = (await res.json()) as { error?: string }
-          if (data?.error) message = data.error
-        } catch {
-          // keep status fallback
-        }
-        throw new Error(message)
+        throw new Error(await readAPIError(res, 'Apply failed'))
       }
       setConfirmOpen(false)
-      toast.success(`Applied ${module}/${name}`)
+      toast.success(`Applied ${name}`)
+      // Reload so the editor holds the new resourceVersion and server defaults.
+      await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'apply failed')
+      setConfirmOpen(false)
+      setError(e instanceof Error ? e.message : 'Apply failed')
     } finally {
       setApplying(false)
     }
@@ -117,9 +127,19 @@ export default function ResourceYAMLEditor({
       toast.success(`Deleted ${name}`)
       onDeleted?.()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'delete failed')
+      setDeleteOpen(false)
+      setError(e instanceof Error ? e.message : 'Delete failed')
     } finally {
       setDeleting(false)
+    }
+  }
+
+  async function copyYAML() {
+    try {
+      await navigator.clipboard.writeText(yaml)
+      toast.success('YAML copied')
+    } catch {
+      toast.error('Could not copy to the clipboard')
     }
   }
 
@@ -127,39 +147,88 @@ export default function ResourceYAMLEditor({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
-      {(allowEdit || canDelete) ? (
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        {allowEdit ? (
-          <Button type="button" size="sm" onClick={() => setConfirmOpen(true)} disabled={applying || deleting}>
-            Apply
-          </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        {readOnlyHint ? <p className="mr-auto text-xs text-muted-foreground">{readOnlyHint}</p> : null}
+        {allowEdit && dirty ? (
+          <Badge variant="outline" className="mr-auto h-5 border-warning/30 bg-warning/10 text-[11px] text-warning">
+            Unsaved changes
+          </Badge>
         ) : null}
-        {canDelete ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="destructive"
-            onClick={() => setDeleteOpen(true)}
-            disabled={applying || deleting}
-          >
-            Delete
+        <div className="ml-auto flex items-center gap-1.5">
+          <Button type="button" size="sm" variant="ghost" onClick={() => void copyYAML()} disabled={!yaml}>
+            <CopyIcon />
+            Copy
           </Button>
-        ) : null}
+          {allowEdit ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => (dirty ? setYaml(original) : void load())}
+              disabled={applying || deleting}
+            >
+              <RotateCcwIcon />
+              {dirty ? 'Revert' : 'Reload'}
+            </Button>
+          ) : null}
+          {canDelete ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setDeleteOpen(true)}
+              disabled={applying || deleting}
+            >
+              Delete
+            </Button>
+          ) : null}
+          {allowEdit ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setConfirmOpen(true)}
+              disabled={applying || deleting || !dirty}
+            >
+              {applying ? 'Applying…' : 'Apply'}
+            </Button>
+          ) : null}
+        </div>
       </div>
-      ) : null}
-      {readOnlyHint ? <p className="text-xs text-muted-foreground">{readOnlyHint}</p> : null}
-      <ErrorAlert message={error} />
+      <ErrorAlert message={error} className="mx-0 mt-0" />
       <Textarea
         value={yaml}
         onChange={(e) => setYaml(e.target.value)}
         readOnly={!allowEdit}
-        className="min-h-0 flex-1 overflow-auto font-mono text-xs"
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        aria-label={`YAML for ${name}`}
+        onKeyDown={(e) => {
+          // Keep focus in the editor and insert two spaces instead of moving focus.
+          if (e.key === 'Tab' && allowEdit && !e.shiftKey) {
+            e.preventDefault()
+            const el = e.currentTarget
+            const { selectionStart, selectionEnd } = el
+            const next = `${yaml.slice(0, selectionStart)}  ${yaml.slice(selectionEnd)}`
+            setYaml(next)
+            requestAnimationFrame(() => {
+              el.selectionStart = el.selectionEnd = selectionStart + 2
+            })
+          }
+          if ((e.metaKey || e.ctrlKey) && e.key === 's' && allowEdit) {
+            e.preventDefault()
+            if (dirty) setConfirmOpen(true)
+          }
+        }}
+        className="min-h-0 flex-1 resize-none overflow-auto bg-muted/30 font-mono text-xs leading-relaxed field-sizing-fixed md:text-xs"
       />
       <ConfirmDialog
         open={confirmOpen}
-        title="Apply YAML"
-        description="Apply this YAML with server-side apply?"
-        confirmLabel="Confirm apply"
+        title={`Apply changes to ${name}?`}
+        description="The YAML is sent with server-side apply. Fields you removed may be reset to defaults."
+        confirmLabel="Apply"
+        pendingLabel="Applying…"
         pending={applying}
         onConfirm={applyYAML}
         onCancel={() => setConfirmOpen(false)}
